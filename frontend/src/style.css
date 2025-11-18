@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	--role-gateway: #ef4444; /* red-500 */
+	--role-switch: #3b82f6; /* blue-500 */
+	--role-firewall: #f97316; /* orange-500 */
+	--role-server: #22c55e; /* green-500 */
+	--role-service: #10b981; /* emerald-500 */
+	--role-nas: #a855f7; /* purple-500 */
+	--role-client: #06b6d4; /* cyan-500 */
+	--role-unknown: #9ca3af; /* gray-400 */
+}
+
+.role-gateway { fill: var(--role-gateway); }
+.role-switch { fill: var(--role-switch); }
+.role-firewall { fill: var(--role-firewall); }
+.role-server { fill: var(--role-server); }
+.role-service { fill: var(--role-service); }
+.role-nas { fill: var(--role-nas); }
+.role-client { fill: var(--role-client); }
+.role-unknown { fill: var(--role-unknown); }
+
+.node-label {
+	font-size: 12px;
+	user-select: none;
+}
+
+
