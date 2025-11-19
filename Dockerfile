@@ -35,7 +35,9 @@ RUN apt-get update && \
 		fping \
 		iproute2 \
 		bash \
-		ca-certificates && \
+		ca-certificates \
+		procps \
+		samba-client && \
 	echo "mibs :" > /etc/snmp/snmp.conf && \
 	rm -rf /var/lib/apt/lists/*
 

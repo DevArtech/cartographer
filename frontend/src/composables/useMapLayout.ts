@@ -4,11 +4,13 @@ export interface SavedLayout {
 	version: number;
 	timestamp: string;
 	positions: Record<string, { x: number; y: number }>;
+	root?: TreeNode;
 }
 
-export function useMapLayout() {
-	const positions: Map<string, { x: number; y: number }> = new Map();
+// Shared state across components
+const positions: Map<string, { x: number; y: number }> = new Map();
 
+export function useMapLayout() {
 	function applySavedPositions(root: TreeNode, saved?: SavedLayout) {
 		if (!saved) return;
 		const walk = (n: TreeNode) => {
@@ -40,6 +42,7 @@ export function useMapLayout() {
 			version: 1,
 			timestamp: new Date().toISOString(),
 			positions: map,
+			root: root,
 		};
 	}
 

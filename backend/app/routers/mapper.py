@@ -4,7 +4,7 @@ import subprocess
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 import json
 
@@ -33,6 +33,13 @@ def _network_map_candidates() -> list[pathlib.Path]:
 		root / "network_map.txt",
 		root / "output" / "network_map.txt",
 	]
+
+
+@router.get("/config")
+def get_config():
+	# Frontend can use this to discover deployment base URL
+	app_url = os.environ.get("APPLICATION_URL", "")
+	return JSONResponse({"applicationUrl": app_url})
 
 
 @router.post("/run-mapper", response_model=MapperResponse)
@@ -131,7 +138,8 @@ def run_mapper_stream():
 		# Drain stderr afterwards (some scripts only write stderr)
 		if proc.stderr:
 			for line in proc.stderr:
-				yield _sse_event("log", f"STDERR: {line.rstrip('\n')}")
+				stripped = line.rstrip('\n')
+				yield _sse_event("log", f"STDERR: {stripped}")
 
 		exit_code = proc.wait()
 
@@ -154,5 +162,19 @@ def run_mapper_stream():
 		yield _sse_event("done", f"exit={exit_code}")
 
 	return StreamingResponse(event_gen(), media_type="text/event-stream")
+
+
+@router.get("/download-map")
+def download_map():
+	# Serve the latest produced network_map.txt as a download
+	for candidate in _network_map_candidates():
+		if candidate.exists():
+			filename = candidate.name
+			return FileResponse(
+				path=str(candidate),
+				filename=filename,
+				media_type="text/plain",
+			)
+	raise HTTPException(status_code=404, detail="network_map.txt not found")
 
 

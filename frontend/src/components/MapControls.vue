@@ -19,7 +19,7 @@
 
 <script lang="ts" setup>
 import axios from "axios";
-import { onBeforeUnmount, ref } from "vue";
+import { onBeforeUnmount, ref, onMounted } from "vue";
 import type { ParsedNetworkMap, TreeNode } from "../types/network";
 import { useNetworkData } from "../composables/useNetworkData";
 import { useMapLayout } from "../composables/useMapLayout";
@@ -41,6 +41,31 @@ const message = ref("");
 const { parseNetworkMap } = useNetworkData();
 const { exportLayout, importLayout } = useMapLayout();
 let es: EventSource | null = null;
+// Prefer relative URLs to avoid mixed-content; use APPLICATION_URL only if safe (https or same protocol)
+const baseUrl = ref<string>("");
+
+onMounted(async () => {
+	try {
+		const res = await fetch("/api/config");
+		if (res.ok) {
+			const cfg = await res.json();
+			const url = String(cfg?.applicationUrl || "").trim();
+			if (url) {
+				try {
+					const u = new URL(url);
+					// Use only if protocol matches page or it's https (to avoid mixed-content when page is https)
+					if (u.protocol === window.location.protocol || u.protocol === "https:") {
+						baseUrl.value = u.origin;
+					}
+				} catch {
+					/* ignore invalid url */
+				}
+			}
+		}
+	} catch {
+		/* ignore */
+	}
+});
 
 async function runMapper() {
 	message.value = "";
@@ -85,7 +110,8 @@ function startSSE() {
 	message.value = "Running mapper…";
 	emit("running", true);
 	try {
-		es = new EventSource("/api/run-mapper/stream");
+		const sseUrl = `${baseUrl.value}/api/run-mapper/stream`.replace(/^\/\//, "/");
+		es = new EventSource(baseUrl.value ? sseUrl : "/api/run-mapper/stream");
 		es.addEventListener("log", (e: MessageEvent) => {
 			emit("log", String(e.data || ""));
 		});
@@ -105,6 +131,9 @@ function startSSE() {
 			message.value = "Mapper completed";
 			loading.value = false;
 			emit("running", false);
+			// Emit a download hint line
+			const dl = baseUrl.value ? `${baseUrl.value}/api/download-map` : `/api/download-map`;
+			emit("log", `DOWNLOAD: ${dl}`);
 			endSSE();
 		});
 		es.onerror = () => {

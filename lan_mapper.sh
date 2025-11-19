@@ -13,7 +13,7 @@ echo
 # Get all interfaces with IPv4, exclude unwanted virtual/tunnel interfaces
 VALID_IFACES=$(ip -o -4 addr show \
     | awk '{print $2}' \
-    | grep -Ev '^(lo|tailscale0|wg[0-9]|veth|fwbr|fwpr|fwln)' \
+    | grep -Ev '^(lo|tailscale0|wg[0-9]|veth|fwbr|fwpr|fwln|docker[0-9]*)' \
     | sort -u)
 
 # Prefer vmbr interfaces (Proxmox bridges)
@@ -63,8 +63,12 @@ mkdir -p "$TEMP_DIR"
 ### 1. ARP SCAN
 ### ====================================================================================
 
+echo "📡 Waking up devices (ping sweep)..."
+# Quick ping sweep to populate ARP table and wake devices
+fping -a -g "$SUBNET" -r 1 -t 50 >/dev/null 2>&1 || true
+
 echo "📡 Running ARP scan on $LAN_IFACE..."
-sudo arp-scan --interface="$LAN_IFACE" --localnet > "$TEMP_DIR/arp.txt"
+arp-scan --interface="$LAN_IFACE" --localnet --retry=2 > "$TEMP_DIR/arp.txt"
 echo "✔ ARP scan complete."
 echo
 
@@ -94,6 +98,11 @@ grep "Status: Up" "$TEMP_DIR/nmap.txt" | awk '{print $2}' | while read IP; do
         HOST=$(avahi-resolve-address "$IP" 2>/dev/null | awk '{print $2}' | sed 's/\.$//')
     fi
 
+    if [[ -z "$HOST" ]]; then
+        # Try NetBIOS lookup (Samba)
+        HOST=$(nmblookup -A "$IP" 2>/dev/null | grep -v "Looking up" | grep "<00>" | head -1 | awk '{print $1}')
+    fi
+
     echo "$IP | ${HOST:-Unknown}" >> "$TEMP_DIR/hosts.txt"
 done
 
@@ -107,8 +116,13 @@ echo
 
 echo "🔗 Gathering LLDP topology..."
 
-sudo systemctl start lldpd >/dev/null 2>&1 || true
-sleep 2
+if ! pgrep lldpd >/dev/null; then
+    echo "Starting lldpd daemon..."
+    # Start lldpd detached from stdout/stderr to prevent hanging the pipe
+    lldpd -d >/dev/null 2>&1 &
+    sleep 2
+fi
+
 lldpctl > "$TEMP_DIR/lldp.txt" || echo "⚠ No LLDP data found."
 
 echo "✔ LLDP scan complete."
@@ -126,7 +140,8 @@ echo "🔍 Attempting SNMP discovery (community: public)..."
 while read -r line; do
     ip=$(echo "$line" | cut -d'|' -f1 | tr -d ' ')
     [[ -z "$ip" ]] && continue
-    snmpwalk -v2c -c public "$ip" 1.3.6.1.2.1.1.5.0 \
+    # timeout 1s, 1 retry
+    snmpwalk -v2c -c public -t 1 -r 1 "$ip" 1.3.6.1.2.1.1.5.0 \
         >> "$TEMP_DIR/snmp.txt" 2>/dev/null || true
 done < "$TEMP_DIR/hosts.txt"
 
@@ -157,22 +172,33 @@ while read -r line; do
 
     role="unknown"
 
+    # Extract MAC for OUI lookup
+    mac=$(grep "$ip" "$TEMP_DIR/arp.txt" | awk '{print $2}' | head -1)
+    
     if [[ "$ip" == "$GATEWAY" ]]; then
         role="gateway/router"
     elif [[ "$lname" == *"routerboard"* ]]; then
         role="gateway/router"
-    elif [[ "$lname" == *"tl-sg"* ]] || [[ "$lname" == *"tp-link"* ]] || [[ "$lname" == *"tplink"* ]]; then
+    elif [[ "$lname" == *"tl-sg"* ]] || [[ "$lname" == *"tp-link"* ]] || [[ "$lname" == *"tplink"* ]] || [[ "$lname" == *"unifi"* ]] || [[ "$lname" == *"cisco"* ]] || [[ "$lname" == *"netgear"* ]]; then
         role="switch/ap"
     elif [[ "$lname" == *"firewalla"* ]]; then
         role="firewall"
-    elif [[ "$lname" == *"nas"* ]] || [[ "$lname" == *"artnas"* ]]; then
+    elif [[ "$lname" == *"nas"* ]] || [[ "$lname" == *"ugreen"* ]] || [[ "$lname" == *"synology"* ]] || [[ "$lname" == *"qnap"* ]]; then
         role="nas"
-    elif [[ "$lname" == *"jellyfin"* ]] || [[ "$lname" == *"wizarr"* ]] || [[ "$lname" == *"b2backup"* ]]; then
+    elif [[ "$lname" == *"jellyfin"* ]] || [[ "$lname" == *"wizarr"* ]] || [[ "$lname" == *"b2backup"* ]] || [[ "$lname" == *"postgres"* ]] || [[ "$lname" == *"onyx"* ]] || [[ "$lname" == *"n8n"* ]] || [[ "$lname" == *"grafana"* ]] || [[ "$lname" == *"prometheus"* ]]; then
         role="service"
-    elif [[ "$lname" == *"postgres"* ]] || [[ "$lname" == *"onyx"* ]] || [[ "$lname" == *"n8n"* ]] || [[ "$lname" == *"grafana"* ]] || [[ "$lname" == *"prometheus"* ]] || [[ "$lname" == *"debian"* ]]; then
+    elif [[ "$lname" == *"server"* ]] || [[ "$lname" == *"debian"* ]] || [[ "$lname" == *"ubuntu"* ]] || [[ "$lname" == *"centos"* ]] || [[ "$lname" == *"redhat"* ]] || [[ "$lname" == *"fedora"* ]] || [[ "$lname" == *"arch"* ]] || [[ "$lname" == *"manjaro"* ]] || [[ "$lname" == *"linux"* ]]; then
         role="server"
-    elif [[ "$lname" == *"desktop"* ]] || [[ "$lname" == *"g-pro"* ]]; then
+    elif [[ "$lname" == *"desktop"* ]] || [[ "$lname" == *"g-pro"* ]] || [[ "$lname" == *"laptop"* ]] || [[ "$lname" == *"iphone"* ]] || [[ "$lname" == *"android"* ]]; then
         role="client"
+    fi
+
+    # Fallback: Check MAC OUI for virtualization
+    if [[ "$role" == "unknown" && -n "$mac" ]]; then
+        # Common Virtualization OUIs
+        if [[ "$mac" =~ ^(02:42:ac|00:50:56|00:0c:29|00:05:69|00:16:3e|00:15:5d|00:1c:42|00:03:ff) ]]; then
+             role="service" # Likely a container or VM
+        fi
     fi
 
     host_role["$ip"]="$role"
@@ -304,3 +330,6 @@ echo
 echo "You can view it with:"
 echo "   cat $OUTPUT"
 echo
+
+# Cleanup background processes
+pkill lldpd || true
