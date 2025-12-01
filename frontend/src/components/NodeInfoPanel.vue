@@ -67,25 +67,23 @@
 				<p class="text-sm">Checking device health...</p>
 			</div>
 
-			<!-- Error State -->
-			<div v-else-if="error" class="p-4">
-				<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+			<!-- Metrics Content (also shown when offline) -->
+			<div v-if="metrics || isOffline" class="p-4 space-y-4">
+				<!-- Offline Notice -->
+				<div v-if="isOffline" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
 					<div class="flex items-start gap-2">
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							<path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
 						</svg>
 						<div>
-							<p class="text-sm font-medium text-red-800 dark:text-red-200">Failed to check health</p>
+							<p class="text-sm font-medium text-red-800 dark:text-red-200">Unable to reach device</p>
 							<p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ error }}</p>
 						</div>
 					</div>
 				</div>
-			</div>
 
-			<!-- Metrics Content -->
-			<div v-else-if="metrics" class="p-4 space-y-4">
 				<!-- Ping Metrics -->
-				<section v-if="metrics.ping">
+				<section v-if="metrics?.ping">
 					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Connectivity</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
 						<div class="grid grid-cols-2 gap-3">
@@ -113,7 +111,7 @@
 				</section>
 
 				<!-- 24h Statistics -->
-				<section v-if="metrics.uptime_percent_24h !== undefined || metrics.avg_latency_24h_ms !== undefined">
+				<section v-if="metrics?.uptime_percent_24h !== undefined || metrics?.avg_latency_24h_ms !== undefined">
 					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">24h Statistics</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
 						<div v-if="metrics.uptime_percent_24h !== undefined" class="space-y-1">
@@ -147,7 +145,7 @@
 				</section>
 
 				<!-- DNS Information -->
-				<section v-if="metrics.dns">
+				<section v-if="metrics?.dns">
 					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">DNS</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
 						<div v-if="metrics.dns.reverse_dns" class="flex items-start justify-between gap-2">
@@ -169,7 +167,7 @@
 				</section>
 
 				<!-- Open Ports -->
-				<section v-if="metrics.open_ports && metrics.open_ports.length > 0">
+				<section v-if="metrics?.open_ports && metrics.open_ports.length > 0">
 					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Open Ports</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg overflow-hidden">
 						<div 
@@ -201,11 +199,11 @@
 							<span class="text-xs text-slate-500 dark:text-slate-400">Connection Speed</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ node.connectionSpeed }}</span>
 						</div>
-						<div v-if="metrics.last_seen_online" class="flex items-center justify-between">
+						<div v-if="metrics?.last_seen_online" class="flex items-center justify-between">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Last Seen Online</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ formatTimestamp(metrics.last_seen_online) }}</span>
 						</div>
-						<div v-if="metrics.consecutive_failures > 0" class="flex items-center justify-between">
+						<div v-if="metrics?.consecutive_failures && metrics.consecutive_failures > 0" class="flex items-center justify-between">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Consecutive Failures</span>
 							<span class="text-sm font-medium text-red-600 dark:text-red-400">{{ metrics.consecutive_failures }}</span>
 						</div>
@@ -258,7 +256,11 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const scanningPorts = ref(false);
 
+// True when we couldn't reach the node (connection error)
+const isOffline = computed(() => !!error.value && !!props.node?.ip);
+
 const statusLabel = computed(() => {
+	if (isOffline.value) return 'Offline (Unreachable)';
 	if (!metrics.value) return 'Unknown';
 	const status = metrics.value.status;
 	switch (status) {
@@ -270,6 +272,7 @@ const statusLabel = computed(() => {
 });
 
 const statusBannerClass = computed(() => {
+	if (isOffline.value) return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200';
 	if (!metrics.value) return 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400';
 	const status = metrics.value.status;
 	switch (status) {
@@ -281,6 +284,7 @@ const statusBannerClass = computed(() => {
 });
 
 const statusDotClass = computed(() => {
+	if (isOffline.value) return 'bg-red-500';
 	if (!metrics.value) return 'bg-slate-400';
 	const status = metrics.value.status;
 	switch (status) {
