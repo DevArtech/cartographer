@@ -2,7 +2,7 @@
 	<div class="flex items-center justify-between gap-4 p-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
 		<!-- Left side: Branding -->
 		<div class="flex items-center gap-2">
-			<h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Cartographer</h1>
+			<h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">🗺️ Cartographer</h1>
 		</div>
 
 		<!-- Right side: Buttons and message -->
