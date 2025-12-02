@@ -222,12 +222,31 @@ def load_layout():
 		raise HTTPException(status_code=500, detail=f"Failed to load layout: {exc}")
 
 
+def _embed_config_path() -> pathlib.Path:
+	"""Path where the embed configuration is stored"""
+	data_dir = pathlib.Path("/app/data")
+	if data_dir.exists():
+		return data_dir / "embed_config.json"
+	return _project_root() / "embed_config.json"
+
+
 @router.get("/embed-data")
 def get_embed_data():
 	"""Get the network map data for the embed view (read-only, no auth required)"""
 	layout_path = _saved_layout_path()
 	if not layout_path.exists():
-		return JSONResponse({"exists": False, "root": None})
+		return JSONResponse({"exists": False, "root": None, "sensitiveMode": False})
+	
+	# Load embed config for sensitive mode setting
+	sensitive_mode = False
+	embed_config_path = _embed_config_path()
+	if embed_config_path.exists():
+		try:
+			with open(embed_config_path, 'r') as f:
+				embed_config = json.load(f)
+				sensitive_mode = embed_config.get("sensitiveMode", False)
+		except Exception:
+			pass
 	
 	try:
 		with open(layout_path, 'r') as f:
@@ -236,13 +255,41 @@ def get_embed_data():
 		# Return just the root tree node for the embed
 		root = layout.get("root")
 		if not root:
-			return JSONResponse({"exists": False, "root": None})
+			return JSONResponse({"exists": False, "root": None, "sensitiveMode": False})
 		
 		return JSONResponse({
 			"exists": True,
-			"root": root
+			"root": root,
+			"sensitiveMode": sensitive_mode
 		})
 	except Exception as exc:
 		raise HTTPException(status_code=500, detail=f"Failed to load embed data: {exc}")
+
+
+@router.get("/embed-config")
+def get_embed_config():
+	"""Get the embed configuration"""
+	embed_config_path = _embed_config_path()
+	if not embed_config_path.exists():
+		return JSONResponse({"sensitiveMode": False})
+	
+	try:
+		with open(embed_config_path, 'r') as f:
+			config = json.load(f)
+		return JSONResponse(config)
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail=f"Failed to load embed config: {exc}")
+
+
+@router.post("/embed-config")
+def save_embed_config(config: dict):
+	"""Save the embed configuration"""
+	try:
+		embed_config_path = _embed_config_path()
+		with open(embed_config_path, 'w') as f:
+			json.dump(config, f, indent=2)
+		return JSONResponse({"success": True, "message": "Embed config saved"})
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail=f"Failed to save embed config: {exc}")
 
 

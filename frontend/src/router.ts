@@ -11,10 +11,7 @@ const routes = [
 	{
 		path: '/embed',
 		name: 'embed',
-		component: EmbedView,
-		props: (route: any) => ({
-			sensitiveMode: route.query.sensitive === 'true'
-		})
+		component: EmbedView
 	}
 ];
 
