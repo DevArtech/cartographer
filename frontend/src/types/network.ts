@@ -81,6 +81,12 @@ export interface PortCheckResult {
 	response_time_ms?: number;
 }
 
+export interface CheckHistoryEntry {
+	timestamp: string; // ISO timestamp
+	success: boolean;
+	latency_ms?: number;
+}
+
 export interface DeviceMetrics {
 	ip: string;
 	status: HealthStatus;
@@ -100,6 +106,7 @@ export interface DeviceMetrics {
 	avg_latency_24h_ms?: number;
 	checks_passed_24h: number;
 	checks_failed_24h: number;
+	check_history: CheckHistoryEntry[]; // Recent check history for timeline display
 	
 	// Additional info
 	last_seen_online?: string; // ISO timestamp

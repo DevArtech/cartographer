@@ -830,11 +830,13 @@ async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
 		node.updatedAt = now;
 		node.version = (node.version || 0) + 1;
 		
-		// Re-register devices with updated list
+		// Re-register devices with updated list (excludes disabled nodes)
 		const ips = getMonitoredDeviceIPs(parsed.value.root);
-		await registerDevices(ips, true);
+		console.log(`[Health] ${enabled ? 'Enabling' : 'Disabling'} monitoring for ${node.name || nodeId} (IP: ${node.ip})`);
+		console.log(`[Health] Updating monitored devices list: ${ips.length} devices`, ips);
 		
-		console.log(`[Health] ${enabled ? 'Enabled' : 'Disabled'} monitoring for ${node.name || nodeId}`);
+		// Send updated list to backend - this REPLACES the entire list
+		await registerDevices(ips, false); // Don't trigger immediate check when disabling
 		
 		// Trigger auto-save
 		triggerAutoSave();

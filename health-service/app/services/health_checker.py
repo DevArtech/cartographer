@@ -12,6 +12,7 @@ from ..models import (
     PingResult, 
     DnsResult, 
     PortCheckResult,
+    CheckHistoryEntry,
     MonitoringConfig,
     MonitoringStatus
 )
@@ -80,6 +81,24 @@ class HealthChecker:
         uptime_percent = (passed / len(recent)) * 100 if recent else None
         
         return uptime_percent, avg_latency, passed, failed
+    
+    def _get_check_history(self, ip: str, hours: int = 24) -> List[CheckHistoryEntry]:
+        """Get check history for timeline display"""
+        if ip not in self._history or len(self._history[ip]) == 0:
+            return []
+        
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        history = []
+        
+        for ts, success, latency in self._history[ip]:
+            if ts > cutoff:
+                history.append(CheckHistoryEntry(
+                    timestamp=ts,
+                    success=success,
+                    latency_ms=latency
+                ))
+        
+        return history
     
     async def ping_host(self, ip: str, count: int = 3, timeout: float = 2.0) -> PingResult:
         """
@@ -284,6 +303,9 @@ class HealthChecker:
         if include_ports:
             open_ports = await self.scan_common_ports(ip)
         
+        # Get check history for timeline
+        check_history = self._get_check_history(ip)
+        
         # Build metrics object
         metrics = DeviceMetrics(
             ip=ip,
@@ -296,6 +318,7 @@ class HealthChecker:
             avg_latency_24h_ms=avg_lat_24h,
             checks_passed_24h=passed_24h,
             checks_failed_24h=failed_24h,
+            check_history=check_history,
             last_seen_online=now if ping_result.success else (cached.last_seen_online if cached else None),
             consecutive_failures=consecutive_failures,
         )

@@ -34,8 +34,9 @@ export function useHealthMonitoring() {
 	 */
 	async function registerDevices(ips: string[], triggerCheck = true): Promise<void> {
 		try {
-			await axios.post('/api/health/monitoring/devices', { ips });
-			console.log(`[Health] Registered ${ips.length} devices for monitoring`);
+			console.log(`[Health] Sending ${ips.length} IPs to backend for monitoring:`, ips);
+			const response = await axios.post('/api/health/monitoring/devices', { ips });
+			console.log(`[Health] Backend response:`, response.data);
 			
 			// Trigger an immediate check so we have data right away
 			if (triggerCheck && ips.length > 0) {

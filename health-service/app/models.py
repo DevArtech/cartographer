@@ -38,6 +38,13 @@ class PortCheckResult(BaseModel):
     response_time_ms: Optional[float] = None
 
 
+class CheckHistoryEntry(BaseModel):
+    """A single health check result in history"""
+    timestamp: datetime
+    success: bool
+    latency_ms: Optional[float] = None
+
+
 class DeviceMetrics(BaseModel):
     """Comprehensive metrics for a device"""
     ip: str
@@ -58,6 +65,7 @@ class DeviceMetrics(BaseModel):
     avg_latency_24h_ms: Optional[float] = None
     checks_passed_24h: int = 0
     checks_failed_24h: int = 0
+    check_history: List[CheckHistoryEntry] = []  # Recent check history for timeline display
     
     # Additional info
     last_seen_online: Optional[datetime] = None

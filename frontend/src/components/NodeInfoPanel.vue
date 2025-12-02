@@ -66,7 +66,7 @@
 			</div>
 
 			<!-- Loading State (manual fetch in progress) -->
-			<div v-if="loading" class="p-8 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
+			<div v-if="monitoringEnabled && loading" class="p-8 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
 				<svg class="animate-spin h-8 w-8 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -75,7 +75,7 @@
 			</div>
 
 			<!-- Waiting for cached data -->
-			<div v-else-if="!metrics && !error && node?.ip" class="p-8 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
+			<div v-else-if="monitoringEnabled && !metrics && !error && node?.ip" class="p-8 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
 				<svg class="animate-spin h-8 w-8 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -84,8 +84,8 @@
 				<p class="text-xs mt-1">First check in progress</p>
 			</div>
 
-			<!-- Metrics Content (also shown when offline) -->
-			<div v-if="metrics || isOffline" class="p-4 space-y-4">
+			<!-- Metrics Content (also shown when offline or monitoring disabled) -->
+			<div v-if="monitoringEnabled && (metrics || isOffline)" class="p-4 space-y-4">
 				<!-- Offline Notice -->
 				<div v-if="isOffline" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
 					<div class="flex items-start gap-2">
@@ -99,8 +99,8 @@
 					</div>
 				</div>
 
-				<!-- Ping Metrics -->
-				<section v-if="metrics?.ping">
+				<!-- Ping Metrics (only shown when monitoring is enabled) -->
+				<section v-if="monitoringEnabled && metrics?.ping">
 					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Connectivity</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
 						<div class="grid grid-cols-2 gap-3">
@@ -127,35 +127,57 @@
 					</div>
 				</section>
 
-				<!-- 24h Statistics -->
-				<section v-if="metrics?.uptime_percent_24h != null || metrics?.avg_latency_24h_ms != null">
-					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">24h Statistics</h3>
+				<!-- 24h Statistics (only shown when monitoring is enabled) -->
+				<section v-if="monitoringEnabled && (metrics?.uptime_percent_24h != null || metrics?.check_history?.length)">
+					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">24h Uptime</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
-						<div v-if="metrics.uptime_percent_24h != null" class="space-y-1">
+						<!-- Uptime percentage and timeline -->
+						<div class="space-y-2">
 							<div class="flex items-center justify-between">
 								<span class="text-xs text-slate-500 dark:text-slate-400">Uptime</span>
-								<span class="text-sm font-medium" :class="getUptimeColor(metrics.uptime_percent_24h)">
-									{{ metrics.uptime_percent_24h.toFixed(1) }}%
+								<span class="text-sm font-medium" :class="getUptimeColor(metrics?.uptime_percent_24h || 0)">
+									{{ metrics?.uptime_percent_24h?.toFixed(1) || '0' }}%
 								</span>
 							</div>
-							<div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-								<div 
-									class="h-full rounded-full transition-all duration-500"
-									:class="getUptimeBarColor(metrics.uptime_percent_24h)"
-									:style="{ width: `${metrics.uptime_percent_24h}%` }"
-								></div>
+							<!-- Timeline bar showing check history -->
+							<div 
+								class="h-4 bg-slate-200 dark:bg-slate-700 rounded overflow-hidden flex"
+								:title="'Check history over 24h'"
+							>
+								<template v-if="metrics?.check_history?.length">
+									<div
+										v-for="(entry, idx) in timelineSegments"
+										:key="idx"
+										class="h-full transition-all"
+										:class="entry.success ? 'bg-emerald-500' : 'bg-red-500'"
+										:style="{ width: entry.width + '%' }"
+										:title="formatTimelineTooltip(entry)"
+									></div>
+								</template>
+								<template v-else>
+									<!-- Fallback to simple percentage bar if no history -->
+									<div 
+										class="h-full bg-emerald-500 transition-all duration-500"
+										:style="{ width: `${metrics?.uptime_percent_24h || 0}%` }"
+									></div>
+								</template>
+							</div>
+							<!-- Timeline labels -->
+							<div class="flex justify-between text-[10px] text-slate-400 dark:text-slate-500">
+								<span>24h ago</span>
+								<span>Now</span>
 							</div>
 						</div>
-						<div v-if="metrics.avg_latency_24h_ms != null" class="flex items-center justify-between">
+						<div v-if="metrics?.avg_latency_24h_ms != null" class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Avg Latency (24h)</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ metrics.avg_latency_24h_ms.toFixed(1) }} ms</span>
 						</div>
 						<div class="flex items-center justify-between text-xs">
 							<span class="text-slate-500 dark:text-slate-400">Checks</span>
 							<span class="space-x-2">
-								<span class="text-emerald-600 dark:text-emerald-400">{{ metrics.checks_passed_24h }} passed</span>
+								<span class="text-emerald-600 dark:text-emerald-400">{{ metrics?.checks_passed_24h || 0 }} passed</span>
 								<span class="text-slate-400">/</span>
-								<span class="text-red-600 dark:text-red-400">{{ metrics.checks_failed_24h }} failed</span>
+								<span class="text-red-600 dark:text-red-400">{{ metrics?.checks_failed_24h || 0 }} failed</span>
 							</span>
 						</div>
 					</div>
@@ -285,8 +307,8 @@
 			</div>
 		</div>
 
-		<!-- Scan Ports Button -->
-		<div v-if="node?.ip && metrics && !metrics.open_ports?.length" class="p-3 border-t border-slate-200 dark:border-slate-700">
+		<!-- Scan Ports Button (only when monitoring enabled) -->
+		<div v-if="monitoringEnabled && node?.ip && metrics && !metrics.open_ports?.length" class="p-3 border-t border-slate-200 dark:border-slate-700">
 			<button
 				@click="scanPorts"
 				:disabled="scanningPorts"
@@ -392,6 +414,46 @@ const statusDotClass = computed(() => {
 		default: return 'bg-slate-400';
 	}
 });
+
+// Timeline segment for uptime visualization
+interface TimelineSegment {
+	success: boolean;
+	width: number;
+	timestamp: string;
+	latency_ms?: number;
+}
+
+// Convert check history to timeline segments
+const timelineSegments = computed((): TimelineSegment[] => {
+	const history = metrics.value?.check_history;
+	if (!history || history.length === 0) return [];
+	
+	// Sort by timestamp (oldest first)
+	const sorted = [...history].sort((a, b) => 
+		new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+	);
+	
+	// Each segment gets equal width
+	const segmentWidth = 100 / sorted.length;
+	
+	return sorted.map(entry => ({
+		success: entry.success,
+		width: segmentWidth,
+		timestamp: entry.timestamp,
+		latency_ms: entry.latency_ms
+	}));
+});
+
+function formatTimelineTooltip(entry: TimelineSegment): string {
+	const date = new Date(entry.timestamp);
+	const time = date.toLocaleTimeString(undefined, { 
+		hour: '2-digit', 
+		minute: '2-digit' 
+	});
+	const status = entry.success ? 'Online' : 'Offline';
+	const latency = entry.latency_ms ? ` (${entry.latency_ms.toFixed(1)}ms)` : '';
+	return `${time}: ${status}${latency}`;
+}
 
 function roleIcon(role?: string): string {
 	const r = role || "unknown";
