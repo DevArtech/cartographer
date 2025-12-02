@@ -35,24 +35,40 @@
 		<div class="flex items-center gap-1">
 			<!-- Primary Actions Group -->
 			<div class="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 dark:bg-slate-800/80">
+				<!-- Scan Button (hidden when loading) -->
 				<button 
+					v-if="!loading"
 					@click="runMapper" 
-					class="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-					:class="loading 
-						? 'bg-amber-500 text-white' 
-						: 'bg-blue-600 text-white hover:bg-blue-500 shadow-sm'"
-					:disabled="loading || !props.canEdit"
+					class="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all bg-blue-600 text-white hover:bg-blue-500 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+					:disabled="!props.canEdit"
 					:title="props.canEdit ? 'Scan network and generate map' : 'Write permission required'"
 				>
-					<svg v-if="loading" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
-						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-					</svg>
-					<svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
 					</svg>
-					<span>{{ loading ? 'Scanning...' : 'Scan' }}</span>
+					<span>Scan</span>
 				</button>
+				
+				<!-- Scanning in progress (shown when loading) -->
+				<div v-else class="flex items-center gap-1">
+					<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-amber-500 text-white">
+						<svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
+						<span>Scanning...</span>
+					</div>
+					<button 
+						@click="cancelScan"
+						class="flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium bg-red-600 text-white hover:bg-red-500 transition-colors"
+						title="Cancel network scan"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+						<span class="hidden sm:inline">Cancel</span>
+					</button>
+				</div>
 				
 				<button 
 					@click="saveLayout" 
@@ -455,6 +471,15 @@ async function runMapper() {
 	message.value = "";
 	emit("clearLogs");
 	startSSE();
+}
+
+function cancelScan() {
+	emit("log", "--- Scan cancelled by user ---");
+	message.value = "Scan cancelled";
+	loading.value = false;
+	emit("running", false);
+	endSSE();
+	setTimeout(() => { message.value = ""; }, 3000);
 }
 
 async function saveLayout() {

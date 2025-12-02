@@ -1185,7 +1185,8 @@ function onClearLogs() {
 }
 
 function downloadHref(line: string): string | null {
-	const m = /^DOWNLOAD:\s+(https?:\/\/[^\s]+)$/i.exec(line.trim());
+	// Match both absolute URLs (http/https) and relative paths (/api/...)
+	const m = /^DOWNLOAD:\s+((?:https?:\/\/[^\s]+|\/[^\s]+))$/i.exec(line.trim());
 	return m ? m[1] : null;
 }
 
