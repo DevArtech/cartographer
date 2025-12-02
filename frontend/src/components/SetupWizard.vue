@@ -42,18 +42,53 @@
 						</p>
 					</div>
 
-					<!-- Display Name -->
+					<!-- First Name / Last Name -->
+					<div class="grid grid-cols-2 gap-4">
+						<div>
+							<label for="firstName" class="block text-sm font-medium text-slate-300 mb-1.5">
+								First Name
+							</label>
+							<input
+								id="firstName"
+								v-model="form.firstName"
+								type="text"
+								required
+								autocomplete="given-name"
+								class="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
+								placeholder="John"
+								:disabled="isSubmitting"
+							/>
+						</div>
+						<div>
+							<label for="lastName" class="block text-sm font-medium text-slate-300 mb-1.5">
+								Last Name
+							</label>
+							<input
+								id="lastName"
+								v-model="form.lastName"
+								type="text"
+								required
+								autocomplete="family-name"
+								class="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
+								placeholder="Doe"
+								:disabled="isSubmitting"
+							/>
+						</div>
+					</div>
+
+					<!-- Email -->
 					<div>
-						<label for="displayName" class="block text-sm font-medium text-slate-300 mb-1.5">
-							Display Name <span class="text-slate-500">(optional)</span>
+						<label for="email" class="block text-sm font-medium text-slate-300 mb-1.5">
+							Email
 						</label>
 						<input
-							id="displayName"
-							v-model="form.displayName"
-							type="text"
-							autocomplete="name"
+							id="email"
+							v-model="form.email"
+							type="email"
+							required
+							autocomplete="email"
 							class="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
-							placeholder="Administrator"
+							placeholder="admin@example.com"
 							:disabled="isSubmitting"
 						/>
 					</div>
@@ -155,7 +190,9 @@ const { setupOwner, login } = useAuth();
 
 const form = ref({
 	username: "",
-	displayName: "",
+	firstName: "",
+	lastName: "",
+	email: "",
 	password: "",
 	confirmPassword: "",
 });
@@ -167,6 +204,9 @@ const errorMessage = ref<string | null>(null);
 const isValid = computed(() => {
 	return (
 		form.value.username.length >= 3 &&
+		form.value.firstName.length >= 1 &&
+		form.value.lastName.length >= 1 &&
+		form.value.email.includes("@") &&
 		form.value.password.length >= 8 &&
 		form.value.password === form.value.confirmPassword
 	);
@@ -188,8 +228,10 @@ async function onSubmit() {
 		// Create the owner account
 		await setupOwner({
 			username: form.value.username,
+			first_name: form.value.firstName,
+			last_name: form.value.lastName,
+			email: form.value.email,
 			password: form.value.password,
-			display_name: form.value.displayName || undefined,
 		});
 
 		// Automatically log in

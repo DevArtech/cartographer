@@ -5,7 +5,9 @@ export type UserRole = "owner" | "readwrite" | "readonly";
 export interface User {
 	id: string;
 	username: string;
-	display_name?: string;
+	first_name: string;
+	last_name: string;
+	email: string;
 	role: UserRole;
 	created_at: string;
 	updated_at: string;
@@ -16,23 +18,34 @@ export interface User {
 // Request to create the initial owner account
 export interface OwnerSetupRequest {
 	username: string;
+	first_name: string;
+	last_name: string;
+	email: string;
 	password: string;
-	display_name?: string;
 }
 
 // Request to create a new user
 export interface UserCreateRequest {
 	username: string;
+	first_name: string;
+	last_name: string;
+	email: string;
 	password: string;
-	display_name?: string;
 	role: UserRole;
 }
 
 // Request to update a user
 export interface UserUpdateRequest {
-	display_name?: string;
+	first_name?: string;
+	last_name?: string;
+	email?: string;
 	role?: UserRole;
 	password?: string;
+}
+
+// Helper to get full name
+export function getFullName(user: User): string {
+	return `${user.first_name} ${user.last_name}`;
 }
 
 // Login credentials

@@ -95,6 +95,10 @@ class AuthService:
         if self.get_user_by_username(request.username):
             raise ValueError("Username already taken")
         
+        # Check if email is taken
+        if self.get_user_by_email(request.email):
+            raise ValueError("Email already in use")
+        
         # Create the owner user
         now = datetime.now(timezone.utc)
         user_id = str(uuid.uuid4())
@@ -102,7 +106,9 @@ class AuthService:
         user = UserInDB(
             id=user_id,
             username=request.username.lower(),
-            display_name=request.display_name or request.username,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            email=request.email.lower(),
             role=UserRole.OWNER,
             password_hash=pwd_context.hash(request.password),
             created_at=now,
@@ -131,13 +137,19 @@ class AuthService:
         if self.get_user_by_username(request.username):
             raise ValueError("Username already taken")
         
+        # Check if email is taken
+        if self.get_user_by_email(request.email):
+            raise ValueError("Email already in use")
+        
         now = datetime.now(timezone.utc)
         user_id = str(uuid.uuid4())
         
         user = UserInDB(
             id=user_id,
             username=request.username.lower(),
-            display_name=request.display_name or request.username,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            email=request.email.lower(),
             role=request.role,
             password_hash=pwd_context.hash(request.password),
             created_at=now,
@@ -160,6 +172,14 @@ class AuthService:
         username_lower = username.lower()
         for user in self._users.values():
             if user.username == username_lower:
+                return user
+        return None
+    
+    def get_user_by_email(self, email: str) -> Optional[UserInDB]:
+        """Get user by email"""
+        email_lower = email.lower()
+        for user in self._users.values():
+            if user.email == email_lower:
                 return user
         return None
     
@@ -193,8 +213,18 @@ class AuthService:
             raise ValueError("Cannot change owner's role")
         
         # Apply updates
-        if request.display_name is not None:
-            user.display_name = request.display_name
+        if request.first_name is not None:
+            user.first_name = request.first_name
+        
+        if request.last_name is not None:
+            user.last_name = request.last_name
+        
+        if request.email is not None:
+            # Check if email is taken by another user
+            existing = self.get_user_by_email(request.email)
+            if existing and existing.id != user_id:
+                raise ValueError("Email already in use")
+            user.email = request.email.lower()
         
         if request.role is not None:
             user.role = request.role

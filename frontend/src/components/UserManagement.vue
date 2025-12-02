@@ -45,32 +45,32 @@
 							:key="u.id"
 							class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700"
 						>
-							<div class="flex items-center gap-4">
-								<!-- Avatar -->
-								<div 
-									class="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium"
-									:class="u.role === 'owner' ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-gradient-to-br from-cyan-500 to-blue-600'"
-								>
-									{{ (u.display_name || u.username).charAt(0).toUpperCase() }}
+						<div class="flex items-center gap-4">
+							<!-- Avatar -->
+							<div 
+								class="w-10 h-10 rounded-full flex items-center justify-center text-white font-medium"
+								:class="u.role === 'owner' ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-gradient-to-br from-cyan-500 to-blue-600'"
+							>
+								{{ u.first_name.charAt(0).toUpperCase() }}
+							</div>
+							
+							<div>
+								<div class="flex items-center gap-2">
+									<span class="font-medium text-slate-900 dark:text-white">
+										{{ getFullName(u) }}
+									</span>
+									<span :class="getRoleBadgeClass(u.role)" class="text-xs px-2 py-0.5 rounded-full">
+										{{ getRoleLabel(u.role) }}
+									</span>
 								</div>
-								
-								<div>
-									<div class="flex items-center gap-2">
-										<span class="font-medium text-slate-900 dark:text-white">
-											{{ u.display_name || u.username }}
-										</span>
-										<span :class="getRoleBadgeClass(u.role)" class="text-xs px-2 py-0.5 rounded-full">
-											{{ getRoleLabel(u.role) }}
-										</span>
-									</div>
-									<div class="text-sm text-slate-500 dark:text-slate-400">
-										@{{ u.username }}
-										<span v-if="u.last_login" class="ml-2">
-											• Last login: {{ formatDate(u.last_login) }}
-										</span>
-									</div>
+								<div class="text-sm text-slate-500 dark:text-slate-400">
+									{{ u.email }}
+									<span v-if="u.last_login" class="ml-2">
+										• Last login: {{ formatDate(u.last_login) }}
+									</span>
 								</div>
 							</div>
+						</div>
 
 							<!-- Actions -->
 							<div v-if="u.role !== 'owner'" class="flex items-center gap-2">
@@ -108,7 +108,7 @@
 
 		<!-- Add/Edit User Modal -->
 		<div v-if="showAddUser || editingUser" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
-			<div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6">
+			<div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
 				<h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">
 					{{ editingUser ? 'Edit User' : 'Add New User' }}
 				</h3>
@@ -128,15 +128,45 @@
 						/>
 					</div>
 					
+					<!-- First Name / Last Name -->
+					<div class="grid grid-cols-2 gap-3">
+						<div>
+							<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+								First Name
+							</label>
+							<input
+								v-model="userForm.firstName"
+								type="text"
+								required
+								class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+								placeholder="John"
+							/>
+						</div>
+						<div>
+							<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+								Last Name
+							</label>
+							<input
+								v-model="userForm.lastName"
+								type="text"
+								required
+								class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+								placeholder="Doe"
+							/>
+						</div>
+					</div>
+					
+					<!-- Email -->
 					<div>
 						<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-							Display Name
+							Email
 						</label>
 						<input
-							v-model="userForm.displayName"
-							type="text"
+							v-model="userForm.email"
+							type="email"
+							required
 							class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-							placeholder="John Doe"
+							placeholder="user@example.com"
 						/>
 					</div>
 					
@@ -210,7 +240,7 @@
 			<div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md p-6">
 				<h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Delete User</h3>
 				<p class="text-slate-600 dark:text-slate-400 mb-6">
-					Are you sure you want to delete <strong>{{ deletingUser.display_name || deletingUser.username }}</strong>? 
+					Are you sure you want to delete <strong>{{ getFullName(deletingUser) }}</strong>? 
 					This action cannot be undone.
 				</p>
 				
@@ -238,7 +268,7 @@
 import { ref, onMounted } from "vue";
 import { useAuth } from "../composables/useAuth";
 import type { User, UserRole } from "../types/auth";
-import { getRoleLabel } from "../types/auth";
+import { getRoleLabel, getFullName } from "../types/auth";
 
 defineEmits<{
 	(e: "close"): void;
@@ -257,7 +287,9 @@ const deletingUser = ref<User | null>(null);
 
 const userForm = ref({
 	username: "",
-	displayName: "",
+	firstName: "",
+	lastName: "",
+	email: "",
 	role: "readonly" as UserRole,
 	password: "",
 });
@@ -304,7 +336,9 @@ function editUser(user: User) {
 	editingUser.value = user;
 	userForm.value = {
 		username: user.username,
-		displayName: user.display_name || "",
+		firstName: user.first_name,
+		lastName: user.last_name,
+		email: user.email,
 		role: user.role,
 		password: "",
 	};
@@ -320,7 +354,9 @@ function closeUserForm() {
 	editingUser.value = null;
 	userForm.value = {
 		username: "",
-		displayName: "",
+		firstName: "",
+		lastName: "",
+		email: "",
 		role: "readonly",
 		password: "",
 	};
@@ -335,7 +371,9 @@ async function onSubmitUser() {
 		if (editingUser.value) {
 			// Update existing user
 			await updateUser(editingUser.value.id, {
-				display_name: userForm.value.displayName || undefined,
+				first_name: userForm.value.firstName,
+				last_name: userForm.value.lastName,
+				email: userForm.value.email,
 				role: userForm.value.role,
 				password: userForm.value.password || undefined,
 			});
@@ -343,8 +381,10 @@ async function onSubmitUser() {
 			// Create new user
 			await createUser({
 				username: userForm.value.username,
+				first_name: userForm.value.firstName,
+				last_name: userForm.value.lastName,
+				email: userForm.value.email,
 				password: userForm.value.password,
-				display_name: userForm.value.displayName || undefined,
 				role: userForm.value.role,
 			});
 		}

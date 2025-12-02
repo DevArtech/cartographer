@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, EmailStr
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -15,7 +15,9 @@ class UserRole(str, Enum):
 class UserBase(BaseModel):
     """Base user fields"""
     username: str = Field(..., min_length=3, max_length=50)
-    display_name: Optional[str] = Field(None, max_length=100)
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
+    email: EmailStr
     
     @field_validator('username')
     @classmethod
@@ -41,8 +43,10 @@ class UserCreate(UserBase):
 class OwnerSetupRequest(BaseModel):
     """Request to create the initial owner account (first-run setup)"""
     username: str = Field(..., min_length=3, max_length=50)
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
+    email: EmailStr
     password: str = Field(..., min_length=8)
-    display_name: Optional[str] = Field(None, max_length=100)
     
     @field_validator('username')
     @classmethod
@@ -61,7 +65,9 @@ class OwnerSetupRequest(BaseModel):
 
 class UserUpdate(BaseModel):
     """Request to update a user"""
-    display_name: Optional[str] = Field(None, max_length=100)
+    first_name: Optional[str] = Field(None, max_length=50)
+    last_name: Optional[str] = Field(None, max_length=50)
+    email: Optional[EmailStr] = None
     role: Optional[UserRole] = None
     password: Optional[str] = Field(None, min_length=8)
 
@@ -70,7 +76,9 @@ class UserResponse(BaseModel):
     """User data returned to clients (no password)"""
     id: str
     username: str
-    display_name: Optional[str] = None
+    first_name: str
+    last_name: str
+    email: str
     role: UserRole
     created_at: datetime
     updated_at: datetime

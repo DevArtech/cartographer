@@ -48,7 +48,7 @@
 						{{ displayName }}
 					</p>
 					<p class="text-xs text-slate-500 dark:text-slate-400">
-						@{{ user?.username }}
+						{{ user?.email }}
 					</p>
 				</div>
 
@@ -168,7 +168,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useAuth } from "../composables/useAuth";
-import { getRoleLabel } from "../types/auth";
+import { getRoleLabel, getFullName } from "../types/auth";
 
 const emit = defineEmits<{
 	(e: "logout"): void;
@@ -190,11 +190,14 @@ const passwordForm = ref({
 });
 
 const displayName = computed(() => {
-	return user.value?.display_name || user.value?.username || "User";
+	if (user.value) {
+		return getFullName(user.value);
+	}
+	return "User";
 });
 
 const userInitial = computed(() => {
-	return displayName.value.charAt(0).toUpperCase();
+	return user.value?.first_name?.charAt(0).toUpperCase() || "U";
 });
 
 const roleLabel = computed(() => {
