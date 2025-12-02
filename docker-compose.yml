@@ -20,6 +20,8 @@ services:
       - FRONTEND_DIST=/app/frontend/dist
       # Health service is on localhost when using host network
       - HEALTH_SERVICE_URL=http://localhost:8001
+      # Auth service is on localhost when using host network
+      - AUTH_SERVICE_URL=http://localhost:8002
     # Network scanning requires elevated privileges
     cap_add:
       - NET_ADMIN
@@ -27,6 +29,8 @@ services:
     restart: unless-stopped
     depends_on:
       health:
+        condition: service_healthy
+      auth:
         condition: service_healthy
 
   # Health Monitoring Microservice
@@ -53,8 +57,34 @@ services:
       retries: 3
       start_period: 10s
 
+  # Auth Microservice
+  auth:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: cartographer-auth
+    # Use host network for consistent localhost access
+    network_mode: host
+    volumes:
+      - auth-data:/app/data
+    environment:
+      - CORS_ORIGINS=*
+      - AUTH_DATA_DIR=/app/data
+      # IMPORTANT: Change this in production!
+      - JWT_SECRET=${JWT_SECRET:-cartographer-dev-secret-change-in-production}
+      - JWT_EXPIRATION_HOURS=24
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 volumes:
   cartographer-data:
     driver: local
   health-data:
+    driver: local
+  auth-data:
     driver: local

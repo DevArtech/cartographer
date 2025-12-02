@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from .routers.mapper import router as mapper_router
 from .routers.health_proxy import router as health_proxy_router
+from .routers.auth_proxy import router as auth_proxy_router
 
 
 def create_app() -> FastAPI:
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
 
 	app.include_router(mapper_router, prefix="/api")
 	app.include_router(health_proxy_router, prefix="/api")
+	app.include_router(auth_proxy_router, prefix="/api")
 
 	# Serve built frontend if present (for production) with SPA fallback
 	# FRONTEND_DIST can override default location

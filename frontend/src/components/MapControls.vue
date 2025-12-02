@@ -10,11 +10,21 @@
 			<div class="text-xs text-slate-500 dark:text-slate-400 min-w-28">
 				<span v-if="message">{{ message }}</span>
 			</div>
-			<button @click="runMapper" class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50" :disabled="loading">
+			<button 
+				@click="runMapper" 
+				class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50" 
+				:disabled="loading || !props.canEdit"
+				:title="props.canEdit ? 'Run network mapper' : 'Write permission required'"
+			>
 				<span v-if="!loading">Run Mapper</span>
 				<span v-else>Running…</span>
 			</button>
-			<button @click="saveLayout" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-2" :disabled="!props.root.children?.length || !props.hasUnsavedChanges || saving">
+			<button 
+				@click="saveLayout" 
+				class="px-3 py-2 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-2" 
+				:disabled="!props.root.children?.length || !props.hasUnsavedChanges || saving || !props.canEdit"
+				:title="props.canEdit ? 'Save network map' : 'Write permission required'"
+			>
 				<svg v-if="saving" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -25,11 +35,20 @@
 			<button @click="exportJSON" class="px-3 py-2 rounded bg-purple-600 text-white text-sm hover:bg-purple-500" :disabled="!props.root.children?.length">
 				Export JSON
 			</button>
-			<label class="px-3 py-2 rounded bg-slate-700 text-white text-sm hover:bg-slate-600 cursor-pointer">
+			<label 
+				class="px-3 py-2 rounded text-white text-sm cursor-pointer"
+				:class="props.canEdit ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-500 opacity-50 cursor-not-allowed'"
+				:title="props.canEdit ? 'Import JSON file' : 'Write permission required'"
+			>
 				Import JSON
-				<input type="file" accept="application/json" class="hidden" @change="onLoadFile" />
+				<input type="file" accept="application/json" class="hidden" @change="onLoadFile" :disabled="!props.canEdit" />
 			</label>
-			<button @click="cleanUpLayout" class="px-3 py-2 rounded bg-amber-600 text-white text-sm hover:bg-amber-500">
+			<button 
+				@click="cleanUpLayout" 
+				class="px-3 py-2 rounded bg-amber-600 text-white text-sm hover:bg-amber-500 disabled:opacity-50"
+				:disabled="!props.canEdit"
+				:title="props.canEdit ? 'Clean up layout' : 'Write permission required'"
+			>
 				Clean Up
 			</button>
 			<div class="border-l border-slate-300 dark:border-slate-600 h-8 mx-1"></div>
@@ -118,6 +137,9 @@
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
 				</svg>
 			</button>
+			<!-- User Menu Slot -->
+			<div class="border-l border-slate-300 dark:border-slate-600 h-8 mx-1"></div>
+			<slot name="user-menu"></slot>
 		</div>
 	</div>
 </template>
@@ -133,6 +155,7 @@ import { useHealthMonitoring, type MonitoringConfig, type MonitoringStatus } fro
 const props = defineProps<{
 	root: TreeNode;
 	hasUnsavedChanges?: boolean;
+	canEdit?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -321,6 +344,10 @@ function exportJSON() {
 }
 
 function onLoadFile(e: Event) {
+	if (!props.canEdit) {
+		message.value = "Write permission required";
+		return;
+	}
 	const input = e.target as HTMLInputElement;
 	if (!input.files || !input.files.length) return;
 	const file = input.files[0];

@@ -1,8 +1,27 @@
 <template>
-	<div class="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+	<!-- Loading State -->
+	<div v-if="authLoading" class="h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+		<div class="text-center">
+			<svg class="animate-spin h-12 w-12 text-cyan-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+			</svg>
+			<p class="text-slate-400">Loading Cartographer...</p>
+		</div>
+	</div>
+
+	<!-- Setup Wizard (First Run) -->
+	<SetupWizard v-else-if="needsSetup" @complete="onSetupComplete" />
+
+	<!-- Login Screen -->
+	<LoginScreen v-else-if="!isAuthenticated" @success="onLoginSuccess" />
+
+	<!-- Main Application -->
+	<div v-else class="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
 		<MapControls
 			:root="parsed?.root || emptyRoot"
 			:hasUnsavedChanges="hasUnsavedChanges"
+			:canEdit="canWrite"
 			@updateMap="onUpdateMap"
 			@applyLayout="onApplyLayout"
 			@log="onLog"
@@ -10,7 +29,12 @@
 			@clearLogs="onClearLogs"
 			@cleanUpLayout="onCleanUpLayout"
 			@saved="onMapSaved"
-		/>
+		>
+			<!-- User Menu Slot -->
+			<template #user-menu>
+				<UserMenu @logout="onLogout" @manageUsers="showUserManagement = true" />
+			</template>
+		</MapControls>
 		<div class="flex flex-1 min-h-0">
 			<aside class="w-80 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
 				<DeviceList
@@ -50,9 +74,13 @@
 						</button>
 						<button
 							class="px-3 py-1 text-xs border-l border-slate-300 dark:border-slate-600"
-							:class="mode === 'edit' ? 'bg-blue-600 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'"
-							@click="mode = 'edit'"
-							title="Edit nodes (drag + type) + Pan"
+							:class="[
+								mode === 'edit' ? 'bg-blue-600 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700',
+								!canWrite ? 'opacity-50 cursor-not-allowed' : ''
+							]"
+							@click="canWrite && (mode = 'edit')"
+							:disabled="!canWrite"
+							:title="canWrite ? 'Edit nodes (drag + type) + Pan' : 'Edit mode requires write permissions'"
 						>
 							Edit
 						</button>
@@ -328,6 +356,9 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- User Management Modal -->
+		<UserManagement v-if="showUserManagement" @close="showUserManagement = false" />
 	</div>
 </template>
 
@@ -338,10 +369,56 @@ import MapControls from "./components/MapControls.vue";
 import DeviceList from "./components/DeviceList.vue";
 import NetworkMap from "./components/NetworkMap.vue";
 import NodeInfoPanel from "./components/NodeInfoPanel.vue";
+import SetupWizard from "./components/SetupWizard.vue";
+import LoginScreen from "./components/LoginScreen.vue";
+import UserMenu from "./components/UserMenu.vue";
+import UserManagement from "./components/UserManagement.vue";
 import type { ParsedNetworkMap, TreeNode, NodeVersion } from "./types/network";
 import { useMapLayout } from "./composables/useMapLayout";
 import { useNetworkData } from "./composables/useNetworkData";
 import { useHealthMonitoring } from "./composables/useHealthMonitoring";
+import { useAuth } from "./composables/useAuth";
+
+// Auth state
+const { isAuthenticated, canWrite, checkSetupStatus, verifySession } = useAuth();
+const authLoading = ref(true);
+const needsSetup = ref(false);
+const showUserManagement = ref(false);
+
+// Check auth status on mount
+async function initAuth() {
+	authLoading.value = true;
+	try {
+		// Check if setup is complete
+		const status = await checkSetupStatus();
+		needsSetup.value = !status.is_setup_complete;
+		
+		// If setup is complete and we have a stored token, verify it
+		if (status.is_setup_complete) {
+			await verifySession();
+		}
+	} catch (e) {
+		console.error("[Auth] Failed to check setup status:", e);
+		// If we can't reach the auth service, assume setup is needed
+		needsSetup.value = false;
+	} finally {
+		authLoading.value = false;
+	}
+}
+
+function onSetupComplete() {
+	needsSetup.value = false;
+}
+
+function onLoginSuccess() {
+	// Auth state is already updated by the composable
+	console.log("[App] Login successful");
+}
+
+function onLogout() {
+	// Reload the page to reset all state
+	window.location.reload();
+}
 
 // Version management helpers
 function initializeNodeVersion(node: TreeNode, source: 'manual' | 'mapper' = 'manual'): void {
@@ -400,6 +477,13 @@ const emptyRoot: TreeNode = { id: "root", name: "Network", role: "group", childr
 const logs = ref<string[]>([]);
 const running = ref(false);
 const mode = ref<'pan' | 'edit'>('pan'); // interaction mode
+
+// Watch canWrite and reset mode if user becomes readonly
+watch(canWrite, (canEdit) => {
+	if (!canEdit && mode.value === 'edit') {
+		mode.value = 'pan';
+	}
+});
 const showHistoryPanel = ref(false); // history panel visibility
 const showNodeInfoPanel = ref(false); // node info panel visibility
 const historyFilter = ref<'selected' | 'all'>('selected'); // history panel filter
@@ -490,6 +574,9 @@ watch(() => parsed.value?.root, async (root) => {
 
 // Start polling for health updates when app mounts
 onMounted(async () => {
+	// Initialize auth first
+	await initAuth();
+	
 	// Start polling for cached health metrics every 10 seconds
 	startPolling(10000);
 	

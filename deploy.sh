@@ -101,6 +101,8 @@ case $COMMAND in
         docker build -t cartographer-app:$TAG .
         echo "Building cartographer-health..."
         docker build -t cartographer-health:$TAG ./health-service
+        echo "Building cartographer-auth..."
+        docker build -t cartographer-auth:$TAG ./auth-service
         echo -e "${GREEN}✓ Build complete${NC}"
         ;;
     
@@ -120,6 +122,10 @@ case $COMMAND in
         docker tag cartographer-health:$TAG $REGISTRY/cartographer-health:$TAG
         docker push $REGISTRY/cartographer-health:$TAG
         
+        # Tag and push auth service
+        docker tag cartographer-auth:$TAG $REGISTRY/cartographer-auth:$TAG
+        docker push $REGISTRY/cartographer-auth:$TAG
+        
         echo -e "${GREEN}✓ Push complete${NC}"
         ;;
     
@@ -136,6 +142,7 @@ case $COMMAND in
         echo "Access the application:"
         echo "  Main App:        http://localhost:8000"
         echo "  Health Service:  http://localhost:8001"
+        echo "  Auth Service:    http://localhost:8002"
         ;;
     
     down)
