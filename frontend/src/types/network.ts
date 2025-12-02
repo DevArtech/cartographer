@@ -45,6 +45,8 @@ export interface TreeNode {
 	history?: NodeVersion[]; // Previous versions for audit trail
 	// Health monitoring
 	monitoringEnabled?: boolean; // Whether to include this node in health monitoring (default: true)
+	// Gateway-specific: external IPs to test for internet connectivity
+	testIps?: string[];
 }
 
 export interface ParsedNetworkMap {

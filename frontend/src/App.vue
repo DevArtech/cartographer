@@ -294,6 +294,7 @@
 				:node="selectedNode"
 				@close="closeNodeInfoPanel"
 				@toggleMonitoring="onToggleNodeMonitoring"
+				@updateTestIps="onUpdateTestIps"
 			/>
 		</div>
 		<!-- Terminal / Logs Panel -->
@@ -837,6 +838,26 @@ async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
 		
 		// Send updated list to backend - this REPLACES the entire list
 		await registerDevices(ips, false); // Don't trigger immediate check when disabling
+		
+		// Trigger auto-save
+		triggerAutoSave();
+	}
+}
+
+function onUpdateTestIps(nodeId: string, testIps: string[]) {
+	if (!parsed.value?.root) return;
+	
+	// Find the node and update its testIps property
+	const node = findNodeById(parsed.value.root, nodeId);
+	if (node) {
+		node.testIps = testIps;
+		
+		// Update the version for change tracking
+		const now = new Date().toISOString();
+		node.updatedAt = now;
+		node.version = (node.version || 0) + 1;
+		
+		console.log(`[Health] Updated test IPs for ${node.name || nodeId}:`, testIps);
 		
 		// Trigger auto-save
 		triggerAutoSave();
