@@ -1,6 +1,6 @@
 <template>
 	<div class="w-full h-full">
-		<svg ref="svgRef" class="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"></svg>
+		<svg ref="svgRef" class="w-full h-full transition-colors" :class="isDark ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900' : 'bg-gradient-to-br from-slate-50 to-blue-50'"></svg>
 	</div>
 </template>
 
@@ -12,6 +12,7 @@ import type { TreeNode } from "../types/network";
 const props = defineProps<{
 	data: TreeNode;
 	sensitiveMode?: boolean;
+	isDark?: boolean;
 }>();
 
 const svgRef = ref<SVGSVGElement | null>(null);
@@ -290,6 +291,9 @@ function render() {
 		return angle;
 	};
 
+	// Theme-aware colors
+	const dark = props.isDark !== false; // Default to dark if not specified
+	
 	g.append("g")
 		.selectAll("path.link")
 		.data(links)
@@ -299,7 +303,7 @@ function render() {
 		.attr("stroke", "#60a5fa")
 		.attr("stroke-width", 2)
 		.attr("stroke-dasharray", "8,4")
-		.attr("opacity", 0.8)
+		.attr("opacity", dark ? 0.8 : 0.6)
 		.attr("d", (d: any) => linkPath(d.source, d.target));
 
 	// Draw nodes
@@ -314,7 +318,7 @@ function render() {
 	// Main node circle with shadow effect
 	node.append("circle")
 		.attr("r", 18)
-		.attr("fill", "#1e293b")
+		.attr("fill", dark ? "#1e293b" : "#ffffff")
 		.attr("stroke", (d: any) => {
 			switch (d.role) {
 				case "gateway/router": return "#ef4444";
@@ -328,7 +332,7 @@ function render() {
 			}
 		})
 		.attr("stroke-width", 3)
-		.style("filter", "drop-shadow(0 2px 8px rgba(0,0,0,0.5))");
+		.style("filter", dark ? "drop-shadow(0 2px 8px rgba(0,0,0,0.5))" : "drop-shadow(0 2px 4px rgba(0,0,0,0.1))");
 
 	// Icon
 	node.append("text")
@@ -342,7 +346,7 @@ function render() {
 		.attr("dy", "2.8em")
 		.attr("text-anchor", "middle")
 		.attr("class", "node-label")
-		.attr("fill", "#e2e8f0")
+		.attr("fill", dark ? "#e2e8f0" : "#334155")
 		.attr("font-weight", "500")
 		.attr("font-size", "11px")
 		.text((d: any) => d.name);
@@ -368,8 +372,8 @@ function render() {
 				.attr("font-size", "10px")
 				.attr("font-weight", "600")
 				.attr("font-style", "italic")
-				.attr("fill", "#93c5fd")
-				.attr("opacity", 0.8)
+				.attr("fill", dark ? "#93c5fd" : "#1e40af")
+				.attr("opacity", dark ? 0.8 : 0.6)
 				.attr("transform", (d: any) => {
 					const angle = getBezierAngle(d.source, d.target);
 					const centerX = (d.source.x + d.target.x) / 2;
@@ -438,7 +442,7 @@ onBeforeUnmount(() => {
 	if (cleanup) cleanup();
 });
 
-watch(() => [props.data, props.sensitiveMode], () => {
+watch(() => [props.data, props.sensitiveMode, props.isDark], () => {
 	render();
 }, { deep: true });
 </script>
