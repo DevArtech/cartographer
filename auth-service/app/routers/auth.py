@@ -219,7 +219,7 @@ async def update_current_profile(
     user: UserInDB = Depends(require_auth)
 ):
     """Update current user's profile"""
-    # Users can only update their own display_name, not role
+    # Users can only update their own profile, not role
     if request.role is not None and user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Cannot change your own role")
     

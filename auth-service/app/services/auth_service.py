@@ -350,7 +350,9 @@ class AuthService:
         return UserResponse(
             id=user.id,
             username=user.username,
-            display_name=user.display_name,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
             role=user.role,
             created_at=user.created_at,
             updated_at=user.updated_at,

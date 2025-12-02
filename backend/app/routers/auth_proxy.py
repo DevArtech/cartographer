@@ -47,9 +47,19 @@ async def proxy_request(
             else:
                 raise HTTPException(status_code=405, detail="Method not allowed")
             
-            # Return the response from auth service
+            # Parse response content safely
+            content = None
+            if response.content:
+                try:
+                    content = response.json()
+                except Exception as json_err:
+                    logger.warning(f"Failed to parse JSON from auth service: {json_err}")
+                    # If it's an error status, try to return raw text as error detail
+                    if response.status_code >= 400:
+                        content = {"detail": response.text or "Unknown error from auth service"}
+            
             return JSONResponse(
-                content=response.json() if response.content else None,
+                content=content,
                 status_code=response.status_code
             )
     except httpx.ConnectError:
@@ -64,6 +74,8 @@ async def proxy_request(
             status_code=504,
             detail="Auth service timeout"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error proxying to auth service: {e}")
         raise HTTPException(
