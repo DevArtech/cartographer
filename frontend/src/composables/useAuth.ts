@@ -24,14 +24,50 @@ const isLoading = ref(false);
 const error = ref<string | null>(null);
 const setupStatus = ref<SetupStatus | null>(null);
 
+// Track if interceptor is already set up
+let interceptorSetup = false;
+
 // Computed properties
 const isAuthenticated = computed(() => !!token.value && !!user.value);
 const isOwner = computed(() => user.value?.role === "owner");
 const canWrite = computed(() => user.value?.role === "owner" || user.value?.role === "readwrite");
 const isReadOnly = computed(() => user.value?.role === "readonly");
 
+// Setup axios response interceptor to handle 401 errors
+function setupAxiosInterceptor(): void {
+	if (interceptorSetup) return;
+	
+	axios.interceptors.response.use(
+		(response) => response,
+		(error) => {
+			// Handle 401 Unauthorized responses
+			if (error.response?.status === 401) {
+				// Don't clear auth for login/setup endpoints (they're expected to fail if not authenticated)
+				const url = error.config?.url || "";
+				const isAuthEndpoint = url.includes("/api/auth/login") || 
+				                        url.includes("/api/auth/setup") ||
+				                        url.includes("/api/auth/verify");
+				
+				if (!isAuthEndpoint && token.value) {
+					console.warn("[Auth] Received 401, clearing session");
+					clearAuth();
+					// Optionally trigger a page reload to show login screen
+					// window.location.reload();
+				}
+			}
+			return Promise.reject(error);
+		}
+	);
+	
+	interceptorSetup = true;
+	console.log("[Auth] Axios interceptor configured");
+}
+
 // Initialize from localStorage
 function initFromStorage(): void {
+	// Set up the axios interceptor
+	setupAxiosInterceptor();
+	
 	try {
 		const stored = localStorage.getItem(AUTH_STORAGE_KEY);
 		if (stored) {

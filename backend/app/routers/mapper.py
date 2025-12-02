@@ -3,10 +3,17 @@ import pathlib
 import subprocess
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 import json
+
+from ..dependencies import (
+    AuthenticatedUser,
+    require_auth,
+    require_write_access,
+    require_owner
+)
 
 
 router = APIRouter()
@@ -43,7 +50,8 @@ def get_config():
 
 
 @router.post("/run-mapper", response_model=MapperResponse)
-def run_mapper() -> MapperResponse:
+def run_mapper(user: AuthenticatedUser = Depends(require_write_access)) -> MapperResponse:
+	"""Run the network mapper script. Requires write access."""
 	script = _script_path()
 	if not script.exists():
 		raise HTTPException(status_code=404, detail=f"lan_mapper.sh not found at {script}")
@@ -108,7 +116,8 @@ def _sse_event(event: str, data: str) -> str:
 
 
 @router.get("/run-mapper/stream")
-def run_mapper_stream():
+def run_mapper_stream(user: AuthenticatedUser = Depends(require_write_access)):
+	"""Stream the mapper script output. Requires write access."""
 	script = _script_path()
 	if not script.exists():
 		raise HTTPException(status_code=404, detail=f"lan_mapper.sh not found at {script}")
@@ -165,7 +174,8 @@ def run_mapper_stream():
 
 
 @router.get("/download-map")
-def download_map():
+def download_map(user: AuthenticatedUser = Depends(require_auth)):
+	"""Download the network map file. Requires authentication."""
 	# Serve the latest produced network_map.txt as a download
 	for candidate in _network_map_candidates():
 		if candidate.exists():
@@ -189,8 +199,8 @@ def _saved_layout_path() -> pathlib.Path:
 
 
 @router.post("/save-layout")
-def save_layout(layout: dict):
-	"""Save the network layout to the server"""
+def save_layout(layout: dict, user: AuthenticatedUser = Depends(require_write_access)):
+	"""Save the network layout to the server. Requires write access."""
 	try:
 		layout_path = _saved_layout_path()
 		with open(layout_path, 'w') as f:
@@ -205,8 +215,8 @@ def save_layout(layout: dict):
 
 
 @router.get("/load-layout")
-def load_layout():
-	"""Load the saved network layout from the server"""
+def load_layout(user: AuthenticatedUser = Depends(require_auth)):
+	"""Load the saved network layout from the server. Requires authentication."""
 	layout_path = _saved_layout_path()
 	if not layout_path.exists():
 		return JSONResponse({"exists": False, "layout": None})
@@ -309,8 +319,8 @@ def get_embed_data(embed_id: str):
 
 
 @router.get("/embeds")
-def list_embeds():
-	"""List all embed configurations"""
+def list_embeds(user: AuthenticatedUser = Depends(require_auth)):
+	"""List all embed configurations. Requires authentication."""
 	embeds = _load_all_embeds()
 	# Return list with IDs but without exposing full config details
 	embed_list = []
@@ -330,8 +340,8 @@ def list_embeds():
 
 
 @router.post("/embeds")
-def create_embed(config: dict):
-	"""Create a new embed configuration"""
+def create_embed(config: dict, user: AuthenticatedUser = Depends(require_write_access)):
+	"""Create a new embed configuration. Requires write access."""
 	try:
 		embeds = _load_all_embeds()
 		
@@ -365,8 +375,8 @@ def create_embed(config: dict):
 
 
 @router.patch("/embeds/{embed_id}")
-def update_embed(embed_id: str, config: dict):
-	"""Update an existing embed configuration"""
+def update_embed(embed_id: str, config: dict, user: AuthenticatedUser = Depends(require_write_access)):
+	"""Update an existing embed configuration. Requires write access."""
 	try:
 		embeds = _load_all_embeds()
 		
@@ -403,8 +413,8 @@ def update_embed(embed_id: str, config: dict):
 
 
 @router.delete("/embeds/{embed_id}")
-def delete_embed(embed_id: str):
-	"""Delete an embed configuration"""
+def delete_embed(embed_id: str, user: AuthenticatedUser = Depends(require_owner)):
+	"""Delete an embed configuration. Requires owner access."""
 	try:
 		embeds = _load_all_embeds()
 		

@@ -181,6 +181,7 @@ import type { ParsedNetworkMap, TreeNode } from "../types/network";
 import { useNetworkData } from "../composables/useNetworkData";
 import { useMapLayout } from "../composables/useMapLayout";
 import { useHealthMonitoring, type MonitoringConfig, type MonitoringStatus } from "../composables/useHealthMonitoring";
+import { useAuth } from "../composables/useAuth";
 import EmbedGenerator from "./EmbedGenerator.vue";
 
 const props = defineProps<{
@@ -207,6 +208,7 @@ const isDark = ref(false);
 const { parseNetworkMap } = useNetworkData();
 const { exportLayout, importLayout } = useMapLayout();
 const { fetchConfig, updateConfig, fetchStatus } = useHealthMonitoring();
+const { token } = useAuth();
 let es: EventSource | null = null;
 // Prefer relative URLs to avoid mixed-content; use APPLICATION_URL only if safe (https or same protocol)
 const baseUrl = ref<string>("");
@@ -421,8 +423,17 @@ function startSSE() {
 	message.value = "Running mapper…";
 	emit("running", true);
 	try {
-		const sseUrl = `${baseUrl.value}/api/run-mapper/stream`.replace(/^\/\//, "/");
-		es = new EventSource(baseUrl.value ? sseUrl : "/api/run-mapper/stream");
+		// Build SSE URL with token as query parameter (EventSource doesn't support custom headers)
+		let sseUrl = `${baseUrl.value}/api/run-mapper/stream`.replace(/^\/\//, "/");
+		if (!baseUrl.value) {
+			sseUrl = "/api/run-mapper/stream";
+		}
+		// Add token as query parameter for SSE authentication
+		if (token.value) {
+			const separator = sseUrl.includes('?') ? '&' : '?';
+			sseUrl = `${sseUrl}${separator}token=${encodeURIComponent(token.value)}`;
+		}
+		es = new EventSource(sseUrl);
 		es.addEventListener("log", (e: MessageEvent) => {
 			emit("log", String(e.data || ""));
 		});
@@ -449,7 +460,7 @@ function startSSE() {
 		});
 		es.onerror = () => {
 			if (loading.value) {
-				message.value = "Stream error";
+				message.value = "Stream error (check authentication)";
 				loading.value = false;
 			}
 			emit("running", false);
