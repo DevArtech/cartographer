@@ -517,6 +517,24 @@ def delete_embed(embed_id: str, user: AuthenticatedUser = Depends(require_owner)
 
 import httpx
 
+# Health service URL - same as health_proxy.py
+HEALTH_SERVICE_URL = os.environ.get("HEALTH_SERVICE_URL", "http://localhost:8001")
+
+
+async def _health_service_request(method: str, path: str, json_body: dict = None, timeout: float = 30.0):
+	"""Make a request to the health service"""
+	url = f"{HEALTH_SERVICE_URL}/api/health{path}"
+	
+	async with httpx.AsyncClient(timeout=timeout) as client:
+		if method == "GET":
+			response = await client.get(url)
+		elif method == "POST":
+			response = await client.post(url, json=json_body)
+		else:
+			raise ValueError(f"Unsupported method: {method}")
+		
+		return response
+
 
 @router.post("/embed/{embed_id}/health/register")
 async def register_embed_health_devices(embed_id: str, request: dict):
@@ -548,19 +566,20 @@ async def register_embed_health_devices(embed_id: str, request: dict):
 	
 	# Register with health service
 	try:
-		health_service_url = os.environ.get("HEALTH_SERVICE_URL", "http://health-service:8002")
-		async with httpx.AsyncClient() as client:
-			response = await client.post(
-				f"{health_service_url}/health/monitoring/devices",
-				json={"ips": real_ips},
-				timeout=10.0
-			)
-			response.raise_for_status()
+		response = await _health_service_request(
+			"POST",
+			"/monitoring/devices",
+			json_body={"ips": real_ips},
+			timeout=10.0
+		)
+		response.raise_for_status()
 		
 		return JSONResponse({
 			"message": f"Registered {len(real_ips)} devices for monitoring",
 			"count": len(real_ips)
 		})
+	except httpx.ConnectError:
+		raise HTTPException(status_code=503, detail="Health service unavailable")
 	except Exception as exc:
 		raise HTTPException(status_code=500, detail=f"Failed to register devices: {exc}")
 
@@ -574,18 +593,19 @@ async def trigger_embed_health_check(embed_id: str):
 		raise HTTPException(status_code=404, detail="Embed not found")
 	
 	try:
-		health_service_url = os.environ.get("HEALTH_SERVICE_URL", "http://health-service:8002")
-		async with httpx.AsyncClient() as client:
-			response = await client.post(
-				f"{health_service_url}/health/monitoring/check-now",
-				timeout=30.0
-			)
-			if response.status_code == 400:
-				# No devices registered - that's ok
-				return JSONResponse({"message": "No devices registered"})
-			response.raise_for_status()
+		response = await _health_service_request(
+			"POST",
+			"/monitoring/check-now",
+			timeout=30.0
+		)
+		if response.status_code == 400:
+			# No devices registered - that's ok
+			return JSONResponse({"message": "No devices registered"})
+		response.raise_for_status()
 		
 		return JSONResponse({"message": "Check triggered"})
+	except httpx.ConnectError:
+		raise HTTPException(status_code=503, detail="Health service unavailable")
 	except Exception as exc:
 		raise HTTPException(status_code=500, detail=f"Failed to trigger check: {exc}")
 
@@ -607,14 +627,13 @@ async def get_embed_cached_health(embed_id: str):
 	sensitive_mode = embed_config.get("sensitiveMode", False)
 	
 	try:
-		health_service_url = os.environ.get("HEALTH_SERVICE_URL", "http://health-service:8002")
-		async with httpx.AsyncClient() as client:
-			response = await client.get(
-				f"{health_service_url}/health/cached",
-				timeout=10.0
-			)
-			response.raise_for_status()
-			all_metrics = response.json()
+		response = await _health_service_request(
+			"GET",
+			"/cached",
+			timeout=10.0
+		)
+		response.raise_for_status()
+		all_metrics = response.json()
 		
 		if not sensitive_mode:
 			# Not in sensitive mode - return as-is
@@ -636,6 +655,8 @@ async def get_embed_cached_health(embed_id: str):
 				anonymized_metrics[anon_id] = safe_metrics
 		
 		return JSONResponse(anonymized_metrics)
+	except httpx.ConnectError:
+		raise HTTPException(status_code=503, detail="Health service unavailable")
 	except Exception as exc:
 		raise HTTPException(status_code=500, detail=f"Failed to get cached health: {exc}")
 
