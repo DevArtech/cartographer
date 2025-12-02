@@ -235,16 +235,26 @@ def get_embed_data():
 	"""Get the network map data for the embed view (read-only, no auth required)"""
 	layout_path = _saved_layout_path()
 	if not layout_path.exists():
-		return JSONResponse({"exists": False, "root": None, "sensitiveMode": False})
+		return JSONResponse({
+			"exists": False,
+			"root": None,
+			"sensitiveMode": False,
+			"showOwner": False,
+			"ownerDisplayName": None
+		})
 	
-	# Load embed config for sensitive mode setting
-	sensitive_mode = False
+	# Load embed config for settings
+	embed_config = {
+		"sensitiveMode": False,
+		"showOwner": False,
+		"ownerDisplayName": None
+	}
 	embed_config_path = _embed_config_path()
 	if embed_config_path.exists():
 		try:
 			with open(embed_config_path, 'r') as f:
-				embed_config = json.load(f)
-				sensitive_mode = embed_config.get("sensitiveMode", False)
+				saved_config = json.load(f)
+				embed_config.update(saved_config)
 		except Exception:
 			pass
 	
@@ -255,12 +265,20 @@ def get_embed_data():
 		# Return just the root tree node for the embed
 		root = layout.get("root")
 		if not root:
-			return JSONResponse({"exists": False, "root": None, "sensitiveMode": False})
+			return JSONResponse({
+				"exists": False,
+				"root": None,
+				"sensitiveMode": False,
+				"showOwner": False,
+				"ownerDisplayName": None
+			})
 		
 		return JSONResponse({
 			"exists": True,
 			"root": root,
-			"sensitiveMode": sensitive_mode
+			"sensitiveMode": embed_config.get("sensitiveMode", False),
+			"showOwner": embed_config.get("showOwner", False),
+			"ownerDisplayName": embed_config.get("ownerDisplayName") if embed_config.get("showOwner") else None
 		})
 	except Exception as exc:
 		raise HTTPException(status_code=500, detail=f"Failed to load embed data: {exc}")

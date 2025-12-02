@@ -27,6 +27,10 @@
 			<!-- Branding watermark -->
 			<div class="absolute bottom-3 left-3 z-10 flex items-center gap-2 bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-slate-700">
 				<span class="text-sm font-medium text-slate-300">🗺️ Cartographer</span>
+				<template v-if="showOwner && ownerDisplayName">
+					<span class="text-slate-500">•</span>
+					<span class="text-sm text-slate-400">{{ ownerDisplayName }}</span>
+				</template>
 			</div>
 			
 			<!-- Zoom controls -->
@@ -90,6 +94,8 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const mapData = ref<TreeNode | null>(null);
 const sensitiveMode = ref(false);
+const showOwner = ref(false);
+const ownerDisplayName = ref<string | null>(null);
 const networkMapRef = ref<InstanceType<typeof NetworkMapEmbed> | null>(null);
 
 async function loadMapData() {
@@ -101,6 +107,8 @@ async function loadMapData() {
 		if (response.data.exists && response.data.root) {
 			mapData.value = response.data.root;
 			sensitiveMode.value = response.data.sensitiveMode || false;
+			showOwner.value = response.data.showOwner || false;
+			ownerDisplayName.value = response.data.ownerDisplayName || null;
 		} else {
 			error.value = 'No network map has been configured yet.';
 		}
