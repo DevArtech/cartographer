@@ -1,7 +1,12 @@
 import os
 import pathlib
+import re
 import subprocess
 from typing import Optional
+import secrets
+import string
+import hashlib
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
@@ -232,9 +237,68 @@ def load_layout(user: AuthenticatedUser = Depends(require_auth)):
 		raise HTTPException(status_code=500, detail=f"Failed to load layout: {exc}")
 
 
-import secrets
-import string
-from datetime import datetime
+# In-memory cache for embed IP mappings (anonymized_id -> real_ip)
+# This allows health checks to work without exposing IPs to the client
+_embed_ip_mappings: dict[str, dict[str, str]] = {}
+
+
+def _generate_anonymized_id(ip: str, embed_id: str) -> str:
+	"""Generate a consistent anonymized ID for an IP within an embed context"""
+	# Use a hash to create a consistent but non-reversible ID
+	# Include embed_id to make IDs unique per embed
+	combined = f"{embed_id}:{ip}"
+	hash_bytes = hashlib.sha256(combined.encode()).hexdigest()[:12]
+	return f"device_{hash_bytes}"
+
+
+def _sanitize_node_ips(node: dict, embed_id: str, ip_mapping: dict[str, str]) -> dict:
+	"""
+	Recursively sanitize a node tree, replacing real IPs with anonymized IDs.
+	Also populates ip_mapping with reverse lookup (anonymized_id -> real_ip).
+	"""
+	sanitized = node.copy()
+	
+	# Replace IP if present
+	if "ip" in sanitized and sanitized["ip"]:
+		real_ip = sanitized["ip"]
+		anon_id = _generate_anonymized_id(real_ip, embed_id)
+		ip_mapping[anon_id] = real_ip
+		sanitized["ip"] = anon_id
+	
+	# Also sanitize the 'id' field if it looks like an IP
+	if "id" in sanitized:
+		id_val = str(sanitized["id"])
+		# Check if id looks like an IP address
+		if id_val and all(part.isdigit() for part in id_val.split(".") if part) and id_val.count(".") == 3:
+			anon_id = _generate_anonymized_id(id_val, embed_id)
+			ip_mapping[anon_id] = id_val
+			sanitized["id"] = anon_id
+	
+	# Sanitize parentId if it looks like an IP
+	if "parentId" in sanitized and sanitized["parentId"]:
+		parent_id = str(sanitized["parentId"])
+		if parent_id and all(part.isdigit() for part in parent_id.split(".") if part) and parent_id.count(".") == 3:
+			anon_id = _generate_anonymized_id(parent_id, embed_id)
+			# Don't overwrite if already mapped
+			if anon_id not in ip_mapping:
+				ip_mapping[anon_id] = parent_id
+			sanitized["parentId"] = anon_id
+	
+	# Also remove/sanitize hostname if it contains IP-like patterns
+	if "hostname" in sanitized and sanitized["hostname"]:
+		hostname = sanitized["hostname"]
+		# Check if hostname contains IP pattern
+		if re.search(r'\d+\.\d+\.\d+\.\d+', hostname):
+			sanitized["hostname"] = ""
+	
+	# Recursively sanitize children
+	if "children" in sanitized and sanitized["children"]:
+		sanitized["children"] = [
+			_sanitize_node_ips(child, embed_id, ip_mapping)
+			for child in sanitized["children"]
+		]
+	
+	return sanitized
 
 
 def _embeds_config_path() -> pathlib.Path:
@@ -274,6 +338,8 @@ def _save_all_embeds(embeds: dict) -> None:
 @router.get("/embed-data/{embed_id}")
 def get_embed_data(embed_id: str):
 	"""Get the network map data for a specific embed (read-only, no auth required)"""
+	global _embed_ip_mappings
+	
 	# Load embed config
 	embeds = _load_all_embeds()
 	embed_config = embeds.get(embed_id)
@@ -306,10 +372,19 @@ def get_embed_data(embed_id: str):
 				"ownerDisplayName": None
 			})
 		
+		sensitive_mode = embed_config.get("sensitiveMode", False)
+		
+		# If sensitive mode is enabled, sanitize all IPs in the response
+		if sensitive_mode:
+			ip_mapping: dict[str, str] = {}
+			root = _sanitize_node_ips(root, embed_id, ip_mapping)
+			# Store the mapping for health checks
+			_embed_ip_mappings[embed_id] = ip_mapping
+		
 		return JSONResponse({
 			"exists": True,
 			"root": root,
-			"sensitiveMode": embed_config.get("sensitiveMode", False),
+			"sensitiveMode": sensitive_mode,
 			"showOwner": embed_config.get("showOwner", False),
 			"ownerDisplayName": embed_config.get("ownerDisplayName") if embed_config.get("showOwner") else None,
 			"name": embed_config.get("name", "Unnamed Embed")
@@ -415,6 +490,8 @@ def update_embed(embed_id: str, config: dict, user: AuthenticatedUser = Depends(
 @router.delete("/embeds/{embed_id}")
 def delete_embed(embed_id: str, user: AuthenticatedUser = Depends(require_owner)):
 	"""Delete an embed configuration. Requires owner access."""
+	global _embed_ip_mappings
+	
 	try:
 		embeds = _load_all_embeds()
 		
@@ -424,10 +501,142 @@ def delete_embed(embed_id: str, user: AuthenticatedUser = Depends(require_owner)
 		del embeds[embed_id]
 		_save_all_embeds(embeds)
 		
+		# Clean up IP mapping if exists
+		if embed_id in _embed_ip_mappings:
+			del _embed_ip_mappings[embed_id]
+		
 		return JSONResponse({"success": True, "message": "Embed deleted"})
 	except HTTPException:
 		raise
 	except Exception as exc:
 		raise HTTPException(status_code=500, detail=f"Failed to delete embed: {exc}")
+
+
+# ==================== Embed Health Endpoints ====================
+# These endpoints allow embeds to use health monitoring without exposing real IPs
+
+import httpx
+
+
+@router.post("/embed/{embed_id}/health/register")
+async def register_embed_health_devices(embed_id: str, request: dict):
+	"""
+	Register devices for health monitoring using anonymized IDs.
+	The backend translates these to real IPs server-side.
+	"""
+	global _embed_ip_mappings
+	
+	# Verify embed exists
+	embeds = _load_all_embeds()
+	if embed_id not in embeds:
+		raise HTTPException(status_code=404, detail="Embed not found")
+	
+	# Get the IP mapping for this embed
+	ip_mapping = _embed_ip_mappings.get(embed_id, {})
+	
+	# Get anonymized IDs from request
+	anon_ids = request.get("device_ids", [])
+	
+	# Translate to real IPs
+	real_ips = []
+	for anon_id in anon_ids:
+		if anon_id in ip_mapping:
+			real_ips.append(ip_mapping[anon_id])
+	
+	if not real_ips:
+		return JSONResponse({"message": "No valid devices to register", "count": 0})
+	
+	# Register with health service
+	try:
+		health_service_url = os.environ.get("HEALTH_SERVICE_URL", "http://health-service:8002")
+		async with httpx.AsyncClient() as client:
+			response = await client.post(
+				f"{health_service_url}/health/monitoring/devices",
+				json={"ips": real_ips},
+				timeout=10.0
+			)
+			response.raise_for_status()
+		
+		return JSONResponse({
+			"message": f"Registered {len(real_ips)} devices for monitoring",
+			"count": len(real_ips)
+		})
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail=f"Failed to register devices: {exc}")
+
+
+@router.post("/embed/{embed_id}/health/check-now")
+async def trigger_embed_health_check(embed_id: str):
+	"""Trigger an immediate health check for embed devices."""
+	# Verify embed exists
+	embeds = _load_all_embeds()
+	if embed_id not in embeds:
+		raise HTTPException(status_code=404, detail="Embed not found")
+	
+	try:
+		health_service_url = os.environ.get("HEALTH_SERVICE_URL", "http://health-service:8002")
+		async with httpx.AsyncClient() as client:
+			response = await client.post(
+				f"{health_service_url}/health/monitoring/check-now",
+				timeout=30.0
+			)
+			if response.status_code == 400:
+				# No devices registered - that's ok
+				return JSONResponse({"message": "No devices registered"})
+			response.raise_for_status()
+		
+		return JSONResponse({"message": "Check triggered"})
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail=f"Failed to trigger check: {exc}")
+
+
+@router.get("/embed/{embed_id}/health/cached")
+async def get_embed_cached_health(embed_id: str):
+	"""
+	Get cached health metrics for an embed, using anonymized IDs.
+	Real IPs are never exposed to the client.
+	"""
+	global _embed_ip_mappings
+	
+	# Verify embed exists and check sensitive mode
+	embeds = _load_all_embeds()
+	embed_config = embeds.get(embed_id)
+	if not embed_config:
+		raise HTTPException(status_code=404, detail="Embed not found")
+	
+	sensitive_mode = embed_config.get("sensitiveMode", False)
+	
+	try:
+		health_service_url = os.environ.get("HEALTH_SERVICE_URL", "http://health-service:8002")
+		async with httpx.AsyncClient() as client:
+			response = await client.get(
+				f"{health_service_url}/health/cached",
+				timeout=10.0
+			)
+			response.raise_for_status()
+			all_metrics = response.json()
+		
+		if not sensitive_mode:
+			# Not in sensitive mode - return as-is
+			return JSONResponse(all_metrics)
+		
+		# In sensitive mode - translate IPs to anonymized IDs
+		ip_mapping = _embed_ip_mappings.get(embed_id, {})
+		# Create reverse mapping: real_ip -> anon_id
+		reverse_mapping = {v: k for k, v in ip_mapping.items()}
+		
+		anonymized_metrics = {}
+		for ip, metrics in all_metrics.items():
+			anon_id = reverse_mapping.get(ip)
+			if anon_id:
+				# Create a copy of metrics without the IP field
+				safe_metrics = dict(metrics)
+				if "ip" in safe_metrics:
+					safe_metrics["ip"] = anon_id
+				anonymized_metrics[anon_id] = safe_metrics
+		
+		return JSONResponse(anonymized_metrics)
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail=f"Failed to get cached health: {exc}")
 
 

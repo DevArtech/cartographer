@@ -104,11 +104,10 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
 import axios from 'axios';
-import type { TreeNode } from '../types/network';
+import type { TreeNode, DeviceMetrics } from '../types/network';
 import NetworkMapEmbed from './NetworkMapEmbed.vue';
-import { useHealthMonitoring } from '../composables/useHealthMonitoring';
 
 const props = defineProps<{
 	embedId: string;
@@ -123,23 +122,65 @@ const ownerDisplayName = ref<string | null>(null);
 const networkMapRef = ref<InstanceType<typeof NetworkMapEmbed> | null>(null);
 const isDark = ref(true);
 
-// Health monitoring
-const { registerDevices, startPolling, stopPolling, cachedMetrics } = useHealthMonitoring();
+// Embed-specific health monitoring (uses anonymized IDs in sensitive mode)
+const embedHealthMetrics = ref<Record<string, DeviceMetrics>>({});
+let healthPollInterval: ReturnType<typeof setInterval> | null = null;
 
-// Helper to extract IPs from the tree
-function extractIPs(node: TreeNode): string[] {
-	const ips: string[] = [];
+// Helper to extract device IDs from the tree (these are anonymized in sensitive mode)
+function extractDeviceIds(node: TreeNode): string[] {
+	const ids: string[] = [];
 	const walk = (n: TreeNode) => {
+		// Use the ip field which contains anonymized IDs in sensitive mode
 		if (n.ip && n.role !== 'group' && n.monitoringEnabled !== false) {
-			ips.push(n.ip);
+			ids.push(n.ip);
 		}
 		for (const child of (n.children || [])) {
 			walk(child);
 		}
 	};
 	walk(node);
-	return ips;
+	return ids;
 }
+
+// Register devices using embed-specific endpoint (server handles IP translation)
+async function registerEmbedDevices(deviceIds: string[]): Promise<void> {
+	try {
+		await axios.post(`/api/embed/${props.embedId}/health/register`, {
+			device_ids: deviceIds
+		});
+		// Trigger immediate check
+		await axios.post(`/api/embed/${props.embedId}/health/check-now`);
+		// Fetch initial metrics
+		await fetchEmbedHealthMetrics();
+	} catch (err) {
+		console.error('[Embed Health] Failed to register devices:', err);
+	}
+}
+
+// Fetch health metrics using embed-specific endpoint (returns anonymized keys in sensitive mode)
+async function fetchEmbedHealthMetrics(): Promise<void> {
+	try {
+		const response = await axios.get(`/api/embed/${props.embedId}/health/cached`);
+		embedHealthMetrics.value = response.data;
+	} catch (err) {
+		console.error('[Embed Health] Failed to fetch metrics:', err);
+	}
+}
+
+function startEmbedHealthPolling(intervalMs: number = 10000): void {
+	if (healthPollInterval) return;
+	healthPollInterval = setInterval(fetchEmbedHealthMetrics, intervalMs);
+}
+
+function stopEmbedHealthPolling(): void {
+	if (healthPollInterval) {
+		clearInterval(healthPollInterval);
+		healthPollInterval = null;
+	}
+}
+
+// Computed to pass to NetworkMapEmbed
+const cachedMetrics = computed(() => embedHealthMetrics.value);
 
 async function loadMapData() {
 	loading.value = true;
@@ -159,12 +200,13 @@ async function loadMapData() {
 			showOwner.value = response.data.showOwner || false;
 			ownerDisplayName.value = response.data.ownerDisplayName || null;
 			
-			// Register devices for health monitoring
-			const ips = extractIPs(response.data.root);
-			if (ips.length > 0) {
-				await registerDevices(ips);
+			// Register devices for health monitoring using embed-specific endpoint
+			// This works with anonymized IDs - the server handles IP translation
+			const deviceIds = extractDeviceIds(response.data.root);
+			if (deviceIds.length > 0) {
+				await registerEmbedDevices(deviceIds);
 				// Start polling for health metrics updates
-				startPolling(10000);
+				startEmbedHealthPolling(10000);
 			}
 		} else {
 			error.value = 'No network map has been configured yet.';
@@ -224,7 +266,7 @@ onMounted(() => {
 
 // Stop health polling when component unmounts
 onBeforeUnmount(() => {
-	stopPolling();
+	stopEmbedHealthPolling();
 });
 </script>
 
