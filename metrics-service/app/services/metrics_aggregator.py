@@ -60,7 +60,7 @@ class MetricsAggregator:
         """Fetch the saved network layout from the backend."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{BACKEND_SERVICE_URL}/api/mapper/load-layout")
+                response = await client.get(f"{BACKEND_SERVICE_URL}/api/load-layout")
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("exists"):
@@ -92,7 +92,7 @@ class MetricsAggregator:
         """Fetch all gateway test IP configurations and metrics."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/test-ips/all")
+                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/gateway/test-ips/all")
                 if response.status_code == 200:
                     return response.json()
                 return {}
@@ -511,7 +511,7 @@ class MetricsAggregator:
         """
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(f"{HEALTH_SERVICE_URL}/api/health/speed-test")
+                response = await client.post(f"{HEALTH_SERVICE_URL}/api/health/speedtest")
                 if response.status_code == 200:
                     data = response.json()
                     
