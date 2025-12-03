@@ -415,6 +415,17 @@ class MetricsAggregator:
                 node_data, health_metrics, gateway_test_ips, depth, parent_id
             )
             
+            # Check if node already exists - if so, preserve notes from whichever has them
+            existing = nodes.get(node_metrics.id)
+            if existing:
+                # If existing has notes but new doesn't, keep existing notes
+                if existing.notes and not node_metrics.notes:
+                    logger.debug(f"Preserving notes from existing node {node_metrics.id}")
+                    node_metrics = node_metrics.model_copy(update={"notes": existing.notes})
+                # If new has notes but existing doesn't, the new one will overwrite (which is fine)
+                elif node_metrics.notes and not existing.notes:
+                    logger.debug(f"New node {node_metrics.id} has notes, overwriting")
+            
             nodes[node_metrics.id] = node_metrics
             connections.extend(node_connections)
             
