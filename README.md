@@ -1,6 +1,6 @@
 # 🗺️ Cartographer
 
-[![Network Map](assets/application.png)](https://cartographer.artzima.dev/embed/yJLRHFuiajaxkWvLc44Gm0f4)
+[![Network Map](https://raw.githubusercontent.com/DevArtech/cartographer/refs/heads/main/assets/application.png)](https://cartographer.artzima.dev/embed/yJLRHFuiajaxkWvLc44Gm0f4)
 
 > 🖱️ **[Click the image to view the interactive map](https://cartographer.artzima.dev/embed/yJLRHFuiajaxkWvLc44Gm0f4)**
 
