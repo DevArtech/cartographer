@@ -4,6 +4,7 @@ OpenAI provider implementation.
 
 import os
 import logging
+from openai import AsyncOpenAI
 from typing import AsyncIterator, List, Optional
 
 from .base import BaseProvider, ProviderConfig, ChatMessage
@@ -24,7 +25,6 @@ class OpenAIProvider(BaseProvider):
     
     def _get_client(self):
         """Get OpenAI client"""
-        from openai import AsyncOpenAI
         
         api_key = self.config.api_key or os.environ.get("OPENAI_API_KEY")
         base_url = self.config.base_url or os.environ.get("OPENAI_BASE_URL")

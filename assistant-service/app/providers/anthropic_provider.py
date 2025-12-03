@@ -4,6 +4,8 @@ Anthropic (Claude) provider implementation.
 
 import os
 import logging
+from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from typing import AsyncIterator, List, Optional
 
 from .base import BaseProvider, ProviderConfig, ChatMessage
@@ -24,7 +26,6 @@ class AnthropicProvider(BaseProvider):
     
     def _get_client(self):
         """Get Anthropic client"""
-        from anthropic import AsyncAnthropic
         
         api_key = self.config.api_key or os.environ.get("ANTHROPIC_API_KEY")
         base_url = self.config.base_url or os.environ.get("ANTHROPIC_BASE_URL")
@@ -34,6 +35,18 @@ class AnthropicProvider(BaseProvider):
             kwargs["base_url"] = base_url
             
         return AsyncAnthropic(**kwargs)
+    
+    def _get_sync_client(self):
+        """Get sync Anthropic client for operations that work better synchronously"""
+        
+        api_key = self.config.api_key or os.environ.get("ANTHROPIC_API_KEY")
+        base_url = self.config.base_url or os.environ.get("ANTHROPIC_BASE_URL")
+        
+        kwargs = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+            
+        return Anthropic(**kwargs)
     
     async def is_available(self) -> bool:
         """Check if Anthropic is configured"""
@@ -97,32 +110,39 @@ class AnthropicProvider(BaseProvider):
         )
     
     async def list_models(self) -> List[str]:
-        """List available Anthropic models from the API with pagination"""
-        client = self._get_client()
+        """List available Anthropic models using the Models API"""
+        import asyncio
         
-        # Fetch all models with pagination
-        # API: https://docs.anthropic.com/en/api/models-list
-        all_models = []
-        after_id = None
+        # Use sync client in a thread pool to avoid async issues with the models API
+        def fetch_models_sync():
+            client = self._get_sync_client()
+            all_models = []
+            after_id = None
+            
+            while True:
+                # Call models.list with pagination
+                if after_id:
+                    page = client.models.list(limit=100, after_id=after_id)
+                else:
+                    page = client.models.list(limit=100)
+                
+                # Collect model IDs
+                for model in page.data:
+                    model_id = model.id
+                    logger.debug(f"Found Anthropic model: {model_id}")
+                    all_models.append(model_id)
+                
+                # Check for more pages
+                if not page.has_more:
+                    break
+                
+                after_id = page.last_id
+            
+            return all_models
         
-        while True:
-            # Build request params
-            kwargs = {"limit": 100}
-            if after_id:
-                kwargs["after_id"] = after_id
-            
-            page = await client.models.list(**kwargs)
-            
-            # Collect model IDs from this page
-            for model in page.data:
-                all_models.append(model.id)
-                logger.debug(f"Found Anthropic model: {model.id}")
-            
-            # Check for more pages
-            if not page.has_more:
-                break
-            
-            after_id = page.last_id
+        # Run sync function in thread pool
+        loop = asyncio.get_event_loop()
+        all_models = await loop.run_in_executor(None, fetch_models_sync)
         
         logger.info(f"Retrieved {len(all_models)} models from Anthropic API")
         

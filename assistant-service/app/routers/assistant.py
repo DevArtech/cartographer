@@ -139,19 +139,35 @@ async def get_config():
             provider = get_provider(provider_type)
             available = await provider.is_available()
             
-            if available:
+            if not available:
+                return ProviderStatus(
+                    provider=provider_type,
+                    available=False,
+                    configured=False,
+                    default_model=provider.default_model,
+                )
+            
+            # Try to get models, but don't fail the whole provider if this fails
+            models = []
+            error_msg = None
+            try:
                 models = await model_cache.get_models(provider_type, provider)
-            else:
-                models = []
+            except Exception as e:
+                logger.warning(f"Failed to list models for {provider_type.value}: {e}")
+                error_msg = f"Could not list models: {str(e)}"
+                # Use default model as fallback
+                models = [provider.default_model]
             
             return ProviderStatus(
                 provider=provider_type,
-                available=available,
-                configured=available,
+                available=True,
+                configured=True,
                 default_model=provider.default_model,
                 available_models=models,
+                error=error_msg,
             )
         except Exception as e:
+            logger.error(f"Error checking provider {provider_type.value}: {e}")
             return ProviderStatus(
                 provider=provider_type,
                 available=False,

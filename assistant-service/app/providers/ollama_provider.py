@@ -4,6 +4,7 @@ Ollama (local models) provider implementation.
 
 import os
 import logging
+from ollama import AsyncClient
 from typing import AsyncIterator, List, Optional
 
 from .base import BaseProvider, ProviderConfig, ChatMessage
@@ -24,7 +25,6 @@ class OllamaProvider(BaseProvider):
     
     def _get_client(self):
         """Get Ollama client"""
-        from ollama import AsyncClient
         
         base_url = (
             self.config.base_url or 

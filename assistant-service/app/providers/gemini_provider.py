@@ -4,6 +4,7 @@ Google Gemini provider implementation.
 
 import os
 import logging
+import google.generativeai as genai
 from typing import AsyncIterator, List, Optional
 
 from .base import BaseProvider, ProviderConfig, ChatMessage
@@ -20,11 +21,10 @@ class GeminiProvider(BaseProvider):
     
     @property
     def default_model(self) -> str:
-        return "gemini-1.5-flash"
+        return "gemini-2.5-flash"
     
     def _configure_genai(self):
         """Configure Google Generative AI"""
-        import google.generativeai as genai
         
         api_key = self.config.api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
         genai.configure(api_key=api_key)

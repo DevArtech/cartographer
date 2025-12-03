@@ -240,6 +240,26 @@ class MetricsContextService:
         if connections:
             lines.append(f"\n🔗 NETWORK CONNECTIONS: {len(connections)} total")
         
+        # User notes summary - collect all nodes with notes
+        nodes_with_notes = []
+        for node_id, node in nodes.items():
+            if node.get("notes"):
+                nodes_with_notes.append({
+                    "name": node.get("name", node_id),
+                    "ip": node.get("ip", "N/A"),
+                    "notes": node.get("notes"),
+                })
+        
+        if nodes_with_notes:
+            lines.append(f"\n📝 USER NOTES")
+            lines.append("-" * 40)
+            for node_info in nodes_with_notes:
+                lines.append(f"  {node_info['name']} ({node_info['ip']}):")
+                # Handle multi-line notes
+                note_lines = node_info['notes'].strip().split('\n')
+                for note_line in note_lines:
+                    lines.append(f"    {note_line}")
+        
         lines.append("\n" + "=" * 60)
         
         context = "\n".join(lines)
