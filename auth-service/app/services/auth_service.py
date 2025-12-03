@@ -175,20 +175,22 @@ class AuthService:
         """Get user by ID"""
         return self._users.get(user_id)
     
-    def get_user_by_username(self, username: str) -> Optional[UserInDB]:
-        """Get user by username"""
+    def get_user_by_username(self, username: str, include_inactive: bool = False) -> Optional[UserInDB]:
+        """Get user by username (only active users by default)"""
         username_lower = username.lower()
         for user in self._users.values():
             if user.username == username_lower:
-                return user
+                if include_inactive or user.is_active:
+                    return user
         return None
     
-    def get_user_by_email(self, email: str) -> Optional[UserInDB]:
-        """Get user by email"""
+    def get_user_by_email(self, email: str, include_inactive: bool = False) -> Optional[UserInDB]:
+        """Get user by email (only active users by default)"""
         email_lower = email.lower()
         for user in self._users.values():
             if user.email == email_lower:
-                return user
+                if include_inactive or user.is_active:
+                    return user
         return None
     
     def list_users(self, requester: UserInDB) -> List[UserResponse]:
@@ -278,7 +280,7 @@ class AuthService:
     
     def authenticate(self, username: str, password: str) -> Optional[UserInDB]:
         """Authenticate user with username and password"""
-        user = self.get_user_by_username(username)
+        user = self.get_user_by_username(username, include_inactive=True)
         if not user:
             logger.debug(f"Authentication failed: user not found ({username})")
             return None
