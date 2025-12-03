@@ -99,6 +99,48 @@
 						History
 					</button>
 				</div>
+				<!-- Navigation controls (bottom-left) -->
+				<div class="absolute bottom-2 left-3 z-10">
+					<div class="flex flex-col gap-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg p-1">
+						<button
+							@click="networkMapRef?.zoomIn()"
+							class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-700 dark:text-slate-300"
+							title="Zoom in"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+							</svg>
+						</button>
+						<button
+							@click="networkMapRef?.zoomOut()"
+							class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-700 dark:text-slate-300"
+							title="Zoom out"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" />
+							</svg>
+						</button>
+						<div class="border-t border-slate-200 dark:border-slate-600 my-0.5"></div>
+						<button
+							@click="networkMapRef?.fitToView()"
+							class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-700 dark:text-slate-300"
+							title="Fit all nodes in view"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+							</svg>
+						</button>
+						<button
+							@click="networkMapRef?.resetView()"
+							class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-700 dark:text-slate-300"
+							title="Reset view"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+							</svg>
+						</button>
+					</div>
+				</div>
 				<!-- Node configuration panel (bottom-right) -->
 				<div class="absolute bottom-2 right-3 z-10">
 					<div v-if="mode === 'edit' && selectedNode" class="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded px-2 py-1 shadow-sm">
