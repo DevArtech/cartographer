@@ -1536,16 +1536,25 @@ watch(() => props.node?.ip, (newIp, oldIp) => {
 		testIPMetrics.value = [];
 		testIPsError.value = null;
 		showAddTestIP.value = false;
+		// Reset speed test state
+		speedTestResult.value = null;
+		speedTestError.value = null;
 	}
 });
 
-// Load test IPs when gateway node is selected
+// Load test IPs and speed test results when gateway node is selected
 watch([() => props.node?.ip, isGateway], async ([ip, isGw]) => {
 	if (ip && isGw) {
-		await loadTestIPs();
+		await Promise.all([
+			loadTestIPs(),
+			loadStoredSpeedTest()
+		]);
 		startTestIPPolling();
 	} else {
 		stopTestIPPolling();
+		// Reset speed test state when switching away from gateway
+		speedTestResult.value = null;
+		speedTestError.value = null;
 	}
 }, { immediate: true });
 
@@ -1751,12 +1760,32 @@ function addPresetTestIP(preset: GatewayTestIP) {
 
 // ==================== Speed Test Functions ====================
 
+async function loadStoredSpeedTest() {
+	const ip = props.node?.ip;
+	if (!ip) return;
+
+	try {
+		const response = await axios.get<SpeedTestResult>(`/api/health/gateway/${ip}/speedtest`);
+		speedTestResult.value = response.data;
+	} catch (err: any) {
+		// 404 means no stored results - that's fine, not an error
+		if (err.response?.status !== 404) {
+			console.error('Failed to load stored speed test:', err);
+		}
+		// Don't set error - just means no previous test
+		speedTestResult.value = null;
+	}
+}
+
 async function runSpeedTest() {
+	const ip = props.node?.ip;
 	speedTestRunning.value = true;
 	speedTestError.value = null;
 
 	try {
-		const response = await axios.post<SpeedTestResult>('/api/health/speedtest', {}, {
+		// Use gateway-specific endpoint if we have a gateway IP
+		const endpoint = ip ? `/api/health/gateway/${ip}/speedtest` : '/api/health/speedtest';
+		const response = await axios.post<SpeedTestResult>(endpoint, {}, {
 			timeout: 120000 // 2 minute timeout
 		});
 		speedTestResult.value = response.data;

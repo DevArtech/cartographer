@@ -218,3 +218,21 @@ async def get_cached_test_ip_metrics(gateway_ip: str, user: AuthenticatedUser = 
 async def run_speed_test(user: AuthenticatedUser = Depends(require_write_access)):
     """Proxy run speed test - can take 30-60 seconds. Requires write access."""
     return await proxy_request("POST", "/speedtest", timeout=120.0)  # 2 minute timeout for speed test
+
+
+@router.get("/speedtest/all")
+async def get_all_speed_tests(user: AuthenticatedUser = Depends(require_auth)):
+    """Proxy get all stored speed test results. Requires authentication."""
+    return await proxy_request("GET", "/speedtest/all")
+
+
+@router.get("/gateway/{gateway_ip}/speedtest")
+async def get_gateway_speed_test(gateway_ip: str, user: AuthenticatedUser = Depends(require_auth)):
+    """Proxy get last speed test result for a gateway. Requires authentication."""
+    return await proxy_request("GET", f"/gateway/{gateway_ip}/speedtest")
+
+
+@router.post("/gateway/{gateway_ip}/speedtest")
+async def run_gateway_speed_test(gateway_ip: str, user: AuthenticatedUser = Depends(require_write_access)):
+    """Proxy run speed test for a specific gateway - can take 30-60 seconds. Requires write access."""
+    return await proxy_request("POST", f"/gateway/{gateway_ip}/speedtest", timeout=120.0)

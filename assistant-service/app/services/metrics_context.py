@@ -229,14 +229,37 @@ class MetricsContextService:
             upload = speed_test.get("upload_mbps")
             ping = speed_test.get("ping_ms")
             
-            if download or upload:
-                lines.append(f"    Speed Test: ↓{download:.1f} Mbps / ↑{upload:.1f} Mbps")
-            if ping:
+            if download is not None or upload is not None:
+                download_str = f"{download:.1f}" if download is not None else "N/A"
+                upload_str = f"{upload:.1f}" if upload is not None else "N/A"
+                lines.append(f"    Speed Test: ↓{download_str} Mbps / ↑{upload_str} Mbps")
+            if ping is not None:
                 lines.append(f"    ISP Latency: {ping:.1f}ms")
             
             isp = speed_test.get("client_isp")
             if isp:
                 lines.append(f"    ISP: {isp}")
+            
+            # Server info
+            server_sponsor = speed_test.get("server_sponsor")
+            server_location = speed_test.get("server_location")
+            if server_sponsor or server_location:
+                server_info = server_sponsor or ""
+                if server_location:
+                    server_info += f" ({server_location})" if server_info else server_location
+                lines.append(f"    Test Server: {server_info}")
+            
+            # Timestamp of the test
+            timestamp = speed_test.get("timestamp")
+            if timestamp:
+                if isinstance(timestamp, str):
+                    lines.append(f"    Tested: {timestamp}")
+                else:
+                    lines.append(f"    Tested: {timestamp.isoformat() if hasattr(timestamp, 'isoformat') else str(timestamp)}")
+        elif speed_test and not speed_test.get("success"):
+            # Show error if speed test failed
+            error_msg = speed_test.get("error_message", "Unknown error")
+            lines.append(f"    Speed Test: Failed - {error_msg}")
         
         # Include notes from the gateway node
         if gateway_node and gateway_node.get("notes"):
