@@ -11,6 +11,7 @@ User authentication and authorization microservice for the Cartographer network 
   - `readwrite`: Can view and modify the network map
   - `readonly`: Can only view the network map
 - **User Management**: Create, update, and delete users (owner only)
+- **Email Invitations**: Invite users via email using [Resend](https://resend.com)
 - **Password Management**: Secure password hashing with bcrypt
 
 ## API Endpoints
@@ -32,6 +33,17 @@ User authentication and authorization microservice for the Cartographer network 
 - `PATCH /api/auth/users/{id}` - Update user
 - `DELETE /api/auth/users/{id}` - Delete user
 
+### Invitations (Owner only)
+- `GET /api/auth/invites` - List all invitations
+- `POST /api/auth/invites` - Create and send an invitation
+- `GET /api/auth/invites/{id}` - Get invitation by ID
+- `DELETE /api/auth/invites/{id}` - Revoke a pending invitation
+- `POST /api/auth/invites/{id}/resend` - Resend invitation email
+
+### Public Invitation Endpoints
+- `GET /api/auth/invite/verify/{token}` - Verify invitation token
+- `POST /api/auth/invite/accept` - Accept invitation and create account
+
 ### Profile
 - `GET /api/auth/me` - Get current user profile
 - `PATCH /api/auth/me` - Update current user profile
@@ -45,6 +57,28 @@ User authentication and authorization microservice for the Cartographer network 
 | `JWT_EXPIRATION_HOURS` | `24` | Token expiration time in hours |
 | `AUTH_DATA_DIR` | `/app/data` | Directory for persistent user data |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
+| `RESEND_API_KEY` | *(empty)* | Resend API key for sending invitation emails |
+| `EMAIL_FROM` | `Cartographer <noreply@cartographer.app>` | Sender email address |
+| `APPLICATION_URL` | `http://localhost:5173` | Public URL for invitation links |
+| `INVITE_EXPIRATION_HOURS` | `72` | Invitation expiration time in hours |
+
+### Email Configuration
+
+Email invitations are **optional**. If `RESEND_API_KEY` is not set:
+- Invitations are still created and stored
+- The invite link is generated but no email is sent
+- You can manually share the invite URL with users
+
+To enable email invitations:
+1. Sign up at [Resend](https://resend.com)
+2. Create an API key
+3. Verify your sending domain (or use Resend's test domain for development)
+4. Set the environment variables:
+   ```bash
+   RESEND_API_KEY=re_your_api_key
+   EMAIL_FROM=Cartographer <noreply@your-domain.com>
+   APPLICATION_URL=https://your-app-url.com
+   ```
 
 ## Development
 
@@ -75,4 +109,8 @@ docker run -p 8002:8002 -v auth-data:/app/data cartographer-auth
 
 ## Data Persistence
 
-User data is stored in JSON format at `$AUTH_DATA_DIR/users.json`. Mount a volume to persist data across container restarts.
+Data is stored in JSON format in `$AUTH_DATA_DIR`:
+- `users.json` - User accounts
+- `invites.json` - Pending and historical invitations
+
+Mount a volume to persist data across container restarts.

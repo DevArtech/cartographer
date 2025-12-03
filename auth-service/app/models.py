@@ -144,3 +144,77 @@ class ErrorResponse(BaseModel):
     """Error response"""
     detail: str
     code: Optional[str] = None
+
+
+# ==================== Invitation Models ====================
+
+class InviteStatus(str, Enum):
+    """Invitation status"""
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
+class InviteCreate(BaseModel):
+    """Request to create an invitation"""
+    email: EmailStr
+    role: UserRole = UserRole.READ_ONLY
+    
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v: UserRole) -> UserRole:
+        if v == UserRole.OWNER:
+            raise ValueError('Cannot invite users with owner role')
+        return v
+
+
+class InviteResponse(BaseModel):
+    """Invitation data returned to clients"""
+    id: str
+    email: str
+    role: UserRole
+    status: InviteStatus
+    invited_by: str  # username of inviter
+    invited_by_name: str  # full name of inviter
+    created_at: datetime
+    expires_at: datetime
+    accepted_at: Optional[datetime] = None
+
+
+class InviteInDB(InviteResponse):
+    """Invitation data stored in database"""
+    token: str  # secure token for accepting invite
+    invited_by_id: str
+
+
+class AcceptInviteRequest(BaseModel):
+    """Request to accept an invitation and create account"""
+    token: str
+    username: str = Field(..., min_length=3, max_length=50)
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=8)
+    
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', v):
+            raise ValueError('Username must start with a letter and contain only letters, numbers, underscores, and hyphens')
+        return v.lower()
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
+
+
+class InviteTokenInfo(BaseModel):
+    """Public info about an invite token (for the accept page)"""
+    email: str
+    role: UserRole
+    invited_by_name: str
+    expires_at: datetime
+    is_valid: bool

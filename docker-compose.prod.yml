@@ -65,6 +65,11 @@ services:
       # IMPORTANT: Set a secure secret in production!
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION_HOURS=24
+      # Email invitations via Resend (optional - invites work without email)
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-Cartographer <noreply@cartographer.app>}
+      - APPLICATION_URL=${APPLICATION_URL}
+      - INVITE_EXPIRATION_HOURS=${INVITE_EXPIRATION_HOURS:-72}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/healthz"]

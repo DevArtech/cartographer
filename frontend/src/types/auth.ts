@@ -122,3 +122,76 @@ export function getRoleDescription(role: UserRole): string {
 			return "";
 	}
 }
+
+// ==================== Invitation Types ====================
+
+export type InviteStatus = "pending" | "accepted" | "expired" | "revoked";
+
+// Invitation data from API
+export interface Invite {
+	id: string;
+	email: string;
+	role: UserRole;
+	status: InviteStatus;
+	invited_by: string;
+	invited_by_name: string;
+	created_at: string;
+	expires_at: string;
+	accepted_at?: string;
+}
+
+// Request to create an invitation
+export interface InviteCreateRequest {
+	email: string;
+	role: UserRole;
+}
+
+// Public info about an invite token
+export interface InviteTokenInfo {
+	email: string;
+	role: UserRole;
+	invited_by_name: string;
+	expires_at: string;
+	is_valid: boolean;
+}
+
+// Request to accept an invitation
+export interface AcceptInviteRequest {
+	token: string;
+	username: string;
+	first_name: string;
+	last_name: string;
+	password: string;
+}
+
+// Helper to get invite status label
+export function getInviteStatusLabel(status: InviteStatus): string {
+	switch (status) {
+		case "pending":
+			return "Pending";
+		case "accepted":
+			return "Accepted";
+		case "expired":
+			return "Expired";
+		case "revoked":
+			return "Revoked";
+		default:
+			return status;
+	}
+}
+
+// Helper to get invite status color class
+export function getInviteStatusClass(status: InviteStatus): string {
+	switch (status) {
+		case "pending":
+			return "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400";
+		case "accepted":
+			return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400";
+		case "expired":
+			return "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400";
+		case "revoked":
+			return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
+		default:
+			return "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400";
+	}
+}

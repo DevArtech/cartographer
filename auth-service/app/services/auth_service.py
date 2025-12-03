@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import secrets
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -10,7 +11,8 @@ import jwt
 
 from ..models import (
     UserRole, UserCreate, UserUpdate, UserResponse, UserInDB,
-    TokenPayload, OwnerSetupRequest
+    TokenPayload, OwnerSetupRequest,
+    InviteStatus, InviteCreate, InviteResponse, InviteInDB, InviteTokenInfo
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,9 @@ JWT_EXPIRATION_HOURS = int(os.environ.get("JWT_EXPIRATION_HOURS", "24"))
 class AuthService:
     """Handles user authentication and management with file-based persistence"""
     
+    # Invitation expiration (hours)
+    INVITE_EXPIRATION_HOURS = int(os.environ.get("INVITE_EXPIRATION_HOURS", "72"))
+    
     def __init__(self):
         # Determine data directory
         self.data_dir = Path(os.environ.get("AUTH_DATA_DIR", "/app/data"))
@@ -35,8 +40,11 @@ class AuthService:
             self.data_dir = Path(__file__).resolve().parents[3]
         
         self.users_file = self.data_dir / "users.json"
+        self.invites_file = self.data_dir / "invites.json"
         self._users: dict[str, UserInDB] = {}
+        self._invites: dict[str, InviteInDB] = {}
         self._load_users()
+        self._load_invites()
     
     def _load_users(self) -> None:
         """Load users from JSON file"""
@@ -381,6 +389,287 @@ class AuthService:
             ])
         
         return permissions
+    
+    # ==================== Invitations ====================
+    
+    def _load_invites(self) -> None:
+        """Load invitations from JSON file"""
+        if self.invites_file.exists():
+            try:
+                with open(self.invites_file, 'r') as f:
+                    data = json.load(f)
+                    for invite_data in data.get("invites", []):
+                        invite = InviteInDB(**invite_data)
+                        self._invites[invite.id] = invite
+                logger.info(f"Loaded {len(self._invites)} invites from {self.invites_file}")
+            except Exception as e:
+                logger.error(f"Failed to load invites: {e}")
+                self._invites = {}
+        else:
+            logger.info("No invites file found, starting fresh")
+            self._invites = {}
+    
+    def _save_invites(self) -> None:
+        """Save invitations to JSON file"""
+        try:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            invites_data = {
+                "invites": [invite.model_dump(mode='json') for invite in self._invites.values()]
+            }
+            with open(self.invites_file, 'w') as f:
+                json.dump(invites_data, f, indent=2, default=str)
+            logger.debug(f"Saved {len(self._invites)} invites to {self.invites_file}")
+        except Exception as e:
+            logger.error(f"Failed to save invites: {e}")
+            raise
+    
+    def _generate_invite_token(self) -> str:
+        """Generate a secure random token for invitations"""
+        return secrets.token_urlsafe(32)
+    
+    def create_invite(self, request: InviteCreate, invited_by: UserInDB) -> tuple[InviteInDB, bool]:
+        """
+        Create an invitation for a new user.
+        Returns (invite, email_sent) tuple.
+        """
+        if invited_by.role != UserRole.OWNER:
+            raise PermissionError("Only owners can invite new users")
+        
+        # Check if email already has an active user
+        existing_user = self.get_user_by_email(request.email)
+        if existing_user and existing_user.is_active:
+            raise ValueError("A user with this email already exists")
+        
+        # Check for existing pending invite to same email
+        for invite in self._invites.values():
+            if (invite.email.lower() == request.email.lower() and 
+                invite.status == InviteStatus.PENDING and
+                invite.expires_at > datetime.now(timezone.utc)):
+                raise ValueError("An active invitation already exists for this email")
+        
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=self.INVITE_EXPIRATION_HOURS)
+        
+        invite_id = str(uuid.uuid4())
+        token = self._generate_invite_token()
+        
+        invite = InviteInDB(
+            id=invite_id,
+            email=request.email.lower(),
+            role=request.role,
+            status=InviteStatus.PENDING,
+            invited_by=invited_by.username,
+            invited_by_name=f"{invited_by.first_name} {invited_by.last_name}",
+            invited_by_id=invited_by.id,
+            token=token,
+            created_at=now,
+            expires_at=expires_at
+        )
+        
+        self._invites[invite_id] = invite
+        self._save_invites()
+        
+        # Try to send email
+        email_sent = False
+        try:
+            from .email_service import send_invitation_email, is_email_configured
+            
+            if is_email_configured():
+                email_id = send_invitation_email(
+                    to_email=invite.email,
+                    invite_token=token,
+                    invited_by_name=invite.invited_by_name,
+                    role=invite.role.value,
+                    expires_hours=self.INVITE_EXPIRATION_HOURS
+                )
+                email_sent = email_id is not None
+            else:
+                logger.warning("Email not configured - invite created but email not sent")
+        except Exception as e:
+            logger.error(f"Failed to send invitation email: {e}")
+        
+        logger.info(f"Invitation created for {invite.email} by {invited_by.username} (email_sent={email_sent})")
+        return invite, email_sent
+    
+    def get_invite_by_token(self, token: str) -> Optional[InviteInDB]:
+        """Get invitation by token"""
+        for invite in self._invites.values():
+            if invite.token == token:
+                return invite
+        return None
+    
+    def get_invite_token_info(self, token: str) -> Optional[InviteTokenInfo]:
+        """Get public info about an invite token (for the accept page)"""
+        invite = self.get_invite_by_token(token)
+        if not invite:
+            return None
+        
+        now = datetime.now(timezone.utc)
+        is_valid = (
+            invite.status == InviteStatus.PENDING and
+            invite.expires_at > now
+        )
+        
+        return InviteTokenInfo(
+            email=invite.email,
+            role=invite.role,
+            invited_by_name=invite.invited_by_name,
+            expires_at=invite.expires_at,
+            is_valid=is_valid
+        )
+    
+    def accept_invite(
+        self, 
+        token: str, 
+        username: str, 
+        first_name: str, 
+        last_name: str, 
+        password: str
+    ) -> UserResponse:
+        """Accept an invitation and create the user account"""
+        invite = self.get_invite_by_token(token)
+        if not invite:
+            raise ValueError("Invalid invitation token")
+        
+        if invite.status != InviteStatus.PENDING:
+            raise ValueError(f"Invitation is no longer valid (status: {invite.status})")
+        
+        now = datetime.now(timezone.utc)
+        if invite.expires_at <= now:
+            # Mark as expired
+            invite.status = InviteStatus.EXPIRED
+            self._invites[invite.id] = invite
+            self._save_invites()
+            raise ValueError("Invitation has expired")
+        
+        # Check if username is taken
+        if self.get_user_by_username(username):
+            raise ValueError("Username already taken")
+        
+        # Check if email is taken (shouldn't happen but double-check)
+        existing = self.get_user_by_email(invite.email)
+        if existing and existing.is_active:
+            raise ValueError("A user with this email already exists")
+        
+        # Create the user
+        user_id = str(uuid.uuid4())
+        user = UserInDB(
+            id=user_id,
+            username=username.lower(),
+            first_name=first_name,
+            last_name=last_name,
+            email=invite.email,
+            role=invite.role,
+            password_hash=pwd_context.hash(password),
+            created_at=now,
+            updated_at=now,
+            is_active=True
+        )
+        
+        self._users[user_id] = user
+        self._save_users()
+        
+        # Mark invitation as accepted
+        invite.status = InviteStatus.ACCEPTED
+        invite.accepted_at = now
+        self._invites[invite.id] = invite
+        self._save_invites()
+        
+        logger.info(f"Invitation accepted: {invite.email} -> {username}")
+        return self._to_response(user)
+    
+    def list_invites(self, requester: UserInDB) -> List[InviteResponse]:
+        """List all invitations (owner only)"""
+        if requester.role != UserRole.OWNER:
+            raise PermissionError("Only owners can view invitations")
+        
+        # Update expired invites
+        now = datetime.now(timezone.utc)
+        for invite in self._invites.values():
+            if invite.status == InviteStatus.PENDING and invite.expires_at <= now:
+                invite.status = InviteStatus.EXPIRED
+        self._save_invites()
+        
+        return [self._invite_to_response(inv) for inv in self._invites.values()]
+    
+    def revoke_invite(self, invite_id: str, revoked_by: UserInDB) -> bool:
+        """Revoke a pending invitation"""
+        if revoked_by.role != UserRole.OWNER:
+            raise PermissionError("Only owners can revoke invitations")
+        
+        invite = self._invites.get(invite_id)
+        if not invite:
+            raise ValueError("Invitation not found")
+        
+        if invite.status != InviteStatus.PENDING:
+            raise ValueError(f"Cannot revoke invitation with status: {invite.status}")
+        
+        invite.status = InviteStatus.REVOKED
+        self._invites[invite_id] = invite
+        self._save_invites()
+        
+        logger.info(f"Invitation revoked: {invite.email} by {revoked_by.username}")
+        return True
+    
+    def resend_invite(self, invite_id: str, resent_by: UserInDB) -> bool:
+        """Resend an invitation email"""
+        if resent_by.role != UserRole.OWNER:
+            raise PermissionError("Only owners can resend invitations")
+        
+        invite = self._invites.get(invite_id)
+        if not invite:
+            raise ValueError("Invitation not found")
+        
+        if invite.status != InviteStatus.PENDING:
+            raise ValueError(f"Cannot resend invitation with status: {invite.status}")
+        
+        # Check if expired and extend if needed
+        now = datetime.now(timezone.utc)
+        if invite.expires_at <= now:
+            # Extend the invitation
+            invite.expires_at = now + timedelta(hours=self.INVITE_EXPIRATION_HOURS)
+            self._invites[invite_id] = invite
+            self._save_invites()
+        
+        # Try to send email
+        try:
+            from .email_service import send_invitation_email, is_email_configured
+            
+            if not is_email_configured():
+                raise ValueError("Email is not configured")
+            
+            remaining_hours = int((invite.expires_at - now).total_seconds() / 3600)
+            email_id = send_invitation_email(
+                to_email=invite.email,
+                invite_token=invite.token,
+                invited_by_name=invite.invited_by_name,
+                role=invite.role.value,
+                expires_hours=remaining_hours
+            )
+            
+            if not email_id:
+                raise ValueError("Failed to send email")
+            
+            logger.info(f"Invitation resent to {invite.email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to resend invitation email: {e}")
+            raise ValueError(f"Failed to send email: {e}")
+    
+    def _invite_to_response(self, invite: InviteInDB) -> InviteResponse:
+        """Convert InviteInDB to InviteResponse (strips token)"""
+        return InviteResponse(
+            id=invite.id,
+            email=invite.email,
+            role=invite.role,
+            status=invite.status,
+            invited_by=invite.invited_by,
+            invited_by_name=invite.invited_by_name,
+            created_at=invite.created_at,
+            expires_at=invite.expires_at,
+            accepted_at=invite.accepted_at
+        )
 
 
 # Singleton instance

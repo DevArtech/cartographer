@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import MainApp from './components/MainApp.vue';
 import EmbedView from './components/EmbedView.vue';
+import AcceptInvite from './components/AcceptInvite.vue';
 
 const routes = [
 	{
@@ -13,6 +14,11 @@ const routes = [
 		name: 'embed',
 		component: EmbedView,
 		props: true
+	},
+	{
+		path: '/accept-invite',
+		name: 'accept-invite',
+		component: AcceptInvite
 	}
 ];
 

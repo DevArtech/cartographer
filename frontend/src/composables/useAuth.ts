@@ -12,6 +12,10 @@ import type {
 	SessionInfo,
 	ChangePasswordRequest,
 	AuthState,
+	Invite,
+	InviteCreateRequest,
+	InviteTokenInfo,
+	AcceptInviteRequest,
 } from "../types/auth";
 
 const AUTH_STORAGE_KEY = "cartographer_auth";
@@ -283,6 +287,70 @@ async function changePassword(request: ChangePasswordRequest): Promise<void> {
 	}
 }
 
+// ==================== Invitation Management ====================
+
+// List invitations (owner only)
+async function listInvites(): Promise<Invite[]> {
+	try {
+		const response = await axios.get<Invite[]>("/api/auth/invites");
+		return response.data;
+	} catch (e: any) {
+		throw new Error(e.response?.data?.detail || "Failed to list invitations");
+	}
+}
+
+// Create invitation (owner only)
+async function createInvite(request: InviteCreateRequest): Promise<Invite> {
+	try {
+		const response = await axios.post<Invite>("/api/auth/invites", request);
+		console.log("[Auth] Invitation created for:", request.email);
+		return response.data;
+	} catch (e: any) {
+		throw new Error(e.response?.data?.detail || "Failed to create invitation");
+	}
+}
+
+// Revoke invitation (owner only)
+async function revokeInvite(inviteId: string): Promise<void> {
+	try {
+		await axios.delete(`/api/auth/invites/${inviteId}`);
+		console.log("[Auth] Invitation revoked:", inviteId);
+	} catch (e: any) {
+		throw new Error(e.response?.data?.detail || "Failed to revoke invitation");
+	}
+}
+
+// Resend invitation email (owner only)
+async function resendInvite(inviteId: string): Promise<void> {
+	try {
+		await axios.post(`/api/auth/invites/${inviteId}/resend`);
+		console.log("[Auth] Invitation resent:", inviteId);
+	} catch (e: any) {
+		throw new Error(e.response?.data?.detail || "Failed to resend invitation");
+	}
+}
+
+// Verify invite token (public)
+async function verifyInviteToken(token: string): Promise<InviteTokenInfo> {
+	try {
+		const response = await axios.get<InviteTokenInfo>(`/api/auth/invite/verify/${token}`);
+		return response.data;
+	} catch (e: any) {
+		throw new Error(e.response?.data?.detail || "Invalid invitation token");
+	}
+}
+
+// Accept invitation and create account (public)
+async function acceptInvite(request: AcceptInviteRequest): Promise<User> {
+	try {
+		const response = await axios.post<User>("/api/auth/invite/accept", request);
+		console.log("[Auth] Invitation accepted, user created:", response.data.username);
+		return response.data;
+	} catch (e: any) {
+		throw new Error(e.response?.data?.detail || "Failed to accept invitation");
+	}
+}
+
 // Main composable export
 export function useAuth() {
 	// Initialize from storage on first use
@@ -319,5 +387,13 @@ export function useAuth() {
 		updateUser,
 		deleteUser,
 		changePassword,
+		
+		// Invitation management
+		listInvites,
+		createInvite,
+		revokeInvite,
+		resendInvite,
+		verifyInviteToken,
+		acceptInvite,
 	};
 }

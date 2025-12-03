@@ -6,7 +6,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ..models import (
     UserRole, UserCreate, UserUpdate, UserResponse,
     LoginRequest, LoginResponse, OwnerSetupRequest, SetupStatus,
-    ChangePasswordRequest, SessionInfo, ErrorResponse
+    ChangePasswordRequest, SessionInfo, ErrorResponse,
+    InviteCreate, InviteResponse, AcceptInviteRequest, InviteTokenInfo
 )
 from ..services.auth_service import auth_service, UserInDB
 
@@ -239,5 +240,89 @@ async def change_password(
     try:
         auth_service.change_password(user.id, request.current_password, request.new_password)
         return {"message": "Password changed successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==================== Invitation Endpoints ====================
+
+@router.get("/invites", response_model=List[InviteResponse])
+async def list_invites(user: UserInDB = Depends(require_owner)):
+    """List all invitations (owner only)"""
+    try:
+        return auth_service.list_invites(user)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.post("/invites", response_model=InviteResponse)
+async def create_invite(request: InviteCreate, user: UserInDB = Depends(require_owner)):
+    """Create an invitation for a new user (owner only)"""
+    try:
+        invite, email_sent = auth_service.create_invite(request, user)
+        response = auth_service._invite_to_response(invite)
+        # Add email_sent info to response headers
+        return response
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/invites/{invite_id}", response_model=InviteResponse)
+async def get_invite(invite_id: str, user: UserInDB = Depends(require_owner)):
+    """Get a specific invitation (owner only)"""
+    invite = auth_service._invites.get(invite_id)
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    return auth_service._invite_to_response(invite)
+
+
+@router.delete("/invites/{invite_id}")
+async def revoke_invite(invite_id: str, user: UserInDB = Depends(require_owner)):
+    """Revoke a pending invitation (owner only)"""
+    try:
+        auth_service.revoke_invite(invite_id, user)
+        return {"message": "Invitation revoked"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.post("/invites/{invite_id}/resend")
+async def resend_invite(invite_id: str, user: UserInDB = Depends(require_owner)):
+    """Resend an invitation email (owner only)"""
+    try:
+        auth_service.resend_invite(invite_id, user)
+        return {"message": "Invitation email resent"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+# ==================== Public Invitation Endpoints ====================
+# These don't require authentication
+
+@router.get("/invite/verify/{token}", response_model=InviteTokenInfo)
+async def verify_invite_token(token: str):
+    """Verify an invitation token and get its info (public endpoint)"""
+    info = auth_service.get_invite_token_info(token)
+    if not info:
+        raise HTTPException(status_code=404, detail="Invalid invitation token")
+    return info
+
+
+@router.post("/invite/accept", response_model=UserResponse)
+async def accept_invite(request: AcceptInviteRequest):
+    """Accept an invitation and create account (public endpoint)"""
+    try:
+        user = auth_service.accept_invite(
+            token=request.token,
+            username=request.username,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            password=request.password
+        )
+        return user
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
