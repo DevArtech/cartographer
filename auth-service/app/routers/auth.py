@@ -134,16 +134,48 @@ async def get_session(user: UserInDB = Depends(require_auth)):
 
 
 @router.post("/verify")
-async def verify_token(user: Optional[UserInDB] = Depends(get_current_user)):
-    """Verify if the current token is valid"""
-    if user:
+async def verify_token(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+):
+    """
+    Verify if the current token is valid.
+    
+    Supports two types of tokens:
+    1. User tokens - verified against the user database
+    2. Service tokens - tokens with "service": true, used for service-to-service auth
+    """
+    if not credentials:
+        return {"valid": False}
+    
+    # First, decode the token to check if it's a service token
+    token_payload = auth_service.verify_token(credentials.credentials)
+    if not token_payload:
+        return {"valid": False}
+    
+    # Check if this is a service token (used for service-to-service communication)
+    # Service tokens have a special "service" claim set to True
+    raw_payload = auth_service.decode_token_payload(credentials.credentials)
+    if raw_payload and raw_payload.get("service") is True:
+        # Service token - valid if signature verification passed
         return {
             "valid": True,
-            "user_id": user.id,
-            "username": user.username,
-            "role": user.role.value
+            "user_id": token_payload.sub,
+            "username": token_payload.username,
+            "role": token_payload.role.value,
+            "is_service": True
         }
-    return {"valid": False}
+    
+    # Regular user token - verify user exists in database
+    user = auth_service.get_user(token_payload.sub)
+    if not user or not user.is_active:
+        return {"valid": False}
+    
+    return {
+        "valid": True,
+        "user_id": user.id,
+        "username": user.username,
+        "role": user.role.value
+    }
 
 
 # ==================== User Management Endpoints ====================

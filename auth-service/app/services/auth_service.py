@@ -336,6 +336,17 @@ class AuthService:
             logger.debug(f"Invalid token: {e}")
             return None
     
+    def decode_token_payload(self, token: str) -> Optional[dict]:
+        """
+        Decode JWT token and return raw payload dict.
+        Used to access additional claims like 'service' flag.
+        """
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            return payload
+        except jwt.InvalidTokenError:
+            return None
+    
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
         """Change user's password"""
         user = self.get_user(user_id)
