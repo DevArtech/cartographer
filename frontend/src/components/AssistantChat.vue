@@ -85,7 +85,7 @@
 				<!-- User message -->
 				<div v-if="msg.role === 'user'" class="flex justify-end">
 					<div class="max-w-[80%] bg-violet-600 rounded-2xl rounded-tr-sm px-4 py-2.5 text-white text-sm">
-						{{ msg.content }}
+						<div class="prose prose-sm prose-invert prose-user max-w-none" v-html="formatMessage(msg.content)"></div>
 					</div>
 				</div>
 
@@ -221,6 +221,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import axios from 'axios';
+import { marked } from 'marked';
 
 const emit = defineEmits(['close']);
 
@@ -429,21 +430,16 @@ async function refreshContext() {
 	}
 }
 
+// Configure marked for chat messages
+marked.setOptions({
+	breaks: true,  // Convert \n to <br>
+	gfm: true,     // GitHub Flavored Markdown
+});
+
 function formatMessage(content: string): string {
-	// Basic markdown-like formatting
-	let formatted = content
-		// Code blocks
-		.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-slate-900 rounded p-2 my-2 overflow-x-auto"><code>$2</code></pre>')
-		// Inline code
-		.replace(/`([^`]+)`/g, '<code class="bg-slate-900 px-1 rounded">$1</code>')
-		// Bold
-		.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-		// Italic
-		.replace(/\*([^*]+)\*/g, '<em>$1</em>')
-		// Line breaks
-		.replace(/\n/g, '<br/>');
-	
-	return formatted;
+	// Use marked to parse markdown
+	const html = marked.parse(content, { async: false }) as string;
+	return html;
 }
 
 async function sendMessage(content: string) {
@@ -581,11 +577,113 @@ watch(messages, scrollToBottom, { deep: true });
 	background: #64748b;
 }
 
-/* Prose overrides for dark mode */
-.prose-invert code {
+/* Prose overrides for dark mode - assistant messages */
+.prose-invert :deep(code) {
 	color: #e2e8f0;
-}
-.prose-invert pre {
 	background: #0f172a;
+	padding: 0.125rem 0.25rem;
+	border-radius: 0.25rem;
+	font-size: 0.875em;
+}
+.prose-invert :deep(pre) {
+	background: #0f172a;
+	padding: 0.75rem;
+	border-radius: 0.375rem;
+	overflow-x: auto;
+	margin: 0.5rem 0;
+}
+.prose-invert :deep(pre code) {
+	background: transparent;
+	padding: 0;
+}
+.prose-invert :deep(p) {
+	margin: 0.5rem 0;
+}
+.prose-invert :deep(p:first-child) {
+	margin-top: 0;
+}
+.prose-invert :deep(p:last-child) {
+	margin-bottom: 0;
+}
+.prose-invert :deep(ul),
+.prose-invert :deep(ol) {
+	margin: 0.5rem 0;
+	padding-left: 1.5rem;
+}
+.prose-invert :deep(li) {
+	margin: 0.25rem 0;
+}
+.prose-invert :deep(ul) {
+	list-style-type: disc;
+}
+.prose-invert :deep(ol) {
+	list-style-type: decimal;
+}
+.prose-invert :deep(a) {
+	color: #a78bfa;
+	text-decoration: underline;
+}
+.prose-invert :deep(a:hover) {
+	color: #c4b5fd;
+}
+.prose-invert :deep(blockquote) {
+	border-left: 3px solid #6366f1;
+	padding-left: 0.75rem;
+	margin: 0.5rem 0;
+	color: #cbd5e1;
+}
+.prose-invert :deep(h1),
+.prose-invert :deep(h2),
+.prose-invert :deep(h3),
+.prose-invert :deep(h4) {
+	font-weight: 600;
+	margin: 0.75rem 0 0.5rem 0;
+}
+.prose-invert :deep(h1) {
+	font-size: 1.25rem;
+}
+.prose-invert :deep(h2) {
+	font-size: 1.125rem;
+}
+.prose-invert :deep(h3) {
+	font-size: 1rem;
+}
+.prose-invert :deep(table) {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 0.5rem 0;
+}
+.prose-invert :deep(th),
+.prose-invert :deep(td) {
+	border: 1px solid #475569;
+	padding: 0.375rem 0.5rem;
+	text-align: left;
+}
+.prose-invert :deep(th) {
+	background: #1e293b;
+	font-weight: 600;
+}
+.prose-invert :deep(hr) {
+	border: none;
+	border-top: 1px solid #475569;
+	margin: 0.75rem 0;
+}
+
+/* User message prose - lighter code backgrounds for violet bubble */
+.prose-user :deep(code) {
+	background: rgba(0, 0, 0, 0.2);
+}
+.prose-user :deep(pre) {
+	background: rgba(0, 0, 0, 0.25);
+}
+.prose-user :deep(a) {
+	color: #e0e7ff;
+}
+.prose-user :deep(a:hover) {
+	color: #ffffff;
+}
+.prose-user :deep(blockquote) {
+	border-left-color: #c4b5fd;
+	color: #e0e7ff;
 }
 </style>
