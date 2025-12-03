@@ -301,9 +301,15 @@ async def get_network_context():
 
 @router.post("/context/refresh")
 async def refresh_context():
-    """Clear cached context and fetch fresh data"""
+    """Clear cached context and fetch fresh data from the metrics service.
+    
+    This triggers the metrics service to regenerate its snapshot with
+    the latest data (including recent speed test results, health checks, etc.)
+    before building the context string.
+    """
     metrics_context_service.clear_cache()
-    _, summary = await metrics_context_service.build_context_string()
+    # Use force_refresh=True to tell the metrics service to regenerate its snapshot
+    _, summary = await metrics_context_service.build_context_string(force_refresh=True)
     
     return {
         "success": True,
@@ -383,7 +389,22 @@ async def get_context_raw():
         gw_detail = {
             "gateway_ip": gw.get("gateway_ip"),
             "test_ips": [],
+            "has_speed_test": gw.get("last_speed_test") is not None,
+            "speed_test": None,
         }
+        # Include speed test details if available
+        speed_test = gw.get("last_speed_test")
+        if speed_test:
+            gw_detail["speed_test"] = {
+                "success": speed_test.get("success"),
+                "download_mbps": speed_test.get("download_mbps"),
+                "upload_mbps": speed_test.get("upload_mbps"),
+                "ping_ms": speed_test.get("ping_ms"),
+                "client_isp": speed_test.get("client_isp"),
+                "server_sponsor": speed_test.get("server_sponsor"),
+                "server_location": speed_test.get("server_location"),
+                "timestamp": str(speed_test.get("timestamp")) if speed_test.get("timestamp") else None,
+            }
         for tip in gw.get("test_ips", []):
             gw_detail["test_ips"].append({
                 "ip": tip.get("ip"),

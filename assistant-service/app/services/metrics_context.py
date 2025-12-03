@@ -32,13 +32,23 @@ class MetricsContextService:
         self._check_interval_seconds = 5  # Recheck every 5 seconds when no snapshot
         self._max_wait_attempts = 6  # Max attempts when waiting for snapshot (30 seconds total)
     
-    async def fetch_network_snapshot(self) -> Optional[Dict[str, Any]]:
-        """Fetch the current network topology snapshot"""
+    async def fetch_network_snapshot(self, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+        """Fetch the current network topology snapshot
+        
+        Args:
+            force_refresh: If True, ask the metrics service to generate a fresh snapshot
+                          instead of returning the cached one. Use this after data changes
+                          (like a speed test) to get the latest data.
+        """
         self._last_check_time = datetime.utcnow()
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(f"{METRICS_SERVICE_URL}/api/metrics/snapshot")
+                if force_refresh:
+                    # Ask metrics service to generate a fresh snapshot with latest data
+                    response = await client.post(f"{METRICS_SERVICE_URL}/api/metrics/snapshot/generate")
+                else:
+                    response = await client.get(f"{METRICS_SERVICE_URL}/api/metrics/snapshot")
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -268,25 +278,28 @@ class MetricsContextService:
         
         return "\n".join(lines)
     
-    async def build_context_string(self, wait_for_data: bool = True) -> tuple[str, Dict[str, Any]]:
+    async def build_context_string(self, wait_for_data: bool = True, force_refresh: bool = False) -> tuple[str, Dict[str, Any]]:
         """
         Build a context string for the AI assistant with network information.
         Returns (context_string, summary_dict)
         
         Args:
             wait_for_data: If True and no snapshot available, wait and retry
+            force_refresh: If True, bypass cache and fetch fresh data from the metrics service.
+                          This also triggers the metrics service to regenerate its snapshot.
         """
-        # Check cache
+        # Check cache (skip if force_refresh)
         now = datetime.utcnow()
         if (
+            not force_refresh and
             self._cached_context and 
             self._cache_timestamp and 
             (now - self._cache_timestamp).total_seconds() < self._cache_ttl_seconds
         ):
             return self._cached_context, self._cached_summary or {}
         
-        # Try to fetch snapshot
-        snapshot = await self.fetch_network_snapshot()
+        # Try to fetch snapshot (force regeneration if force_refresh)
+        snapshot = await self.fetch_network_snapshot(force_refresh=force_refresh)
         
         # If no snapshot and we should wait, try waiting for it
         if not snapshot and wait_for_data and not self._snapshot_available:
