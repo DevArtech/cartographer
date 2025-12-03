@@ -9,10 +9,11 @@ import os
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Any
 
 import httpx
+import jwt
 
 from ..models import (
     NetworkTopologySnapshot,
@@ -37,8 +38,39 @@ logger = logging.getLogger(__name__)
 HEALTH_SERVICE_URL = os.environ.get("HEALTH_SERVICE_URL", "http://localhost:8001")
 BACKEND_SERVICE_URL = os.environ.get("BACKEND_SERVICE_URL", "http://localhost:8000")
 
+# JWT Configuration (must match auth service)
+JWT_SECRET = os.environ.get("JWT_SECRET", "cartographer-dev-secret-change-in-production")
+JWT_ALGORITHM = "HS256"
+
 # Publishing configuration
 DEFAULT_PUBLISH_INTERVAL = int(os.environ.get("METRICS_PUBLISH_INTERVAL", "30"))
+
+
+def _generate_service_token() -> str:
+    """
+    Generate a long-lived service token for internal service-to-service communication.
+    This token is used by the metrics service to authenticate with the backend.
+    """
+    now = datetime.now(timezone.utc)
+    # Service token valid for 1 year
+    expires = now + timedelta(days=365)
+    
+    payload = {
+        "sub": "metrics-service",
+        "username": "metrics-service",
+        "role": "owner",  # Service has full access
+        "exp": expires,
+        "iat": now,
+        "service": True,  # Mark as service token
+    }
+    
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return token
+
+
+# Generate service token on module load
+SERVICE_TOKEN = _generate_service_token()
+SERVICE_AUTH_HEADER = {"Authorization": f"Bearer {SERVICE_TOKEN}"}
 
 
 class MetricsAggregator:
@@ -60,11 +92,16 @@ class MetricsAggregator:
         """Fetch the saved network layout from the backend."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{BACKEND_SERVICE_URL}/api/load-layout")
+                response = await client.get(
+                    f"{BACKEND_SERVICE_URL}/api/load-layout",
+                    headers=SERVICE_AUTH_HEADER
+                )
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("exists"):
                         return data.get("layout")
+                elif response.status_code == 401:
+                    logger.error("Authentication failed fetching layout - check JWT_SECRET")
                 return None
         except httpx.ConnectError:
             logger.warning("Backend service unavailable - cannot fetch network layout")

@@ -123,6 +123,8 @@ services:
       # Other services on localhost when using host network
       - HEALTH_SERVICE_URL=http://localhost:8001
       - BACKEND_SERVICE_URL=http://localhost:8000
+      # JWT secret must match auth service for service-to-service auth
+      - JWT_SECRET=${JWT_SECRET:-cartographer-dev-secret-change-in-production}
       # Publishing configuration
       - METRICS_PUBLISH_INTERVAL=${METRICS_PUBLISH_INTERVAL:-30}
     restart: unless-stopped
