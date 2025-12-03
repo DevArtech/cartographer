@@ -37,35 +37,43 @@ async def lifespan(app: FastAPI):
     
     On startup:
     - Connect to Redis
+    - Generate initial snapshot immediately
     - Start the background metrics publishing loop
     
     On shutdown:
     - Stop publishing
     - Disconnect from Redis
     """
+    import asyncio
+    
     # Startup
     logger.info("Starting Cartographer Metrics Service...")
     
-    # Connect to Redis
+    # Connect to Redis first
     redis_connected = await redis_publisher.connect()
     if redis_connected:
         logger.info("Connected to Redis successfully")
     else:
         logger.warning("Failed to connect to Redis - will retry on publish")
     
-    # Start background publishing
-    metrics_aggregator.start_publishing()
-    logger.info("Background metrics publishing started")
-    
-    # Generate initial snapshot
+    # Generate initial snapshot IMMEDIATELY (before starting background loop)
+    # This ensures snapshot is available as soon as the service starts accepting requests
+    logger.info("Generating initial snapshot...")
     try:
         initial_snapshot = await metrics_aggregator.generate_snapshot()
         if initial_snapshot:
-            logger.info(f"Initial snapshot generated with {initial_snapshot.total_nodes} nodes")
+            logger.info(f"Initial snapshot ready with {initial_snapshot.total_nodes} nodes")
             if redis_connected:
                 await redis_publisher.store_last_snapshot(initial_snapshot)
+                await redis_publisher.publish_topology_snapshot(initial_snapshot)
+        else:
+            logger.warning("No initial snapshot generated - layout may not exist yet")
     except Exception as e:
         logger.warning(f"Failed to generate initial snapshot: {e}")
+    
+    # Start background publishing loop (will wait for interval before first publish)
+    metrics_aggregator.start_publishing(skip_initial=True)
+    logger.info("Background metrics publishing started")
     
     yield
     

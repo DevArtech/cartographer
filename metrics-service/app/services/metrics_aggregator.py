@@ -506,9 +506,14 @@ class MetricsAggregator:
         
         return success
     
-    async def _publish_loop(self):
+    async def _publish_loop(self, skip_initial: bool = False):
         """Background loop that periodically publishes snapshots."""
         logger.info(f"Starting metrics publish loop (interval: {self._publish_interval}s)")
+        
+        # If skip_initial is True, wait before first publish (initial was already done at startup)
+        if skip_initial:
+            logger.debug(f"Skipping initial publish, waiting {self._publish_interval}s")
+            await asyncio.sleep(self._publish_interval)
         
         while True:
             try:
@@ -524,13 +529,19 @@ class MetricsAggregator:
                 logger.error(f"Error in publish loop: {e}")
                 await asyncio.sleep(5)  # Wait before retrying
     
-    def start_publishing(self):
-        """Start the background publishing task."""
+    def start_publishing(self, skip_initial: bool = False):
+        """
+        Start the background publishing task.
+        
+        Args:
+            skip_initial: If True, wait for one interval before first publish
+                         (useful when initial snapshot was already generated at startup)
+        """
         if self._publish_task and not self._publish_task.done():
             logger.warning("Publishing already running")
             return
         
-        self._publish_task = asyncio.create_task(self._publish_loop())
+        self._publish_task = asyncio.create_task(self._publish_loop(skip_initial=skip_initial))
         logger.info("Background publishing started")
     
     def stop_publishing(self):
