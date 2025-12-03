@@ -14,13 +14,23 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(BaseProvider):
     """Anthropic Claude API provider"""
     
+    # Known working models - these are the stable/latest aliases
+    KNOWN_MODELS = [
+        "claude-sonnet-4-20250514",
+        "claude-3-7-sonnet-20250219",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022", 
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307",
+    ]
+    
     @property
     def name(self) -> str:
         return "anthropic"
     
     @property
     def default_model(self) -> str:
-        return "claude-3-5-sonnet-20241022"
+        return "claude-sonnet-4-20250514"
     
     def _get_client(self):
         """Get Anthropic client"""
@@ -97,53 +107,82 @@ class AnthropicProvider(BaseProvider):
         )
     
     async def list_models(self) -> List[str]:
-        """List available Anthropic models from the API"""
+        """List available Anthropic models from the API with pagination"""
         try:
             client = self._get_client()
-            # Anthropic has a models list endpoint
-            models_response = await client.models.list(limit=100)
             
+            # Fetch all models with pagination
+            # API reference: https://platform.claude.com/docs/en/api/models/list
             chat_models = []
-            for model in models_response.data:
-                model_id = model.id
-                # Include Claude models
-                if model_id.startswith('claude'):
-                    chat_models.append(model_id)
+            after_id = None
             
-            # Sort with newest models first (by date suffix, descending)
-            def sort_key(model_name):
-                # Extract version info: claude-3-5-sonnet-20241022
-                parts = model_name.split('-')
-                # Priority: claude-3-5 > claude-3, sonnet > haiku > opus (for cost/performance balance)
-                version_priority = 0
-                if '3-5' in model_name or '3.5' in model_name:
-                    version_priority = 0
-                elif '3' in model_name:
-                    version_priority = 1
-                else:
-                    version_priority = 2
+            while True:
+                # Build request params
+                params = {"limit": 100}
+                if after_id:
+                    params["after_id"] = after_id
                 
-                # Get date suffix if present
-                date_suffix = ''
+                models_response = await client.models.list(**params)
+                
+                # Process models from this page
+                for model in models_response.data:
+                    model_id = model.id
+                    # Include all Claude models (the API only returns available models)
+                    if model_id.startswith('claude'):
+                        chat_models.append(model_id)
+                
+                # Check if there are more pages
+                if not models_response.has_more:
+                    break
+                    
+                # Set cursor for next page
+                after_id = models_response.last_id
+            
+            logger.info(f"Fetched {len(chat_models)} Anthropic models from API")
+            
+            # Sort with newest/best models first
+            def sort_key(model_name):
+                # Priority by model family (newest first)
+                version_priority = 10
+                if 'sonnet-4' in model_name or 'claude-4' in model_name:
+                    version_priority = 0
+                elif '3-7' in model_name or '3.7' in model_name:
+                    version_priority = 1
+                elif '3-5' in model_name or '3.5' in model_name:
+                    version_priority = 2
+                elif 'opus' in model_name:
+                    version_priority = 3
+                elif '3' in model_name:
+                    version_priority = 4
+                
+                # Model type priority (sonnet > haiku > opus for balance)
+                type_priority = 5
+                if 'sonnet' in model_name:
+                    type_priority = 0
+                elif 'haiku' in model_name:
+                    type_priority = 1
+                elif 'opus' in model_name:
+                    type_priority = 2
+                
+                # Get date suffix if present (newer dates first)
+                date_suffix = 0
+                parts = model_name.split('-')
                 for part in reversed(parts):
                     if part.isdigit() and len(part) == 8:
-                        date_suffix = part
+                        date_suffix = int(part)
                         break
                 
-                return (version_priority, -int(date_suffix) if date_suffix else 0, model_name)
+                return (version_priority, type_priority, -date_suffix, model_name)
             
             chat_models.sort(key=sort_key)
             
-            return chat_models if chat_models else [self.default_model]
+            # If API returned models, use them; otherwise fall back
+            if chat_models:
+                return chat_models
+            
+            return self.KNOWN_MODELS
             
         except Exception as e:
             logger.warning(f"Failed to list Anthropic models: {e}")
-            # Fallback to known models
-            return [
-                "claude-sonnet-4-20250514",
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022",
-                "claude-3-opus-20240229",
-                "claude-3-sonnet-20240229",
-                "claude-3-haiku-20240307",
-            ]
+            # Fallback to known working models
+            return self.KNOWN_MODELS
