@@ -29,6 +29,10 @@ from ..models import (
     TestNotificationResponse,
     EmailConfig,
     DiscordConfig,
+    ScheduledBroadcast,
+    ScheduledBroadcastStatus,
+    ScheduledBroadcastCreate,
+    ScheduledBroadcastResponse,
 )
 from .email_service import send_notification_email, send_test_email, is_email_configured
 from .discord_service import discord_service, send_discord_notification, send_test_discord, is_discord_configured
@@ -40,6 +44,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(os.environ.get("NOTIFICATION_DATA_DIR", "/app/data"))
 PREFERENCES_FILE = DATA_DIR / "notification_preferences.json"
 HISTORY_FILE = DATA_DIR / "notification_history.json"
+SCHEDULED_FILE = DATA_DIR / "scheduled_broadcasts.json"
 
 # Rate limiting
 MAX_HISTORY_SIZE = 1000  # Keep last 1000 notifications in memory
@@ -54,10 +59,13 @@ class NotificationManager:
         self._preferences: Dict[str, NotificationPreferences] = {}
         self._history: deque = deque(maxlen=MAX_HISTORY_SIZE)
         self._rate_limits: Dict[str, deque] = {}  # user_id -> deque of timestamps
+        self._scheduled_broadcasts: Dict[str, ScheduledBroadcast] = {}
+        self._scheduler_task: Optional[asyncio.Task] = None
         
         # Load persisted data
         self._load_preferences()
         self._load_history()
+        self._load_scheduled_broadcasts()
     
     def _save_preferences(self):
         """Save preferences to disk"""
@@ -127,6 +135,206 @@ class NotificationManager:
             logger.info(f"Loaded {len(self._history)} notification records")
         except Exception as e:
             logger.error(f"Failed to load notification history: {e}")
+    
+    def _save_scheduled_broadcasts(self):
+        """Save scheduled broadcasts to disk"""
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            
+            data = {
+                broadcast_id: broadcast.model_dump(mode="json")
+                for broadcast_id, broadcast in self._scheduled_broadcasts.items()
+            }
+            
+            with open(SCHEDULED_FILE, 'w') as f:
+                json.dump(data, f, indent=2, default=str)
+        except Exception as e:
+            logger.error(f"Failed to save scheduled broadcasts: {e}")
+    
+    def _load_scheduled_broadcasts(self):
+        """Load scheduled broadcasts from disk"""
+        try:
+            if not SCHEDULED_FILE.exists():
+                return
+            
+            with open(SCHEDULED_FILE, 'r') as f:
+                data = json.load(f)
+            
+            for broadcast_id, broadcast_data in data.items():
+                # Parse datetime strings
+                for field in ["scheduled_at", "created_at", "sent_at"]:
+                    if field in broadcast_data and broadcast_data[field] and isinstance(broadcast_data[field], str):
+                        broadcast_data[field] = datetime.fromisoformat(broadcast_data[field].replace("Z", "+00:00"))
+                
+                self._scheduled_broadcasts[broadcast_id] = ScheduledBroadcast(**broadcast_data)
+            
+            logger.info(f"Loaded {len(self._scheduled_broadcasts)} scheduled broadcasts")
+        except Exception as e:
+            logger.error(f"Failed to load scheduled broadcasts: {e}")
+    
+    # ==================== Scheduled Broadcast Scheduler ====================
+    
+    async def start_scheduler(self):
+        """Start the background scheduler for processing scheduled broadcasts"""
+        if self._scheduler_task is not None:
+            return
+        
+        self._scheduler_task = asyncio.create_task(self._scheduler_loop())
+        logger.info("Scheduled broadcast scheduler started")
+    
+    async def stop_scheduler(self):
+        """Stop the background scheduler"""
+        if self._scheduler_task is not None:
+            self._scheduler_task.cancel()
+            try:
+                await self._scheduler_task
+            except asyncio.CancelledError:
+                pass
+            self._scheduler_task = None
+            logger.info("Scheduled broadcast scheduler stopped")
+    
+    async def _scheduler_loop(self):
+        """Background loop to check and send scheduled broadcasts"""
+        while True:
+            try:
+                await self._process_due_broadcasts()
+                await asyncio.sleep(30)  # Check every 30 seconds
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in scheduler loop: {e}")
+                await asyncio.sleep(60)  # Wait longer on error
+    
+    async def _process_due_broadcasts(self):
+        """Process any broadcasts that are due to be sent"""
+        now = datetime.utcnow()
+        
+        for broadcast_id, broadcast in list(self._scheduled_broadcasts.items()):
+            if broadcast.status != ScheduledBroadcastStatus.PENDING:
+                continue
+            
+            if broadcast.scheduled_at <= now:
+                await self._send_scheduled_broadcast(broadcast_id)
+    
+    async def _send_scheduled_broadcast(self, broadcast_id: str):
+        """Send a scheduled broadcast"""
+        broadcast = self._scheduled_broadcasts.get(broadcast_id)
+        if not broadcast:
+            return
+        
+        try:
+            # Create the network event
+            event = NetworkEvent(
+                event_id=f"scheduled-{broadcast_id}",
+                event_type=broadcast.event_type,
+                priority=broadcast.priority,
+                title=broadcast.title,
+                message=broadcast.message,
+                details={
+                    "scheduled_by": broadcast.created_by,
+                    "scheduled_at": broadcast.scheduled_at.isoformat(),
+                    "is_scheduled": True,
+                }
+            )
+            
+            # Broadcast to all users
+            results = await self.broadcast_notification(event)
+            
+            # Update broadcast status
+            broadcast.status = ScheduledBroadcastStatus.SENT
+            broadcast.sent_at = datetime.utcnow()
+            broadcast.users_notified = len(results)
+            
+            logger.info(f"Scheduled broadcast {broadcast_id} sent to {len(results)} users")
+            
+        except Exception as e:
+            broadcast.status = ScheduledBroadcastStatus.FAILED
+            broadcast.error_message = str(e)
+            logger.error(f"Failed to send scheduled broadcast {broadcast_id}: {e}")
+        
+        self._save_scheduled_broadcasts()
+    
+    # ==================== Scheduled Broadcast Management ====================
+    
+    def create_scheduled_broadcast(
+        self,
+        title: str,
+        message: str,
+        scheduled_at: datetime,
+        created_by: str,
+        event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE,
+        priority: NotificationPriority = NotificationPriority.MEDIUM,
+    ) -> ScheduledBroadcast:
+        """Create a new scheduled broadcast"""
+        broadcast_id = str(uuid.uuid4())
+        
+        broadcast = ScheduledBroadcast(
+            id=broadcast_id,
+            title=title,
+            message=message,
+            event_type=event_type,
+            priority=priority,
+            scheduled_at=scheduled_at,
+            created_by=created_by,
+        )
+        
+        self._scheduled_broadcasts[broadcast_id] = broadcast
+        self._save_scheduled_broadcasts()
+        
+        logger.info(f"Scheduled broadcast created: {broadcast_id} for {scheduled_at}")
+        return broadcast
+    
+    def get_scheduled_broadcasts(
+        self,
+        include_completed: bool = False,
+    ) -> ScheduledBroadcastResponse:
+        """Get all scheduled broadcasts"""
+        broadcasts = list(self._scheduled_broadcasts.values())
+        
+        if not include_completed:
+            broadcasts = [b for b in broadcasts if b.status == ScheduledBroadcastStatus.PENDING]
+        
+        # Sort by scheduled time
+        broadcasts.sort(key=lambda b: b.scheduled_at)
+        
+        return ScheduledBroadcastResponse(
+            broadcasts=broadcasts,
+            total_count=len(broadcasts),
+        )
+    
+    def get_scheduled_broadcast(self, broadcast_id: str) -> Optional[ScheduledBroadcast]:
+        """Get a specific scheduled broadcast"""
+        return self._scheduled_broadcasts.get(broadcast_id)
+    
+    def cancel_scheduled_broadcast(self, broadcast_id: str) -> bool:
+        """Cancel a scheduled broadcast"""
+        broadcast = self._scheduled_broadcasts.get(broadcast_id)
+        if not broadcast:
+            return False
+        
+        if broadcast.status != ScheduledBroadcastStatus.PENDING:
+            return False
+        
+        broadcast.status = ScheduledBroadcastStatus.CANCELLED
+        self._save_scheduled_broadcasts()
+        
+        logger.info(f"Scheduled broadcast cancelled: {broadcast_id}")
+        return True
+    
+    def delete_scheduled_broadcast(self, broadcast_id: str) -> bool:
+        """Delete a scheduled broadcast (only if cancelled or completed)"""
+        broadcast = self._scheduled_broadcasts.get(broadcast_id)
+        if not broadcast:
+            return False
+        
+        if broadcast.status == ScheduledBroadcastStatus.PENDING:
+            return False  # Must cancel first
+        
+        del self._scheduled_broadcasts[broadcast_id]
+        self._save_scheduled_broadcasts()
+        
+        logger.info(f"Scheduled broadcast deleted: {broadcast_id}")
+        return True
     
     # ==================== Preferences Management ====================
     

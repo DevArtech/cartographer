@@ -541,24 +541,61 @@
 										></textarea>
 									</div>
 
-									<!-- Send Button -->
+									<!-- Schedule Toggle -->
+									<div class="flex items-center justify-between pt-2 pb-2 border-t border-amber-200 dark:border-amber-700/30">
+										<div>
+											<p class="font-medium text-slate-900 dark:text-white text-sm">Schedule for Later</p>
+											<p class="text-xs text-slate-500 dark:text-slate-400">Set a specific time to send this notification</p>
+										</div>
+										<button 
+											@click="scheduleMode = !scheduleMode"
+											class="relative w-12 h-7 rounded-full transition-colors"
+											:class="scheduleMode ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'"
+										>
+											<span 
+												class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
+												:class="scheduleMode ? 'translate-x-5' : ''"
+											></span>
+										</button>
+									</div>
+
+									<!-- Schedule DateTime Picker -->
+									<div v-if="scheduleMode" class="space-y-2">
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+											Schedule Date & Time
+										</label>
+										<input
+											v-model="scheduledDateTime"
+											type="datetime-local"
+											:min="minScheduleDateTime"
+											class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+										/>
+										<p class="text-xs text-slate-500 dark:text-slate-400">
+											Time is in your local timezone
+										</p>
+									</div>
+
+									<!-- Send/Schedule Button -->
 									<div class="flex items-center justify-between pt-2">
 										<p class="text-xs text-slate-500 dark:text-slate-400">
-											This will be sent to all users with notifications enabled
+											{{ scheduleMode ? 'Will be sent at the scheduled time' : 'Will be sent immediately to all users' }}
 										</p>
 										<button
-											@click="sendBroadcast"
-											:disabled="sendingBroadcast || !broadcastTitle.trim() || !broadcastMessage.trim()"
+											@click="scheduleMode ? scheduleTheBroadcast() : sendBroadcast()"
+											:disabled="sendingBroadcast || !broadcastTitle.trim() || !broadcastMessage.trim() || (scheduleMode && !scheduledDateTime)"
 											class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
 										>
 											<svg v-if="sendingBroadcast" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 												<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 												<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 											</svg>
+											<svg v-else-if="scheduleMode" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+											</svg>
 											<svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
 											</svg>
-											{{ sendingBroadcast ? 'Sending...' : 'Send to All Users' }}
+											{{ sendingBroadcast ? (scheduleMode ? 'Scheduling...' : 'Sending...') : (scheduleMode ? 'Schedule Broadcast' : 'Send Now') }}
 										</button>
 									</div>
 
@@ -576,14 +613,72 @@
 											class="p-3 rounded-lg"
 											:class="broadcastResult.success ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'"
 										>
-											<p v-if="broadcastResult.success" class="text-sm font-medium">
+											<p v-if="broadcastResult.success && broadcastResult.users_notified !== undefined" class="text-sm font-medium">
 												✓ Notification sent to {{ broadcastResult.users_notified }} user(s)
+											</p>
+											<p v-else-if="broadcastResult.success" class="text-sm font-medium">
+												✓ {{ broadcastResult.error }}
 											</p>
 											<p v-else class="text-sm font-medium">
 												✗ {{ broadcastResult.error || 'Failed to send notification' }}
 											</p>
 										</div>
 									</Transition>
+
+									<!-- Scheduled Broadcasts List -->
+									<div v-if="scheduledBroadcasts.length > 0" class="mt-4 pt-4 border-t border-amber-200 dark:border-amber-700/30">
+										<h4 class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+											</svg>
+											Scheduled Broadcasts ({{ scheduledBroadcasts.length }})
+										</h4>
+										<div class="space-y-2">
+											<div 
+												v-for="broadcast in scheduledBroadcasts" 
+												:key="broadcast.id"
+												class="p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+											>
+												<div class="flex items-start justify-between gap-3">
+													<div class="flex-1 min-w-0">
+														<div class="flex items-center gap-2">
+															<span class="text-lg">{{ NOTIFICATION_TYPE_INFO[broadcast.event_type]?.icon || '📢' }}</span>
+															<p class="font-medium text-slate-900 dark:text-white text-sm truncate">{{ broadcast.title }}</p>
+														</div>
+														<p class="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{{ broadcast.message }}</p>
+														<div class="flex items-center gap-2 mt-2">
+															<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+																<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+																	<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+																</svg>
+																{{ formatScheduledTime(broadcast.scheduled_at) }}
+															</span>
+															<span 
+																class="px-2 py-0.5 rounded text-xs font-medium"
+																:class="{
+																	'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400': broadcast.priority === 'low',
+																	'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400': broadcast.priority === 'medium',
+																	'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400': broadcast.priority === 'high',
+																	'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400': broadcast.priority === 'critical',
+																}"
+															>
+																{{ broadcast.priority }}
+															</span>
+														</div>
+													</div>
+													<button
+														@click="cancelScheduledBroadcastHandler(broadcast.id)"
+														class="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
+														title="Cancel scheduled broadcast"
+													>
+														<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+															<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+														</svg>
+													</button>
+												</div>
+											</div>
+										</div>
+									</div>
 								</div>
 							</div>
 						</template>
@@ -619,7 +714,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { 
 	useNotifications, 
 	NOTIFICATION_TYPE_INFO, 
@@ -632,6 +727,7 @@ import {
 	type NotificationType,
 	type NotificationPriority,
 	type TestNotificationResult,
+	type ScheduledBroadcast,
 } from "../composables/useNotifications";
 import { useAuth } from "../composables/useAuth";
 
@@ -652,6 +748,9 @@ const {
 	getDiscordChannels,
 	sendTestNotification,
 	sendBroadcastNotification,
+	getScheduledBroadcasts,
+	scheduleBroadcast,
+	cancelScheduledBroadcast,
 } = useNotifications();
 
 // State
@@ -676,6 +775,19 @@ const broadcastType = ref<NotificationType>("scheduled_maintenance");
 const broadcastPriority = ref<NotificationPriority>("medium");
 const sendingBroadcast = ref(false);
 const broadcastResult = ref<{ success: boolean; users_notified?: number; error?: string } | null>(null);
+
+// Scheduled broadcast state
+const scheduleMode = ref(false);
+const scheduledDateTime = ref("");
+const scheduledBroadcasts = ref<ScheduledBroadcast[]>([]);
+const loadingScheduled = ref(false);
+
+// Computed: minimum schedule datetime (5 minutes from now)
+const minScheduleDateTime = computed(() => {
+	const now = new Date();
+	now.setMinutes(now.getMinutes() + 5);
+	return now.toISOString().slice(0, 16);
+});
 
 // Load data
 onMounted(async () => {
@@ -714,6 +826,11 @@ onMounted(async () => {
 			} catch (e) {
 				console.error("Failed to load Discord info:", e);
 			}
+		}
+		
+		// Load scheduled broadcasts for owners
+		if (isOwner.value) {
+			await loadScheduledBroadcasts();
 		}
 	} catch (e) {
 		console.error("Failed to load notification settings:", e);
@@ -895,6 +1012,83 @@ async function sendBroadcast() {
 	} finally {
 		sendingBroadcast.value = false;
 	}
+}
+
+// Schedule broadcast (owner only)
+async function scheduleTheBroadcast() {
+	if (!broadcastTitle.value.trim() || !broadcastMessage.value.trim() || !scheduledDateTime.value) {
+		broadcastResult.value = { success: false, error: "Title, message, and schedule time are required" };
+		setTimeout(() => { broadcastResult.value = null; }, 5000);
+		return;
+	}
+	
+	sendingBroadcast.value = true;
+	broadcastResult.value = null;
+	
+	try {
+		const scheduleDate = new Date(scheduledDateTime.value);
+		
+		await scheduleBroadcast(
+			broadcastTitle.value.trim(),
+			broadcastMessage.value.trim(),
+			scheduleDate,
+			broadcastType.value,
+			broadcastPriority.value
+		);
+		
+		broadcastResult.value = { success: true, error: `Broadcast scheduled for ${scheduleDate.toLocaleString()}` };
+		
+		// Clear form on success
+		broadcastTitle.value = "";
+		broadcastMessage.value = "";
+		broadcastType.value = "scheduled_maintenance";
+		broadcastPriority.value = "medium";
+		scheduledDateTime.value = "";
+		scheduleMode.value = false;
+		
+		// Refresh scheduled broadcasts list
+		await loadScheduledBroadcasts();
+		
+		setTimeout(() => { broadcastResult.value = null; }, 5000);
+	} catch (e: any) {
+		broadcastResult.value = { success: false, error: e.message };
+		setTimeout(() => { broadcastResult.value = null; }, 5000);
+	} finally {
+		sendingBroadcast.value = false;
+	}
+}
+
+// Load scheduled broadcasts
+async function loadScheduledBroadcasts() {
+	if (!isOwner.value) return;
+	
+	loadingScheduled.value = true;
+	try {
+		const response = await getScheduledBroadcasts(false);
+		scheduledBroadcasts.value = response.broadcasts;
+	} catch (e) {
+		console.error("Failed to load scheduled broadcasts:", e);
+	} finally {
+		loadingScheduled.value = false;
+	}
+}
+
+// Cancel a scheduled broadcast
+async function cancelScheduledBroadcastHandler(broadcastId: string) {
+	try {
+		await cancelScheduledBroadcast(broadcastId);
+		await loadScheduledBroadcasts();
+	} catch (e: any) {
+		console.error("Failed to cancel broadcast:", e);
+		broadcastResult.value = { success: false, error: e.message };
+		setTimeout(() => { broadcastResult.value = null; }, 5000);
+	}
+}
+
+// Format date for display
+function formatScheduledTime(isoString: string): string {
+	const date = new Date(isoString);
+	return date.toLocaleString();
 }
 </script>
 

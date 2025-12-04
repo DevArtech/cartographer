@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.notifications import router as notifications_router
 from .services.discord_service import discord_service, is_discord_configured
+from .services.notification_manager import notification_manager
 
 # Configure logging
 logging.basicConfig(
@@ -43,10 +44,18 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Discord bot not configured (DISCORD_BOT_TOKEN not set)")
     
+    # Start scheduled broadcast scheduler
+    logger.info("Starting scheduled broadcast scheduler...")
+    await notification_manager.start_scheduler()
+    
     yield
     
     # Shutdown
     logger.info("Shutting down Notification Service...")
+    
+    # Stop scheduled broadcast scheduler
+    await notification_manager.stop_scheduler()
+    logger.info("Scheduled broadcast scheduler stopped")
     
     # Stop Discord bot
     if discord_service._running:

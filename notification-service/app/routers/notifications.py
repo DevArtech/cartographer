@@ -6,6 +6,7 @@ import logging
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query, Header
 
+from datetime import datetime
 from ..models import (
     NotificationPreferences,
     NotificationPreferencesUpdate,
@@ -21,6 +22,9 @@ from ..models import (
     NetworkEvent,
     NotificationType,
     NotificationPriority,
+    ScheduledBroadcast,
+    ScheduledBroadcastCreate,
+    ScheduledBroadcastResponse,
 )
 from ..services.notification_manager import notification_manager
 from ..services.discord_service import discord_service, is_discord_configured, get_bot_invite_url
@@ -232,4 +236,61 @@ async def send_manual_notification(
             "success": True,
             "users_notified": len(results),
         }
+
+
+# ==================== Scheduled Broadcasts ====================
+
+@router.get("/scheduled", response_model=ScheduledBroadcastResponse)
+async def get_scheduled_broadcasts(
+    include_completed: bool = Query(False, description="Include sent/cancelled broadcasts"),
+):
+    """Get all scheduled broadcasts"""
+    return notification_manager.get_scheduled_broadcasts(include_completed=include_completed)
+
+
+@router.post("/scheduled", response_model=ScheduledBroadcast)
+async def create_scheduled_broadcast(
+    request: ScheduledBroadcastCreate,
+    x_username: str = Header(..., description="Username of the owner creating the broadcast"),
+):
+    """Create a new scheduled broadcast (owner only)"""
+    # Validate scheduled time is in the future
+    if request.scheduled_at <= datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+    
+    return notification_manager.create_scheduled_broadcast(
+        title=request.title,
+        message=request.message,
+        scheduled_at=request.scheduled_at,
+        created_by=x_username,
+        event_type=request.event_type,
+        priority=request.priority,
+    )
+
+
+@router.get("/scheduled/{broadcast_id}", response_model=ScheduledBroadcast)
+async def get_scheduled_broadcast(broadcast_id: str):
+    """Get a specific scheduled broadcast"""
+    broadcast = notification_manager.get_scheduled_broadcast(broadcast_id)
+    if not broadcast:
+        raise HTTPException(status_code=404, detail="Scheduled broadcast not found")
+    return broadcast
+
+
+@router.post("/scheduled/{broadcast_id}/cancel")
+async def cancel_scheduled_broadcast(broadcast_id: str):
+    """Cancel a scheduled broadcast"""
+    success = notification_manager.cancel_scheduled_broadcast(broadcast_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot cancel broadcast (not found or already sent)")
+    return {"success": True, "message": "Broadcast cancelled"}
+
+
+@router.delete("/scheduled/{broadcast_id}")
+async def delete_scheduled_broadcast(broadcast_id: str):
+    """Delete a scheduled broadcast (must be cancelled or completed first)"""
+    success = notification_manager.delete_scheduled_broadcast(broadcast_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Cannot delete broadcast (not found or still pending)")
+    return {"success": True, "message": "Broadcast deleted"}
 

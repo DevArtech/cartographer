@@ -293,6 +293,47 @@ class MLModelStatus(BaseModel):
     is_trained: bool = False
 
 
+# ==================== Scheduled Broadcasts ====================
+
+class ScheduledBroadcastStatus(str, Enum):
+    """Status of a scheduled broadcast"""
+    PENDING = "pending"
+    SENT = "sent"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+class ScheduledBroadcast(BaseModel):
+    """A scheduled broadcast notification"""
+    id: str = Field(default_factory=lambda: "")
+    title: str
+    message: str
+    event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE
+    priority: NotificationPriority = NotificationPriority.MEDIUM
+    scheduled_at: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str  # Username of the owner who created it
+    status: ScheduledBroadcastStatus = ScheduledBroadcastStatus.PENDING
+    sent_at: Optional[datetime] = None
+    users_notified: int = 0
+    error_message: Optional[str] = None
+
+
+class ScheduledBroadcastCreate(BaseModel):
+    """Request to create a scheduled broadcast"""
+    title: str
+    message: str
+    event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE
+    priority: NotificationPriority = NotificationPriority.MEDIUM
+    scheduled_at: datetime
+
+
+class ScheduledBroadcastResponse(BaseModel):
+    """Response with scheduled broadcast info"""
+    broadcasts: List[ScheduledBroadcast]
+    total_count: int
+
+
 # ==================== API Requests/Responses ====================
 
 class TestNotificationRequest(BaseModel):

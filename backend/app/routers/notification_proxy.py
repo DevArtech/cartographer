@@ -254,6 +254,61 @@ async def send_global_notification(request: Request, user: AuthenticatedUser = D
     )
 
 
+# ==================== Scheduled Broadcasts (Owner Only) ====================
+
+@router.get("/scheduled")
+async def get_scheduled_broadcasts(
+    include_completed: bool = Query(False),
+    user: AuthenticatedUser = Depends(require_owner),
+):
+    """Get all scheduled broadcasts. Owner only."""
+    return await proxy_request(
+        "GET",
+        "/scheduled",
+        params={"include_completed": include_completed},
+    )
+
+
+@router.post("/scheduled")
+async def create_scheduled_broadcast(request: Request, user: AuthenticatedUser = Depends(require_owner)):
+    """
+    Create a new scheduled broadcast. Owner only.
+    
+    Expects a JSON body with:
+    - title: str - The notification title
+    - message: str - The notification message
+    - event_type: str - The type of notification (default: 'scheduled_maintenance')
+    - priority: str - The priority level (default: 'medium')
+    - scheduled_at: str - ISO datetime when to send the broadcast
+    """
+    body = await request.json()
+    
+    return await proxy_request(
+        "POST",
+        "/scheduled",
+        json_body=body,
+        headers={"X-Username": user.username},
+    )
+
+
+@router.get("/scheduled/{broadcast_id}")
+async def get_scheduled_broadcast(broadcast_id: str, user: AuthenticatedUser = Depends(require_owner)):
+    """Get a specific scheduled broadcast. Owner only."""
+    return await proxy_request("GET", f"/scheduled/{broadcast_id}")
+
+
+@router.post("/scheduled/{broadcast_id}/cancel")
+async def cancel_scheduled_broadcast(broadcast_id: str, user: AuthenticatedUser = Depends(require_owner)):
+    """Cancel a scheduled broadcast. Owner only."""
+    return await proxy_request("POST", f"/scheduled/{broadcast_id}/cancel")
+
+
+@router.delete("/scheduled/{broadcast_id}")
+async def delete_scheduled_broadcast(broadcast_id: str, user: AuthenticatedUser = Depends(require_owner)):
+    """Delete a scheduled broadcast. Owner only."""
+    return await proxy_request("DELETE", f"/scheduled/{broadcast_id}")
+
+
 # ==================== Internal Endpoints (for health service integration) ====================
 
 @router.post("/internal/process-health-check")

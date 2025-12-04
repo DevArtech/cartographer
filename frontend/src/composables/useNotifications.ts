@@ -103,6 +103,28 @@ export interface TestNotificationResult {
   error?: string;
 }
 
+export type ScheduledBroadcastStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
+
+export interface ScheduledBroadcast {
+  id: string;
+  title: string;
+  message: string;
+  event_type: NotificationType;
+  priority: NotificationPriority;
+  scheduled_at: string;
+  created_at: string;
+  created_by: string;
+  status: ScheduledBroadcastStatus;
+  sent_at?: string;
+  users_notified: number;
+  error_message?: string;
+}
+
+export interface ScheduledBroadcastResponse {
+  broadcasts: ScheduledBroadcast[];
+  total_count: number;
+}
+
 const API_BASE = '/api/notifications';
 
 export function useNotifications() {
@@ -207,6 +229,46 @@ export function useNotifications() {
     return response.data;
   }
 
+  // Get scheduled broadcasts (owner only)
+  async function getScheduledBroadcasts(includeCompleted: boolean = false): Promise<ScheduledBroadcastResponse> {
+    const response = await axios.get<ScheduledBroadcastResponse>(
+      `${API_BASE}/scheduled`,
+      { params: { include_completed: includeCompleted } }
+    );
+    return response.data;
+  }
+
+  // Schedule a broadcast (owner only)
+  async function scheduleBroadcast(
+    title: string,
+    message: string,
+    scheduledAt: Date,
+    eventType: NotificationType = 'scheduled_maintenance',
+    priority: NotificationPriority = 'medium'
+  ): Promise<ScheduledBroadcast> {
+    const response = await axios.post<ScheduledBroadcast>(
+      `${API_BASE}/scheduled`,
+      {
+        title,
+        message,
+        event_type: eventType,
+        priority,
+        scheduled_at: scheduledAt.toISOString(),
+      }
+    );
+    return response.data;
+  }
+
+  // Cancel a scheduled broadcast (owner only)
+  async function cancelScheduledBroadcast(broadcastId: string): Promise<void> {
+    await axios.post(`${API_BASE}/scheduled/${broadcastId}/cancel`);
+  }
+
+  // Delete a scheduled broadcast (owner only)
+  async function deleteScheduledBroadcast(broadcastId: string): Promise<void> {
+    await axios.delete(`${API_BASE}/scheduled/${broadcastId}`);
+  }
+
   return {
     isLoading,
     error,
@@ -220,6 +282,10 @@ export function useNotifications() {
     sendTestNotification,
     getStats,
     sendBroadcastNotification,
+    getScheduledBroadcasts,
+    scheduleBroadcast,
+    cancelScheduledBroadcast,
+    deleteScheduledBroadcast,
   };
 }
 
