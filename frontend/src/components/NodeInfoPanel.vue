@@ -411,10 +411,14 @@
 										</div>
 										<!-- Speed indicator (small badge) -->
 										<div 
-											v-if="port.status === 'active' && (port.speed || port.negotiatedSpeed)"
-											class="absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 leading-none"
+											v-if="port.status === 'active' && getDisplaySpeed(port).speed"
+											class="absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded leading-none"
+											:class="getDisplaySpeed(port).isInferred 
+												? 'bg-purple-600 dark:bg-purple-400 text-white dark:text-slate-900' 
+												: 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800'"
+											:title="getDisplaySpeed(port).isInferred ? 'Speed inferred from connected device' : 'Configured speed'"
 										>
-											{{ formatSpeedShort(port.negotiatedSpeed || port.speed) }}
+											{{ formatSpeedShort(getDisplaySpeed(port).speed) }}
 										</div>
 										<!-- PoE indicator (lightning bolt) -->
 										<div 
@@ -462,6 +466,10 @@
 									<span>⚡</span>
 									<span>PoE</span>
 								</div>
+								<div class="flex items-center gap-1">
+									<div class="px-1 py-0.5 rounded text-[8px] font-bold bg-purple-600 dark:bg-purple-400 text-white dark:text-slate-900">1G</div>
+									<span>Inferred Speed</span>
+								</div>
 							</div>
 
 							<!-- Active Connections List -->
@@ -484,11 +492,15 @@
 									<div class="flex items-center gap-1.5">
 										<span v-if="conn.poe && conn.poe !== 'off'" class="text-[10px]" :title="getPoeLabel(conn.poe)">⚡</span>
 										<span 
-											v-if="conn.speed || conn.negotiatedSpeed"
-											class="px-1.5 py-0.5 rounded text-[10px] font-medium"
-											:class="getSpeedBadgeClass(conn.negotiatedSpeed || conn.speed)"
+											v-if="getDisplaySpeed(conn).speed"
+											class="px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center gap-0.5"
+											:class="getDisplaySpeed(conn).isInferred 
+												? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' 
+												: getSpeedBadgeClass(getDisplaySpeed(conn).speed)"
+											:title="getDisplaySpeed(conn).isInferred ? 'Speed inferred from connected device' : 'Configured speed'"
 										>
-											{{ conn.negotiatedSpeed || conn.speed }}
+											{{ getDisplaySpeed(conn).speed }}
+											<span v-if="getDisplaySpeed(conn).isInferred" class="opacity-60">↔</span>
 										</span>
 										<span 
 											class="px-1.5 py-0.5 rounded text-[10px]"
@@ -919,11 +931,19 @@
 										Actual Link Speed
 										<span class="font-normal text-slate-400">(negotiated)</span>
 									</label>
+									<!-- Show inferred speed hint if available -->
+									<div 
+										v-if="editingPort.connectedDeviceId && !editingPort.negotiatedSpeed && getInferredSpeedFromConnectedDevice(editingPort.connectedDeviceId)"
+										class="mb-1.5 px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-xs text-purple-700 dark:text-purple-300 flex items-center gap-1"
+									>
+										<span>↔</span>
+										<span>Auto-inferred from connected device: <strong>{{ getInferredSpeedFromConnectedDevice(editingPort.connectedDeviceId) }}</strong></span>
+									</div>
 									<select 
 										v-model="editingPort.negotiatedSpeed"
 										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 									>
-										<option value="">Same as configured</option>
+										<option value="">{{ editingPort.connectedDeviceId && getInferredSpeedFromConnectedDevice(editingPort.connectedDeviceId) ? 'Auto-infer from connected device' : 'Same as configured' }}</option>
 										<option value="10M">10 Mbps</option>
 										<option value="100M">100 Mbps</option>
 										<option value="1G">1 Gbps</option>
@@ -2673,8 +2693,13 @@ function getPortTooltip(port: LanPort): string {
 	} else {
 		parts.push(`Type: ${port.type.toUpperCase()}`);
 		if (port.status === 'active') {
-			if (port.negotiatedSpeed || port.speed) {
-				parts.push(`Speed: ${port.negotiatedSpeed || port.speed}`);
+			const displaySpeed = getDisplaySpeed(port);
+			if (displaySpeed.speed) {
+				if (displaySpeed.isInferred) {
+					parts.push(`Speed: ${displaySpeed.speed} (inferred from connected device)`);
+				} else {
+					parts.push(`Speed: ${displaySpeed.speed}`);
+				}
 			}
 			if (port.poe && port.poe !== 'off') {
 				parts.push(`PoE: ${port.poe.toUpperCase()}`);
@@ -2764,9 +2789,57 @@ function onConnectedDeviceChange() {
 		if (device) {
 			editingPort.value.connectedDeviceName = device.name;
 		}
+		
+		// Try to auto-infer speed from the connected device's port
+		const inferredSpeed = getInferredSpeedFromConnectedDevice(editingPort.value.connectedDeviceId);
+		if (inferredSpeed && !editingPort.value.negotiatedSpeed) {
+			editingPort.value.negotiatedSpeed = inferredSpeed;
+		}
 	} else {
 		editingPort.value.connectedDeviceName = undefined;
 	}
+}
+
+// Find speed from a connected device's port that links back to this node
+function getInferredSpeedFromConnectedDevice(connectedDeviceId: string): PortSpeed | undefined {
+	if (!props.node || !props.allDevices) return undefined;
+	
+	// Find the connected device
+	const connectedDevice = props.allDevices.find(d => d.id === connectedDeviceId);
+	if (!connectedDevice?.lanPorts?.ports) return undefined;
+	
+	// Look for a port on that device that connects back to the current node
+	const linkBackPort = connectedDevice.lanPorts.ports.find(
+		p => p.connectedDeviceId === props.node!.id && p.status === 'active'
+	);
+	
+	if (linkBackPort) {
+		// Return the negotiated speed first, then configured speed
+		return linkBackPort.negotiatedSpeed || linkBackPort.speed;
+	}
+	
+	return undefined;
+}
+
+// Get the display speed for a port, considering inferred speed from connected device
+function getDisplaySpeed(port: LanPort): { speed: PortSpeed | undefined; isInferred: boolean } {
+	// First check if port has its own speed set
+	if (port.negotiatedSpeed) {
+		return { speed: port.negotiatedSpeed, isInferred: false };
+	}
+	if (port.speed) {
+		return { speed: port.speed, isInferred: false };
+	}
+	
+	// Try to infer from connected device
+	if (port.connectedDeviceId) {
+		const inferredSpeed = getInferredSpeedFromConnectedDevice(port.connectedDeviceId);
+		if (inferredSpeed) {
+			return { speed: inferredSpeed, isInferred: true };
+		}
+	}
+	
+	return { speed: undefined, isInferred: false };
 }
 
 function savePortChanges() {
