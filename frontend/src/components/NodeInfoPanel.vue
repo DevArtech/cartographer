@@ -289,13 +289,18 @@
 												:key="n"
 												class="h-5 text-[9px] flex items-center justify-center font-mono border relative overflow-hidden"
 												:class="defaultPortType === 'rj45' 
-													? 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 border-amber-400 dark:border-amber-600 rounded-b-md rounded-t-sm' 
-													: 'bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200 border-cyan-400 dark:border-cyan-600 rounded-full'"
+													? 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 border-amber-400 dark:border-amber-600 rounded-sm' 
+													: 'bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200 border-cyan-400 dark:border-cyan-600 rounded'"
 											>
-												<!-- RJ45 clip notch -->
+												<!-- RJ45 clip notch (cutout at bottom) -->
 												<div 
 													v-if="defaultPortType === 'rj45'"
-													class="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-current opacity-30 rounded-b-sm"
+													class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-slate-200 dark:bg-slate-700 rounded-t-sm"
+												></div>
+												<!-- SFP pull tab -->
+												<div 
+													v-if="defaultPortType !== 'rj45'"
+													class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
 												></div>
 												<span class="relative z-10">{{ n }}</span>
 											</div>
@@ -389,19 +394,16 @@
 											:class="[getPortClasses(port), getPortShape(port)]"
 											:title="getPortTooltip(port)"
 										>
-											<!-- RJ45 clip notch indicator -->
+											<!-- RJ45 clip notch (cutout at bottom) -->
 											<div 
 												v-if="port.type === 'rj45' && port.status !== 'blocked'"
-												class="absolute top-0 left-1/2 -translate-x-1/2 w-2.5 h-1 bg-current opacity-30 rounded-b-sm"
+												class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-1.5 rounded-t-sm"
+												:class="portEditMode ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-slate-100 dark:bg-slate-900'"
 											></div>
-											<!-- SFP cage lines -->
+											<!-- SFP handle/pull tab indicator -->
 											<div 
 												v-if="(port.type === 'sfp' || port.type === 'sfp+') && port.status !== 'blocked'"
-												class="absolute inset-y-1 left-0.5 w-0.5 bg-current opacity-20 rounded-full"
-											></div>
-											<div 
-												v-if="(port.type === 'sfp' || port.type === 'sfp+') && port.status !== 'blocked'"
-												class="absolute inset-y-1 right-0.5 w-0.5 bg-current opacity-20 rounded-full"
+												class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-3 h-0.5 bg-current opacity-25 rounded-full"
 											></div>
 											<!-- Port Number/Label -->
 											<span v-if="port.status !== 'blocked'" class="relative z-10">
@@ -441,13 +443,15 @@
 							<!-- Legend -->
 							<div class="flex flex-wrap gap-3 text-[10px] text-slate-500 dark:text-slate-400">
 								<div class="flex items-center gap-1">
-									<div class="w-3 h-3.5 rounded-b-md rounded-t-sm bg-amber-200 dark:bg-amber-800 border border-amber-400 dark:border-amber-600 relative overflow-hidden">
-										<div class="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-0.5 bg-amber-600 dark:bg-amber-400 opacity-40 rounded-b-sm"></div>
+									<div class="w-3 h-3.5 rounded-sm bg-amber-200 dark:bg-amber-800 border border-amber-400 dark:border-amber-600 relative overflow-hidden">
+										<div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-slate-100 dark:bg-slate-900 rounded-t-sm"></div>
 									</div>
 									<span>RJ45</span>
 								</div>
 								<div class="flex items-center gap-1">
-									<div class="w-4 h-2.5 rounded-full bg-cyan-200 dark:bg-cyan-800 border border-cyan-400 dark:border-cyan-600"></div>
+									<div class="w-4 h-2.5 rounded bg-cyan-200 dark:bg-cyan-800 border border-cyan-400 dark:border-cyan-600 relative overflow-hidden">
+										<div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-cyan-600 dark:bg-cyan-400 opacity-30 rounded-full"></div>
+									</div>
 									<span>SFP/SFP+</span>
 								</div>
 								<div class="flex items-center gap-1">
@@ -1509,10 +1513,15 @@
 									:class="[getPortClasses(port), getPortShape(port)]"
 									:title="getPortTooltip(port)"
 								>
-									<!-- RJ45 clip notch indicator -->
+									<!-- RJ45 clip notch (cutout at bottom) -->
 									<div 
 										v-if="port.type === 'rj45' && port.status !== 'blocked'"
-										class="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-current opacity-30 rounded-b-sm"
+										class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-slate-100 dark:bg-slate-900 rounded-t-sm"
+									></div>
+									<!-- SFP pull tab -->
+									<div 
+										v-if="(port.type === 'sfp' || port.type === 'sfp+') && port.status !== 'blocked'"
+										class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
 									></div>
 									<span v-if="port.status !== 'blocked'" class="relative z-10">{{ getPortLabel(port) }}</span>
 									<span v-else class="text-slate-400 dark:text-slate-600 relative z-10">✕</span>
@@ -2675,13 +2684,11 @@ function getPortShape(port: LanPort): string {
 	}
 	
 	if (port.type === 'rj45') {
-		// RJ45: More square/rectangular shape with slight rounding at bottom, flat top
-		// Represents the characteristic RJ45 connector shape
-		return 'rounded-b-md rounded-t-sm';
+		// RJ45: Square/rectangular shape with slight rounding
+		return 'rounded-sm';
 	} else {
-		// SFP/SFP+: Elongated horizontal shape with rounded ends (pill-like)
-		// Represents the SFP transceiver cage opening
-		return 'rounded-full';
+		// SFP/SFP+: Rectangular shape with slight rounding (not too pill-like)
+		return 'rounded';
 	}
 }
 
