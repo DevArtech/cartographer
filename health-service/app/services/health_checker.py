@@ -853,6 +853,8 @@ class HealthChecker:
                 )
             
             # Check all gateway test IPs in parallel
+            # Note: Test IPs are checked independently of gateway device monitoring status
+            # because they monitor external internet connectivity, not the gateway itself
             if self._gateway_test_ips:
                 enabled_gateways = [gw for gw, config in self._gateway_test_ips.items() if config.enabled]
                 if enabled_gateways:

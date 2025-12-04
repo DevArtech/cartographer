@@ -255,7 +255,15 @@ async def create_scheduled_broadcast(
 ):
     """Create a new scheduled broadcast (owner only)"""
     # Validate scheduled time is in the future
-    if request.scheduled_at <= datetime.utcnow():
+    # Handle both timezone-aware and naive datetimes
+    scheduled_time = request.scheduled_at
+    now = datetime.utcnow()
+    
+    # If scheduled_time is timezone-aware, convert to naive UTC for comparison
+    if scheduled_time.tzinfo is not None:
+        scheduled_time = scheduled_time.replace(tzinfo=None)
+    
+    if scheduled_time <= now:
         raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
     
     return notification_manager.create_scheduled_broadcast(

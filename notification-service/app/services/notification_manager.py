@@ -278,7 +278,12 @@ class NotificationManager:
             if broadcast.status != ScheduledBroadcastStatus.PENDING:
                 continue
             
-            if broadcast.scheduled_at <= now:
+            # Handle both timezone-aware and naive datetimes
+            scheduled_time = broadcast.scheduled_at
+            if scheduled_time.tzinfo is not None:
+                scheduled_time = scheduled_time.replace(tzinfo=None)
+            
+            if scheduled_time <= now:
                 await self._send_scheduled_broadcast(broadcast_id)
     
     async def _send_scheduled_broadcast(self, broadcast_id: str):

@@ -1351,9 +1351,14 @@ function onNotesBlur() {
 }
 
 // Use cached metrics from composable, falling back to local metrics (from manual refresh/port scan)
+// Returns null if monitoring is disabled for the device (except for gateway test IPs which are tracked separately)
 const metrics = computed(() => {
 	const ip = props.node?.ip;
 	if (!ip) return null;
+	
+	// If monitoring is disabled for this device, don't show cached device metrics
+	// Note: This doesn't affect gateway test IPs which are tracked independently
+	if (!monitoringEnabled.value) return null;
 	
 	// Prefer local metrics if we have them (from manual refresh or port scan)
 	if (localMetrics.value?.ip === ip) {
