@@ -514,6 +514,7 @@ import { useMapLayout } from "../composables/useMapLayout";
 import { useNetworkData } from "../composables/useNetworkData";
 import { useHealthMonitoring } from "../composables/useHealthMonitoring";
 import { useAuth } from "../composables/useAuth";
+import { useNotifications } from "../composables/useNotifications";
 
 // Auth state
 const { isAuthenticated, canWrite, checkSetupStatus, verifySession } = useAuth();
@@ -684,6 +685,7 @@ function stopResize() {
 const { applySavedPositions, clearPositions, exportLayout } = useMapLayout();
 const { parseNetworkMap } = useNetworkData();
 const { registerDevices, startPolling, stopPolling, cachedMetrics } = useHealthMonitoring();
+const { silenceDevice, unsilenceDevice, setSilencedDevices } = useNotifications();
 
 // Track if we've done initial registration
 let hasRegisteredDevices = false;
@@ -697,6 +699,15 @@ function getMonitoredDeviceIPs(root: TreeNode): string[] {
 		.filter((ip): ip is string => !!ip);
 }
 
+// Helper to get IPs of devices that have monitoring disabled (for notification service)
+function getSilencedDeviceIPs(root: TreeNode): string[] {
+	const devices = flattenDevices(root);
+	return devices
+		.filter(d => d.ip && d.monitoringEnabled === false) // Only include nodes with monitoring explicitly disabled
+		.map(d => d.ip!)
+		.filter((ip): ip is string => !!ip);
+}
+
 // Register devices for health monitoring whenever parsed changes
 watch(() => parsed.value?.root, async (root) => {
 	if (root) {
@@ -706,6 +717,16 @@ watch(() => parsed.value?.root, async (root) => {
 			await registerDevices(ips);
 			hasRegisteredDevices = true;
 			console.log(`[Health] Registered ${ips.length} device IPs for monitoring`);
+		}
+		
+		// Sync silenced devices with notification service
+		// This ensures devices with monitoring disabled don't trigger notifications
+		const silencedIps = getSilencedDeviceIPs(root);
+		try {
+			await setSilencedDevices(silencedIps);
+			console.log(`[Notifications] Synced ${silencedIps.length} silenced device IPs`);
+		} catch (e) {
+			console.error('[Notifications] Failed to sync silenced devices:', e);
 		}
 	}
 });
@@ -726,6 +747,15 @@ onMounted(async () => {
 			await registerDevices(ips);
 			hasRegisteredDevices = true;
 			console.log(`[Health] Registered ${ips.length} device IPs for monitoring (on mount)`);
+		}
+		
+		// Sync silenced devices with notification service on initial load
+		const silencedIps = getSilencedDeviceIPs(parsed.value.root);
+		try {
+			await setSilencedDevices(silencedIps);
+			console.log(`[Notifications] Synced ${silencedIps.length} silenced device IPs (on mount)`);
+		} catch (e) {
+			console.error('[Notifications] Failed to sync silenced devices:', e);
 		}
 	}
 });
@@ -1064,6 +1094,23 @@ async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
 		
 		// Send updated list to backend - this REPLACES the entire list
 		await registerDevices(ips, false); // Don't trigger immediate check when disabling
+		
+		// Update notification service silenced devices list
+		// This ensures the device is also excluded from notification tracking
+		if (node.ip) {
+			try {
+				if (enabled) {
+					await unsilenceDevice(node.ip);
+				} else {
+					await silenceDevice(node.ip);
+				}
+			} catch (e) {
+				console.error('[Notifications] Failed to update silenced device:', e);
+			}
+		}
+		
+		// Trigger Vue reactivity by creating a new reference
+		parsed.value = { ...parsed.value };
 		
 		// Trigger auto-save
 		triggerAutoSave();
