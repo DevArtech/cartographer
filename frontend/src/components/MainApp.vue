@@ -807,15 +807,15 @@ function findNodeById(n: TreeNode, id?: string): TreeNode | undefined {
 
 function flattenDevices(root: TreeNode): TreeNode[] {
 	const res: TreeNode[] = [];
-	const walk = (n: TreeNode, isRoot = false) => {
-		// Don't add the root itself to the list
-		if (!isRoot) {
+	const walk = (n: TreeNode) => {
+		// Include ALL non-group nodes, including the root if it's a real device (e.g., gateway/router)
+		if (n.role !== "group") {
 			res.push(n);
 		}
-		for (const c of n.children || []) walk(c, false);
+		for (const c of n.children || []) walk(c);
 	};
-	walk(root, true);
-	return res.filter(n => n.role !== "group");
+	walk(root);
+	return res;
 }
 
 // Sort nodes by depth, parent position, and IP address (matching DeviceList)
