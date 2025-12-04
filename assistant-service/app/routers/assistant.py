@@ -414,9 +414,17 @@ async def get_context_raw():
             })
         gateway_details.append(gw_detail)
     
+    # Filter to count only actual devices (exclude root and groups, matching frontend)
+    root_node_id = snapshot.get("root_node_id")
+    device_count = sum(
+        1 for node_id, node in nodes.items()
+        if node_id != root_node_id and node.get("role", "").lower() != "group"
+    )
+    
     return {
         "snapshot_available": True,
-        "total_nodes": len(nodes),
+        "total_nodes": device_count,
+        "total_tree_nodes": len(nodes),
         "total_gateways": len(gateways),
         "nodes": node_details,
         "gateways": gateway_details,
