@@ -233,6 +233,8 @@ function roleDot(role?: string) {
 // Get status background class for monitored devices
 function getStatusBackground(node: TreeNode): string {
 	// Check if monitoring is disabled for this specific device (matches NetworkMap logic)
+
+	console.log('node', node)
 	if (node.monitoringEnabled === false) return ''; // Monitoring disabled - leave default
 	
 	const ip = node.ip;
