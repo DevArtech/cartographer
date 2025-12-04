@@ -807,10 +807,16 @@ function findNodeById(n: TreeNode, id?: string): TreeNode | undefined {
 
 function flattenDevices(root: TreeNode): TreeNode[] {
 	const res: TreeNode[] = [];
+	const seen = new Set<string>();
 	const walk = (n: TreeNode) => {
 		// Include ALL non-group nodes, including the root if it's a real device (e.g., gateway/router)
+		// Deduplicate by IP/ID to avoid counting the same device twice (root might also exist as a child)
 		if (n.role !== "group") {
-			res.push(n);
+			const key = n.ip || n.id;
+			if (!seen.has(key)) {
+				seen.add(key);
+				res.push(n);
+			}
 		}
 		for (const c of n.children || []) walk(c);
 	};
