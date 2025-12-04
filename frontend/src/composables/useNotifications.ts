@@ -3,6 +3,7 @@
  */
 
 import { ref } from 'vue';
+import axios from 'axios';
 
 // Types
 export interface EmailConfig {
@@ -108,38 +109,16 @@ export function useNotifications() {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
-  async function fetchApi<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const token = localStorage.getItem('auth_token');
-    
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data.detail || `Request failed: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
   // Get notification preferences
   async function getPreferences(): Promise<NotificationPreferences> {
     isLoading.value = true;
     error.value = null;
     try {
-      return await fetchApi<NotificationPreferences>('/preferences');
+      const response = await axios.get<NotificationPreferences>(`${API_BASE}/preferences`);
+      return response.data;
     } catch (e: any) {
-      error.value = e.message;
-      throw e;
+      error.value = e.response?.data?.detail || e.message;
+      throw new Error(error.value || 'Failed to get preferences');
     } finally {
       isLoading.value = false;
     }
@@ -152,13 +131,11 @@ export function useNotifications() {
     isLoading.value = true;
     error.value = null;
     try {
-      return await fetchApi<NotificationPreferences>('/preferences', {
-        method: 'PUT',
-        body: JSON.stringify(update),
-      });
+      const response = await axios.put<NotificationPreferences>(`${API_BASE}/preferences`, update);
+      return response.data;
     } catch (e: any) {
-      error.value = e.message;
-      throw e;
+      error.value = e.response?.data?.detail || e.message;
+      throw new Error(error.value || 'Failed to update preferences');
     } finally {
       isLoading.value = false;
     }
@@ -166,32 +143,34 @@ export function useNotifications() {
 
   // Get service status
   async function getServiceStatus(): Promise<NotificationServiceStatus> {
-    return fetchApi<NotificationServiceStatus>('/status');
+    const response = await axios.get<NotificationServiceStatus>(`${API_BASE}/status`);
+    return response.data;
   }
 
   // Get Discord bot info
   async function getDiscordBotInfo(): Promise<DiscordBotInfo> {
-    return fetchApi<DiscordBotInfo>('/discord/info');
+    const response = await axios.get<DiscordBotInfo>(`${API_BASE}/discord/info`);
+    return response.data;
   }
 
   // Get Discord guilds
   async function getDiscordGuilds(): Promise<DiscordGuild[]> {
-    const response = await fetchApi<{ guilds: DiscordGuild[] }>('/discord/guilds');
-    return response.guilds;
+    const response = await axios.get<{ guilds: DiscordGuild[] }>(`${API_BASE}/discord/guilds`);
+    return response.data.guilds;
   }
 
   // Get Discord channels for a guild
   async function getDiscordChannels(guildId: string): Promise<DiscordChannel[]> {
-    const response = await fetchApi<{ channels: DiscordChannel[] }>(
-      `/discord/guilds/${guildId}/channels`
+    const response = await axios.get<{ channels: DiscordChannel[] }>(
+      `${API_BASE}/discord/guilds/${guildId}/channels`
     );
-    return response.channels;
+    return response.data.channels;
   }
 
   // Get Discord invite URL
   async function getDiscordInviteUrl(): Promise<string> {
-    const response = await fetchApi<{ invite_url: string }>('/discord/invite-url');
-    return response.invite_url;
+    const response = await axios.get<{ invite_url: string }>(`${API_BASE}/discord/invite-url`);
+    return response.data.invite_url;
   }
 
   // Send test notification
@@ -199,15 +178,14 @@ export function useNotifications() {
     channel: 'email' | 'discord',
     message?: string
   ): Promise<TestNotificationResult> {
-    return fetchApi<TestNotificationResult>('/test', {
-      method: 'POST',
-      body: JSON.stringify({ channel, message }),
-    });
+    const response = await axios.post<TestNotificationResult>(`${API_BASE}/test`, { channel, message });
+    return response.data;
   }
 
   // Get notification stats
   async function getStats(): Promise<NotificationStats> {
-    return fetchApi<NotificationStats>('/stats');
+    const response = await axios.get<NotificationStats>(`${API_BASE}/stats`);
+    return response.data;
   }
 
   return {
