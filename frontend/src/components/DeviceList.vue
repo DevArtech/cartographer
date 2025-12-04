@@ -31,8 +31,12 @@
 					v-for="d in filtered"
 					:key="d.id"
 					@click="$emit('select', d.id)"
-					class="px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer flex items-center gap-3 transition-colors"
-					:class="{'bg-cyan-50 dark:bg-cyan-900/20 border-l-2 border-l-cyan-500': d.id === selectedId }"
+					class="px-4 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-700/50 cursor-pointer flex items-center gap-3 transition-colors"
+					:class="[
+						d.id === selectedId 
+							? 'bg-cyan-50 dark:bg-cyan-900/20 border-l-2 border-l-cyan-500' 
+							: getStatusBackground(d)
+					]"
 				>
 					<span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :class="roleDot(d.role)"></span>
 					<div class="min-w-0 flex-1">
@@ -57,6 +61,7 @@
 <script lang="ts" setup>
 import { computed, ref } from "vue";
 import type { TreeNode } from "../types/network";
+import { useHealthMonitoring } from "../composables/useHealthMonitoring";
 
 const props = defineProps<{
 	root: TreeNode;
@@ -66,6 +71,8 @@ const props = defineProps<{
 defineEmits<{
 	(e: "select", id: string): void;
 }>();
+
+const { cachedMetrics } = useHealthMonitoring();
 
 const query = ref("");
 
@@ -209,6 +216,22 @@ function roleDot(role?: string) {
 		case "nas": return "bg-purple-500";
 		case "client": return "bg-cyan-500";
 		default: return "bg-gray-400";
+	}
+}
+
+// Get status background class for monitored devices
+function getStatusBackground(node: TreeNode): string {
+	const ip = (node as any).ip;
+	if (!ip) return '';
+	
+	const metrics = cachedMetrics.value?.[ip];
+	if (!metrics) return ''; // Not monitored - leave default
+	
+	switch (metrics.status) {
+		case 'healthy': return 'bg-emerald-50 dark:bg-emerald-900/20';
+		case 'degraded': return 'bg-amber-50 dark:bg-amber-900/20';
+		case 'unhealthy': return 'bg-red-50 dark:bg-red-900/20';
+		default: return '';
 	}
 }
 </script>
