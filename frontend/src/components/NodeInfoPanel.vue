@@ -2969,16 +2969,16 @@ function onPortDrop(event: DragEvent, targetPort: LanPort) {
 	lanPortsConfig.value.ports[sourceIndex].connectedDeviceName = targetConnection.connectedDeviceName;
 	lanPortsConfig.value.ports[sourceIndex].connectionLabel = targetConnection.connectionLabel;
 	
-	// Set target port to active if it wasn't already (since it now has a connection)
-	if (lanPortsConfig.value.ports[targetIndex].status === 'unused') {
-		lanPortsConfig.value.ports[targetIndex].status = 'active';
-	}
+	// Set target port to active (since it now has a connection)
+	lanPortsConfig.value.ports[targetIndex].status = 'active';
 	
-	// If source port lost its connection and had no other connection, set to unused
+	// Set source port to unused if it no longer has a connection
 	if (!lanPortsConfig.value.ports[sourceIndex].connectedDeviceId && 
 		!lanPortsConfig.value.ports[sourceIndex].connectionLabel) {
-		// Keep it active if user might want it that way, but we could also set to unused
-		// For now, let's keep it as-is since user might have speed/poe configured
+		lanPortsConfig.value.ports[sourceIndex].status = 'unused';
+	} else {
+		// Source port got target's connection via swap, so keep it active
+		lanPortsConfig.value.ports[sourceIndex].status = 'active';
 	}
 	
 	// Emit the update
