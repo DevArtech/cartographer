@@ -41,26 +41,43 @@ def create_app() -> FastAPI:
 			app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
 		index_file = dist_path / "index.html"
-		favicon_file = dist_path / "favicon.png"
-
-		# Serve favicon from dist root (always define route, check file at request time)
-		@app.get("/favicon.png", include_in_schema=False)
-		def favicon():
-			if favicon_file.exists():
-				return FileResponse(str(favicon_file), media_type="image/png")
-			return {"detail": "Not Found"}
 
 		if index_file.exists():
 			@app.get("/", include_in_schema=False)
 			def index():
 				return FileResponse(str(index_file))
 
-			# SPA fallback - keep /api routes working, everything else serves index.html
+			# SPA fallback - serve static files if they exist, otherwise index.html
 			@app.get("/{full_path:path}", include_in_schema=False)
 			def spa_fallback(full_path: str):
 				# Avoid catching API explicitly (redundant due to route order, but defensive)
 				if full_path.startswith("api"):
 					return {"detail": "Not Found"}
+				
+				# Check if the requested path is a static file in dist
+				static_file = dist_path / full_path
+				if static_file.exists() and static_file.is_file():
+					# Determine media type based on extension
+					suffix = static_file.suffix.lower()
+					media_types = {
+						".png": "image/png",
+						".jpg": "image/jpeg",
+						".jpeg": "image/jpeg",
+						".gif": "image/gif",
+						".svg": "image/svg+xml",
+						".ico": "image/x-icon",
+						".webp": "image/webp",
+						".js": "application/javascript",
+						".css": "text/css",
+						".json": "application/json",
+						".woff": "font/woff",
+						".woff2": "font/woff2",
+						".ttf": "font/ttf",
+					}
+					media_type = media_types.get(suffix)
+					return FileResponse(str(static_file), media_type=media_type)
+				
+				# Otherwise serve index.html for SPA routing
 				return FileResponse(str(index_file))
 
 	return app
