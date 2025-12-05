@@ -5,6 +5,32 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### 0.1.15 (2025-12-05)
+
+
+### ✨ Features
+
+* add post-commit ([044222f](https://github.com/devartech/cartographer/commit/044222f49208f42ca1428bbf580c7130d6f61c78))
+* add semantic versioning management ([008e96d](https://github.com/devartech/cartographer/commit/008e96dd9a640f9e65ebd85bc5da2574eebe01a2))
+* fake major ([167e7c2](https://github.com/devartech/cartographer/commit/167e7c2efb611df1b15677a7011cfe2156b7985e))
+* fake major ([b443b4b](https://github.com/devartech/cartographer/commit/b443b4ba2e39788ea5398d3d0d87ec0204d1a1d9))
+* fake major ([9740892](https://github.com/devartech/cartographer/commit/9740892169ddfb96b82d1bc8520d8bd39bffdf39))
+* **frontend:** add banner notification ([38b79dd](https://github.com/devartech/cartographer/commit/38b79dda877674ce96692f5e1e2e21459921a5f5))
+* **frontend:** add update settings ([c0f7aa6](https://github.com/devartech/cartographer/commit/c0f7aa61ea3a7a8ad204ad52de3a62f40be867c3))
+* **frontend:** fix UI + make major for test ([ddb1102](https://github.com/devartech/cartographer/commit/ddb1102f1ef71a0aa16a836bb0c856dbfdf8da8c))
+* **frontend:** send notifs on check ([b75bd19](https://github.com/devartech/cartographer/commit/b75bd19b59dfa90a706576d56f84f822f3786483))
+* **notifications:** add version notification ([b0223c6](https://github.com/devartech/cartographer/commit/b0223c6edf28cbdcd376e0a3389e7d71b0c80e0b))
+
+
+### 🐛 Bug Fixes
+
+* **backend:** send notifications on system ([ce1f2f4](https://github.com/devartech/cartographer/commit/ce1f2f4e7da371328ba7a5d4acc5f30f6249d1ae))
+* **frontend:** fix caching for versions ([a3e570f](https://github.com/devartech/cartographer/commit/a3e570fc60bcb7ea9249ac1d0f856b2a4407eff9))
+* **frontend:** move updates to own section ([bd13b66](https://github.com/devartech/cartographer/commit/bd13b66c27474948b8b0125919568ddc3e9ca62c))
+* **frontend:** remove info text on updates ([dcead47](https://github.com/devartech/cartographer/commit/dcead470b8ce02e67d9e2103843f0514d8fdfff5))
+* **frontend:** swap to API instead of CDN ([3c23742](https://github.com/devartech/cartographer/commit/3c237425d6122045ebf8bb7d671c703b70e5fab8))
+* versioning retrieval ([6a0fc5b](https://github.com/devartech/cartographer/commit/6a0fc5bc4595ef2c8522533d1262be49e31c5761))
+
 ### [0.1.14](https://github.com/devartech/cartographer/compare/v0.1.13...v0.1.14) (2025-12-05)
 
 
