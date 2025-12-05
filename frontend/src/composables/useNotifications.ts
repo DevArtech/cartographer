@@ -407,7 +407,7 @@ export const NOTIFICATION_TYPE_INFO: Record<NotificationType, { label: string; i
 };
 
 export const PRIORITY_INFO: Record<NotificationPriority, { label: string; color: string }> = {
-  low: { label: 'Low', color: 'slate' },
+  low: { label: 'Low', color: 'emerald' },
   medium: { label: 'Medium', color: 'amber' },
   high: { label: 'High', color: 'orange' },
   critical: { label: 'Critical', color: 'red' },
