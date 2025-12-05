@@ -153,10 +153,10 @@ export function useNotifications() {
   }
 
   // Update notification preferences
+  // Note: Does not set isLoading to avoid UI flicker/scroll reset during background saves
   async function updatePreferences(
     update: Partial<NotificationPreferences>
   ): Promise<NotificationPreferences> {
-    isLoading.value = true;
     error.value = null;
     try {
       const response = await axios.put<NotificationPreferences>(`${API_BASE}/preferences`, update);
@@ -164,8 +164,6 @@ export function useNotifications() {
     } catch (e: any) {
       error.value = e.response?.data?.detail || e.message;
       throw new Error(error.value || 'Failed to update preferences');
-    } finally {
-      isLoading.value = false;
     }
   }
 
