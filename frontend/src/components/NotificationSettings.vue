@@ -445,7 +445,8 @@
 											</button>
 										</div>
 
-										<div v-if="preferences.quiet_hours_enabled" class="flex items-center gap-3">
+										<div v-if="preferences.quiet_hours_enabled" class="space-y-3">
+										<div class="flex items-center gap-3">
 											<input
 												v-model="preferences.quiet_hours_start"
 												type="time"
@@ -460,6 +461,51 @@
 												@change="savePreferences"
 											/>
 										</div>
+
+										<!-- Pass-through alerts -->
+										<div class="pt-2 border-t border-slate-200 dark:border-slate-700">
+											<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+												Pass-through Alerts
+											</label>
+											<p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+												Allow high-priority alerts to bypass quiet hours
+											</p>
+											<div class="flex flex-wrap gap-2">
+												<button
+													@click="setBypassPriority(null)"
+													:class="[
+														'px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors',
+														preferences.quiet_hours_bypass_priority === null || preferences.quiet_hours_bypass_priority === undefined
+															? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400'
+															: 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
+													]"
+												>
+													None
+												</button>
+												<button
+													v-for="(info, priority) in PRIORITY_INFO"
+													:key="priority"
+													@click="setBypassPriority(priority)"
+													:class="[
+														'px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors',
+														preferences.quiet_hours_bypass_priority === priority
+															? `border-${info.color}-500 bg-${info.color}-50 dark:bg-${info.color}-900/20 text-${info.color}-700 dark:text-${info.color}-400`
+															: 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
+													]"
+												>
+													{{ info.label }}+
+												</button>
+											</div>
+											<p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+												<template v-if="preferences.quiet_hours_bypass_priority">
+													<span class="font-medium">{{ PRIORITY_INFO[preferences.quiet_hours_bypass_priority].label }}</span> and higher alerts will still be delivered during quiet hours
+												</template>
+												<template v-else>
+													All notifications will be blocked during quiet hours
+												</template>
+											</p>
+										</div>
+									</div>
 									</div>
 								</div>
 							</div>
@@ -898,6 +944,12 @@ async function toggleDiscord() {
 async function toggleQuietHours() {
 	if (!preferences.value) return;
 	preferences.value.quiet_hours_enabled = !preferences.value.quiet_hours_enabled;
+	await savePreferences();
+}
+
+async function setBypassPriority(priority: NotificationPriority | null) {
+	if (!preferences.value) return;
+	preferences.value.quiet_hours_bypass_priority = priority;
 	await savePreferences();
 }
 

@@ -150,6 +150,10 @@ class NotificationPreferences(BaseModel):
     quiet_hours_enabled: bool = False
     quiet_hours_start: Optional[str] = None  # HH:MM format
     quiet_hours_end: Optional[str] = None  # HH:MM format
+    # Allow high-priority alerts to bypass quiet hours
+    # If set, notifications with this priority or higher will still be sent during quiet hours
+    # None means no pass-through (all notifications blocked during quiet hours)
+    quiet_hours_bypass_priority: Optional[NotificationPriority] = None
     
     # Rate limiting
     max_notifications_per_hour: int = 10
@@ -179,6 +183,7 @@ class NotificationPreferencesUpdate(BaseModel):
     quiet_hours_enabled: Optional[bool] = None
     quiet_hours_start: Optional[str] = None
     quiet_hours_end: Optional[str] = None
+    quiet_hours_bypass_priority: Optional[NotificationPriority] = None
     max_notifications_per_hour: Optional[int] = None
 
 

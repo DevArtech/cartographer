@@ -541,9 +541,19 @@ class NotificationManager:
         if priority_order.index(effective_priority) < priority_order.index(prefs.minimum_priority):
             return False, f"Event type priority {effective_priority.value} below minimum {prefs.minimum_priority.value}"
         
-        # Check quiet hours
+        # Check quiet hours (with pass-through for high-priority alerts)
         if self._is_quiet_hours(prefs):
-            return False, "Currently in quiet hours"
+            # Check if this notification can bypass quiet hours
+            if prefs.quiet_hours_bypass_priority is not None:
+                bypass_index = priority_order.index(prefs.quiet_hours_bypass_priority)
+                effective_index = priority_order.index(effective_priority)
+                if effective_index >= bypass_index:
+                    # Priority is high enough to bypass quiet hours
+                    pass
+                else:
+                    return False, f"Currently in quiet hours (priority {effective_priority.value} below bypass threshold {prefs.quiet_hours_bypass_priority.value})"
+            else:
+                return False, "Currently in quiet hours"
         
         # Check rate limit
         if not self._check_rate_limit(prefs.user_id, prefs):
