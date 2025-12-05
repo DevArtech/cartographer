@@ -47,8 +47,8 @@ def create_app() -> FastAPI:
 			app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
 		if index_file.exists():
-			# Explicit favicon route - this ensures it's served correctly
-			@app.get("/favicon.png", include_in_schema=False)
+			# Explicit favicon route - supports GET and HEAD
+			@app.api_route("/favicon.png", methods=["GET", "HEAD"], include_in_schema=False)
 			async def serve_favicon():
 				favicon_path = DIST_PATH / "favicon.png"
 				if favicon_path.exists():
