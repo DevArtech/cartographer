@@ -30,6 +30,7 @@ from ..services.notification_manager import notification_manager
 from ..services.discord_service import discord_service, is_discord_configured, get_bot_invite_url
 from ..services.email_service import is_email_configured
 from ..services.anomaly_detector import anomaly_detector
+from ..services.version_checker import version_checker
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,7 @@ async def get_service_status():
         "discord_configured": is_discord_configured(),
         "discord_bot_connected": discord_service._ready.is_set() if discord_service._client else False,
         "ml_model_status": anomaly_detector.get_model_status().model_dump(),
+        "version_checker": version_checker.get_status(),
     }
 
 
@@ -408,5 +410,94 @@ async def notify_cartographer_down(
     return {
         "success": True,
         "users_notified": len(results),
+    }
+
+
+# ==================== Version Update Notifications ====================
+
+@router.get("/version")
+async def get_version_status():
+    """
+    Get current version status and last check info.
+    
+    Returns information about the current version, latest available version,
+    and whether an update is available.
+    """
+    return version_checker.get_status()
+
+
+@router.post("/version/check")
+async def check_for_updates():
+    """
+    Manually trigger a version check and get results.
+    
+    This will check GitHub for the latest version and return whether
+    an update is available. If an update is found and users haven't
+    been notified yet, this will also trigger notifications.
+    """
+    return await version_checker.check_now()
+
+
+@router.post("/version/notify")
+async def send_version_notification():
+    """
+    Manually send a version update notification to all subscribed users.
+    
+    This will check for updates and force-send notifications regardless
+    of whether users have already been notified about this version.
+    """
+    # First check for the latest version
+    result = await version_checker.check_now()
+    
+    if not result.get("success"):
+        return {
+            "success": False,
+            "error": result.get("error", "Failed to check for updates"),
+        }
+    
+    if not result.get("has_update"):
+        return {
+            "success": False,
+            "message": "No update available",
+            "current_version": result.get("current_version"),
+            "latest_version": result.get("latest_version"),
+        }
+    
+    # Import the helper functions from version_checker
+    from ..services.version_checker import (
+        get_update_priority,
+        get_update_title,
+        get_update_message,
+        CHANGELOG_URL,
+    )
+    
+    update_type = result.get("update_type")
+    current_version = result.get("current_version")
+    latest_version = result.get("latest_version")
+    
+    # Create and send the notification
+    event = NetworkEvent(
+        event_type=NotificationType.SYSTEM_STATUS,
+        priority=get_update_priority(update_type),
+        title=get_update_title(update_type, latest_version),
+        message=get_update_message(update_type, current_version, latest_version),
+        details={
+            "update_type": update_type,
+            "current_version": current_version,
+            "latest_version": latest_version,
+            "changelog_url": CHANGELOG_URL,
+            "is_version_update": True,
+            "manual_trigger": True,
+        },
+    )
+    
+    results = await notification_manager.broadcast_notification(event)
+    
+    return {
+        "success": True,
+        "users_notified": len(results),
+        "current_version": current_version,
+        "latest_version": latest_version,
+        "update_type": update_type,
     }
 

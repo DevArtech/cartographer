@@ -18,6 +18,7 @@ from .routers.notifications import router as notifications_router
 from .services.discord_service import discord_service, is_discord_configured
 from .services.notification_manager import notification_manager
 from .services.anomaly_detector import anomaly_detector
+from .services.version_checker import version_checker
 from .models import NetworkEvent, NotificationType, NotificationPriority
 
 # Configure logging
@@ -150,6 +151,10 @@ async def lifespan(app: FastAPI):
     logger.info("Starting scheduled broadcast scheduler...")
     await notification_manager.start_scheduler()
     
+    # Start version checker
+    logger.info("Starting version checker...")
+    await version_checker.start()
+    
     # Mark service as running (not clean shutdown yet)
     _save_service_state(clean_shutdown=False)
     
@@ -180,6 +185,10 @@ async def lifespan(app: FastAPI):
     # Stop scheduled broadcast scheduler
     await notification_manager.stop_scheduler()
     logger.info("Scheduled broadcast scheduler stopped")
+    
+    # Stop version checker
+    await version_checker.stop()
+    logger.info("Version checker stopped")
     
     # Stop Discord bot
     if discord_service._running:

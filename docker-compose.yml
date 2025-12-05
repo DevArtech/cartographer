@@ -193,6 +193,8 @@ services:
     environment:
       - CORS_ORIGINS=*
       - NOTIFICATION_DATA_DIR=/app/data
+      # Current application version for update checking
+      - CARTOGRAPHER_VERSION=${CARTOGRAPHER_VERSION:-0.1.1}
       # Email notifications via Resend (same key as auth service)
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-Cartographer <notifications@cartographer.app>}

@@ -8,6 +8,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Read version from VERSION file
+if [ -f "VERSION" ]; then
+    CARTOGRAPHER_VERSION=$(cat VERSION | tr -d '[:space:]')
+    export CARTOGRAPHER_VERSION
+else
+    CARTOGRAPHER_VERSION="0.1.0"
+    export CARTOGRAPHER_VERSION
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -149,10 +158,11 @@ case $COMMAND in
     
     up)
         echo -e "${GREEN}Starting services with $COMPOSE_FILE...${NC}"
+        echo "Cartographer version: $CARTOGRAPHER_VERSION"
         if [ "$USE_PROD" = true ]; then
-            REGISTRY=$REGISTRY TAG=$TAG $DOCKER_COMPOSE -f $COMPOSE_FILE up -d
+            REGISTRY=$REGISTRY TAG=$TAG CARTOGRAPHER_VERSION=$CARTOGRAPHER_VERSION $DOCKER_COMPOSE -f $COMPOSE_FILE up -d
         else
-            $DOCKER_COMPOSE -f $COMPOSE_FILE up --build -d
+            CARTOGRAPHER_VERSION=$CARTOGRAPHER_VERSION $DOCKER_COMPOSE -f $COMPOSE_FILE up --build -d
         fi
         echo ""
         echo -e "${GREEN}✓ Services started${NC}"
