@@ -592,7 +592,7 @@ class NotificationManager:
         if not force:
             should_notify, reason = self._should_notify(prefs, event)
             if not should_notify:
-                logger.debug(f"Skipping notification for {user_id}: {reason}")
+                logger.info(f"Skipping {event.event_type.value} notification for {user_id}: {reason}")
                 return records
         
         notification_id = str(uuid.uuid4())

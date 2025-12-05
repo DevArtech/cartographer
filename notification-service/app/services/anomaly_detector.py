@@ -594,8 +594,32 @@ class AnomalyDetector:
         title = ""
         message = ""
         
+        # Use provided previous_state, or fall back to internal state tracking
+        # This handles cases where the health service restarted and lost state
+        effective_previous_state = previous_state
+        if effective_previous_state is None and stats:
+            # The stats.last_state was updated by train() above to the current state,
+            # but we can infer the previous state from consecutive counters
+            # If we just had consecutive successes > 1, previous was online
+            # If we just had consecutive failures > 1, previous was offline  
+            # If this is the first check (both are 0 or 1), we don't know
+            if stats.consecutive_successes > 1:
+                effective_previous_state = "online"
+            elif stats.consecutive_failures > 1:
+                effective_previous_state = "offline"
+            # Also check: if device just transitioned (consecutive count is 1)
+            # and we have history, infer from current state
+            elif stats.consecutive_successes == 1 and stats.failed_checks > 0:
+                effective_previous_state = "offline"  # Was offline/degraded, now online
+            elif stats.consecutive_failures == 1 and stats.successful_checks > 0:
+                effective_previous_state = "online"  # Was online, now offline
+        
+        # Check if device was in a non-online state (offline or degraded)
+        # We only consider it "was not online" if we have explicit evidence
+        device_was_not_online = effective_previous_state in ("offline", "degraded")
+        
         # Check for state change
-        state_changed = previous_state and previous_state != current_state
+        state_changed = effective_previous_state and effective_previous_state != current_state
         
         # Check if device is in a stable offline state (this is its normal behavior)
         is_stable_offline_device = stats and stats.is_stable_offline()
@@ -628,13 +652,34 @@ class AnomalyDetector:
                     priority = NotificationPriority.HIGH
                     message += f" ({stats.consecutive_failures} consecutive failures)"
         
-        elif success and previous_state == "offline":
-            # Device came back online
+        elif success and (
+            # Device came back online from any non-online state (offline, degraded, or unknown)
+            device_was_not_online or
+            # Or this is the first success after having failures (recovery)
+            (stats and stats.consecutive_successes == 1 and stats.failed_checks > 0)
+        ):
+            # Device came back online from offline/degraded state
             should_notify = True
             event_type = NotificationType.DEVICE_ONLINE
             priority = NotificationPriority.LOW
             title = f"Device Online: {device_name or device_ip}"
-            message = f"The device at {device_ip} is now responding."
+            
+            if effective_previous_state == "degraded":
+                message = f"The device at {device_ip} has recovered from degraded state and is now fully online."
+            else:
+                message = f"The device at {device_ip} is now responding."
+            
+            logger.info(
+                f"Device {device_ip} came back online - creating DEVICE_ONLINE notification "
+                f"(previous_state={previous_state}, effective_previous_state={effective_previous_state}, "
+                f"consecutive_successes={stats.consecutive_successes if stats else 'N/A'}, "
+                f"failed_checks={stats.failed_checks if stats else 'N/A'})"
+            )
+            
+            # Add recovery context if we have failure history
+            if stats and stats.failed_checks > 0:
+                if stats.consecutive_failures == 0 and stats.failed_checks > 0:
+                    message += " Device has recovered."
         
         # Check for degraded performance
         if success and result.is_anomaly:
@@ -653,7 +698,14 @@ class AnomalyDetector:
                 message = f"High packet loss detected on {device_ip}: {packet_loss*100:.1f}%"
         
         if not should_notify:
+            logger.debug(
+                f"No notification for {device_ip}: success={success}, "
+                f"previous_state={previous_state}, effective_previous_state={effective_previous_state}, "
+                f"current_state={current_state}, is_anomaly={result.is_anomaly}"
+            )
             return None
+        
+        logger.info(f"Creating {event_type.value} notification for {device_ip}: {title}")
         
         # Create the event
         import uuid
