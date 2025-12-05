@@ -99,6 +99,29 @@ async def _send_cartographer_up_notification(previous_state: dict):
         logger.error(f"Failed to send cartographer_up notification: {e}")
 
 
+async def _send_cartographer_down_notification():
+    """Send notification that Cartographer is shutting down"""
+    try:
+        event = NetworkEvent(
+            event_type=NotificationType.CARTOGRAPHER_DOWN,
+            priority=NotificationPriority.HIGH,
+            title="Cartographer is Shutting Down",
+            message="The Cartographer monitoring service is shutting down for maintenance or restart. You will receive a notification when it comes back online.",
+            details={
+                "service": "cartographer",
+                "shutdown_type": "clean",
+                "shutdown_time": datetime.utcnow().isoformat(),
+            },
+        )
+        
+        # Broadcast to all users who have this notification type enabled
+        results = await notification_manager.broadcast_notification(event)
+        logger.info(f"Sent cartographer_down notification to {len(results)} users")
+        
+    except Exception as e:
+        logger.error(f"Failed to send cartographer_down notification: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown events"""
@@ -141,6 +164,13 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Notification Service...")
+    
+    # Send shutdown notification FIRST (before stopping services)
+    logger.info("Sending shutdown notification...")
+    await _send_cartographer_down_notification()
+    
+    # Small delay to ensure notification is sent
+    await asyncio.sleep(1)
     
     # Save ML model state
     logger.info("Saving ML anomaly detection model state...")
