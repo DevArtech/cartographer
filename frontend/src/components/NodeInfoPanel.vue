@@ -332,6 +332,17 @@
 
 						<!-- Port Grid Display -->
 						<div v-else class="space-y-3">
+							<!-- Drag indicator banner -->
+							<div 
+								v-if="draggedPort"
+								class="flex items-center gap-2 px-3 py-2 bg-cyan-50 dark:bg-cyan-900/30 border border-cyan-200 dark:border-cyan-800 rounded-lg text-xs text-cyan-700 dark:text-cyan-300 animate-pulse"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+								</svg>
+								<span>Drop on another port to move the connection</span>
+							</div>
+							
 							<!-- Grid Actions & Edit Mode Toggle -->
 							<div v-if="hasWritePermission" class="flex items-center justify-between">
 								<span class="text-xs text-slate-500 dark:text-slate-400">
@@ -382,12 +393,23 @@
 									class="grid gap-2 gap-y-3 min-w-fit"
 									:style="{ gridTemplateColumns: `repeat(${lanPortsConfig.cols}, minmax(32px, 1fr))` }"
 								>
-									<div 
-										v-for="port in sortedPorts"
-										:key="`${port.row}-${port.col}`"
-										@click="hasWritePermission && onPortClick(port)"
-										class="relative group cursor-pointer"
-									>
+<div 
+									v-for="port in sortedPorts"
+									:key="`${port.row}-${port.col}`"
+									@click="hasWritePermission && onPortClick(port)"
+									:draggable="canDragPort(port)"
+									@dragstart="(e) => onPortDragStart(e, port)"
+									@dragend="onPortDragEnd"
+									@dragover="(e) => onPortDragOver(e, port)"
+									@dragleave="onPortDragLeave"
+									@drop="(e) => onPortDrop(e, port)"
+									class="relative group"
+									:class="[
+										canDragPort(port) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+										isDraggedPort(port) ? 'opacity-50 scale-95' : '',
+										isDragOverPort(port) && !isDraggedPort(port) ? 'ring-2 ring-cyan-400 ring-offset-2 scale-105' : ''
+									]"
+								>
 										<!-- Port Visual -->
 										<div 
 											class="h-8 flex items-center justify-center text-[10px] font-mono font-medium border-2 transition-all relative"
@@ -434,6 +456,16 @@
 											class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900"
 											:title="port.connectedDeviceName || 'Connected'"
 										></div>
+										<!-- Drag indicator (shows on hover for draggable ports) -->
+										<div 
+											v-if="canDragPort(port) && !isDraggedPort(port)"
+											class="absolute -top-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+											title="Drag to move connection"
+										>
+											<svg class="w-3 h-3 text-slate-400 dark:text-slate-500" fill="currentColor" viewBox="0 0 24 24">
+												<path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+											</svg>
+										</div>
 									</div>
 								</div>
 							</div>
@@ -467,6 +499,12 @@
 								<div class="flex items-center gap-1">
 									<span>⚡</span>
 									<span>PoE</span>
+								</div>
+								<div v-if="hasWritePermission" class="flex items-center gap-1">
+									<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+										<path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z"/>
+									</svg>
+									<span>Drag to move</span>
 								</div>
 							</div>
 
@@ -2547,6 +2585,10 @@ const originalEditingPort = ref<LanPort | null>(null);
 const portEditMode = ref(false); // Edit mode for configuring port type, speed, status, PoE
 const wasInEditModeOnOpen = ref(false); // Track if user was in edit mode when they opened the port editor
 
+// Drag and drop state for moving connections between ports
+const draggedPort = ref<LanPort | null>(null);
+const dragOverPort = ref<LanPort | null>(null);
+
 // Local copy of lanPorts config that we can modify
 const lanPortsConfig = ref<LanPortsConfig | null>(null);
 
@@ -2696,6 +2738,11 @@ function getPortTooltip(port: LanPort): string {
 			} else if (port.connectionLabel) {
 				parts.push(`Connection: ${port.connectionLabel}`);
 			}
+			// Add drag hint for ports with connections
+			if (hasWritePermission.value && (port.connectedDeviceId || port.connectionLabel)) {
+				parts.push('');
+				parts.push('💡 Drag to move connection to another port');
+			}
 		} else {
 			parts.push('(Unused)');
 		}
@@ -2820,6 +2867,132 @@ function confirmClearPorts() {
 		lanPortsConfig.value = null;
 		emit('updateLanPorts', props.node.id, null as any);
 	}
+}
+
+// Drag and drop handlers for moving connections between ports
+function canDragPort(port: LanPort): boolean {
+	// Can only drag ports that have connection info
+	return hasWritePermission.value && port.status === 'active' && !!(port.connectedDeviceId || port.connectionLabel);
+}
+
+function onPortDragStart(event: DragEvent, port: LanPort) {
+	if (!canDragPort(port)) {
+		event.preventDefault();
+		return;
+	}
+	
+	draggedPort.value = port;
+	
+	// Set drag data
+	if (event.dataTransfer) {
+		event.dataTransfer.effectAllowed = 'move';
+		event.dataTransfer.setData('text/plain', `${port.row}-${port.col}`);
+	}
+}
+
+function onPortDragEnd() {
+	draggedPort.value = null;
+	dragOverPort.value = null;
+}
+
+function onPortDragOver(event: DragEvent, port: LanPort) {
+	if (!draggedPort.value || !hasWritePermission.value) return;
+	
+	// Can't drop on itself or blocked ports
+	if (draggedPort.value.row === port.row && draggedPort.value.col === port.col) return;
+	if (port.status === 'blocked') return;
+	
+	event.preventDefault();
+	if (event.dataTransfer) {
+		event.dataTransfer.dropEffect = 'move';
+	}
+	
+	dragOverPort.value = port;
+}
+
+function onPortDragLeave() {
+	dragOverPort.value = null;
+}
+
+function onPortDrop(event: DragEvent, targetPort: LanPort) {
+	event.preventDefault();
+	
+	if (!draggedPort.value || !lanPortsConfig.value || !props.node || !hasWritePermission.value) {
+		onPortDragEnd();
+		return;
+	}
+	
+	// Can't drop on blocked ports
+	if (targetPort.status === 'blocked') {
+		onPortDragEnd();
+		return;
+	}
+	
+	const sourcePort = draggedPort.value;
+	
+	// Find both ports in the config
+	const sourceIndex = lanPortsConfig.value.ports.findIndex(
+		p => p.row === sourcePort.row && p.col === sourcePort.col
+	);
+	const targetIndex = lanPortsConfig.value.ports.findIndex(
+		p => p.row === targetPort.row && p.col === targetPort.col
+	);
+	
+	if (sourceIndex < 0 || targetIndex < 0) {
+		onPortDragEnd();
+		return;
+	}
+	
+	// Move connection info from source to target (swap if target has connection)
+	// Connection info to move: connectedDeviceId, connectedDeviceName, connectionLabel
+	// DO NOT move: type, speed, negotiatedSpeed, poe, status, portNumber
+	
+	const sourceConnection = {
+		connectedDeviceId: lanPortsConfig.value.ports[sourceIndex].connectedDeviceId,
+		connectedDeviceName: lanPortsConfig.value.ports[sourceIndex].connectedDeviceName,
+		connectionLabel: lanPortsConfig.value.ports[sourceIndex].connectionLabel,
+	};
+	
+	const targetConnection = {
+		connectedDeviceId: lanPortsConfig.value.ports[targetIndex].connectedDeviceId,
+		connectedDeviceName: lanPortsConfig.value.ports[targetIndex].connectedDeviceName,
+		connectionLabel: lanPortsConfig.value.ports[targetIndex].connectionLabel,
+	};
+	
+	// Apply the swap - target gets source's connection
+	lanPortsConfig.value.ports[targetIndex].connectedDeviceId = sourceConnection.connectedDeviceId;
+	lanPortsConfig.value.ports[targetIndex].connectedDeviceName = sourceConnection.connectedDeviceName;
+	lanPortsConfig.value.ports[targetIndex].connectionLabel = sourceConnection.connectionLabel;
+	
+	// Source gets target's connection (or clears if target was empty)
+	lanPortsConfig.value.ports[sourceIndex].connectedDeviceId = targetConnection.connectedDeviceId;
+	lanPortsConfig.value.ports[sourceIndex].connectedDeviceName = targetConnection.connectedDeviceName;
+	lanPortsConfig.value.ports[sourceIndex].connectionLabel = targetConnection.connectionLabel;
+	
+	// Set target port to active if it wasn't already (since it now has a connection)
+	if (lanPortsConfig.value.ports[targetIndex].status === 'unused') {
+		lanPortsConfig.value.ports[targetIndex].status = 'active';
+	}
+	
+	// If source port lost its connection and had no other connection, set to unused
+	if (!lanPortsConfig.value.ports[sourceIndex].connectedDeviceId && 
+		!lanPortsConfig.value.ports[sourceIndex].connectionLabel) {
+		// Keep it active if user might want it that way, but we could also set to unused
+		// For now, let's keep it as-is since user might have speed/poe configured
+	}
+	
+	// Emit the update
+	emit('updateLanPorts', props.node.id, lanPortsConfig.value);
+	
+	onPortDragEnd();
+}
+
+function isDraggedPort(port: LanPort): boolean {
+	return draggedPort.value?.row === port.row && draggedPort.value?.col === port.col;
+}
+
+function isDragOverPort(port: LanPort): boolean {
+	return dragOverPort.value?.row === port.row && dragOverPort.value?.col === port.col;
 }
 </script>
 
