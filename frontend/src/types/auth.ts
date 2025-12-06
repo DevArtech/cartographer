@@ -102,9 +102,9 @@ export function getRoleLabel(role: UserRole): string {
 		case "owner":
 			return "Owner";
 		case "readwrite":
-			return "Read/Write";
+			return "Admin";
 		case "readonly":
-			return "Read Only";
+			return "Member";
 		default:
 			return role;
 	}
@@ -115,9 +115,9 @@ export function getRoleDescription(role: UserRole): string {
 		case "owner":
 			return "Full access - can manage users and modify the network map";
 		case "readwrite":
-			return "Can view and modify the network map";
+			return "Admin - Can view and modify the network map";
 		case "readonly":
-			return "Can only view the network map";
+			return "Member - Can only view the network map";
 		default:
 			return "";
 	}

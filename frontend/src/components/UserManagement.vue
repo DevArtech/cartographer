@@ -313,8 +313,8 @@
 							v-model="userForm.role"
 							class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
 						>
-							<option value="readonly">Read Only - Can only view the network map</option>
-							<option value="readwrite">Read/Write - Can view and modify the network map</option>
+							<option value="readonly">Member - Can only view the network map</option>
+							<option value="readwrite">Admin - Can view and modify the network map</option>
 						</select>
 					</div>
 
@@ -472,8 +472,8 @@
 							v-model="inviteForm.role"
 							class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
 						>
-							<option value="readonly">Read Only - Can only view the network map</option>
-							<option value="readwrite">Read/Write - Can view and modify the network map</option>
+							<option value="readonly">Member - Can only view the network map</option>
+							<option value="readwrite">Admin - Can view and modify the network map</option>
 						</select>
 					</div>
 
