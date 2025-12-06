@@ -70,6 +70,7 @@ export interface NotificationServiceStatus {
     is_trained: boolean;
     devices_tracked: number;
     anomalies_detected_total: number;
+    anomalies_detected_24h: number;
   };
 }
 

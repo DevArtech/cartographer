@@ -352,6 +352,7 @@ class MLModelStatus(BaseModel):
     samples_count: int = 0
     devices_tracked: int = 0
     anomalies_detected_total: int = 0
+    anomalies_detected_24h: int = 0
     false_positive_rate: Optional[float] = None
     is_trained: bool = False
 

@@ -328,6 +328,8 @@ class AnomalyDetector:
         # Track devices we've sent offline notifications for
         # so we can send online notifications when they recover
         self._notified_offline: set = set()
+        # Track anomaly timestamps for 24h count (max 10000 to prevent unbounded growth)
+        self._anomaly_timestamps: deque = deque(maxlen=10000)
         
         # Load persisted state
         self._load_state()
@@ -344,6 +346,7 @@ class AnomalyDetector:
                 "false_positives": self._false_positives,
                 "last_training": self._last_training.isoformat() if self._last_training else None,
                 "notified_offline": list(self._notified_offline),  # Track devices with pending online notifications
+                "anomaly_timestamps": [ts.isoformat() for ts in self._anomaly_timestamps],
             }
             
             with open(MODEL_STATE_FILE, 'w') as f:
@@ -376,6 +379,13 @@ class AnomalyDetector:
             self._false_positives = state.get("false_positives", 0)
             self._last_training = datetime.fromisoformat(state["last_training"]) if state.get("last_training") else None
             self._notified_offline = set(state.get("notified_offline", []))
+            # Load anomaly timestamps (filter to keep only last 24h on load)
+            cutoff = datetime.utcnow() - timedelta(days=1)
+            self._anomaly_timestamps = deque(
+                (datetime.fromisoformat(ts) for ts in state.get("anomaly_timestamps", [])
+                 if datetime.fromisoformat(ts) > cutoff),
+                maxlen=10000
+            )
             
             logger.info(f"Loaded anomaly detector state with {len(self._device_stats)} devices, {len(self._notified_offline)} pending online notifications")
         except Exception as e:
@@ -542,6 +552,7 @@ class AnomalyDetector:
         
         if is_anomaly:
             self._anomalies_detected += 1
+            self._anomaly_timestamps.append(datetime.utcnow())
             # Save state when anomaly is detected (important event)
             self._save_state()
         
@@ -826,12 +837,17 @@ class AnomalyDetector:
     
     def get_model_status(self) -> MLModelStatus:
         """Get current status of the ML model"""
+        # Count anomalies in past 24 hours
+        cutoff = datetime.utcnow() - timedelta(days=1)
+        anomalies_24h = sum(1 for ts in self._anomaly_timestamps if ts > cutoff)
+        
         return MLModelStatus(
             model_version=self.MODEL_VERSION,
             last_training=self._last_training,
             samples_count=sum(s.total_checks for s in self._device_stats.values()),
             devices_tracked=len(self._device_stats),
             anomalies_detected_total=self._anomalies_detected,
+            anomalies_detected_24h=anomalies_24h,
             is_trained=len(self._device_stats) > 0 and self._last_training is not None,
         )
     
@@ -854,6 +870,7 @@ class AnomalyDetector:
         self._anomalies_detected = 0
         self._false_positives = 0
         self._last_training = None
+        self._anomaly_timestamps.clear()
         self._save_state()
         logger.info("Reset all anomaly detection data")
     

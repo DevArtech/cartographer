@@ -524,8 +524,8 @@
 										<p class="text-xs text-slate-500 dark:text-slate-400">Devices Tracked</p>
 									</div>
 									<div>
-										<p class="text-2xl font-bold text-slate-900 dark:text-white">{{ serviceStatus.ml_model_status.anomalies_detected_total }}</p>
-										<p class="text-xs text-slate-500 dark:text-slate-400">Anomalies Detected</p>
+										<p class="text-2xl font-bold text-slate-900 dark:text-white">{{ serviceStatus.ml_model_status.anomalies_detected_24h }}</p>
+										<p class="text-xs text-slate-500 dark:text-slate-400">Anomalies (24h)</p>
 									</div>
 									<div>
 										<p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ serviceStatus.ml_model_status.is_trained ? 'Active' : 'Training' }}</p>
