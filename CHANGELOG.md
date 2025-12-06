@@ -5,6 +5,20 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.1.21](https://github.com/devartech/cartographer/compare/v0.1.14...v0.1.21) (2025-12-06)
+
+
+### 🐛 Bug Fixes
+
+* **frontend:** remove info text on updates ([dcead47](https://github.com/devartech/cartographer/commit/dcead470b8ce02e67d9e2103843f0514d8fdfff5))
+* load tests auth issues ([f270434](https://github.com/devartech/cartographer/commit/f270434043687f4d7d9e3b753d7dc655fa95ee57))
+* with blocks in locustfiles ([04c7e8b](https://github.com/devartech/cartographer/commit/04c7e8bfd2e45a9a01852093834666dbf3d0009e))
+
+
+### ⏪ Reverts
+
+* revert to prior to performance changes ([e3a0580](https://github.com/devartech/cartographer/commit/e3a05804a13b2609815395da41246701e2c2c693))
+
 ### [0.1.20](https://github.com/devartech/cartographer/compare/v0.1.19...v0.1.20) (2025-12-05)
 
 ### [0.1.19](https://github.com/devartech/cartographer/compare/v0.1.18...v0.1.19) (2025-12-05)
