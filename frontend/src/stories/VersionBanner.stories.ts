@@ -212,11 +212,10 @@ export const WithDarkHeader: Story = {
 // All three types stacked for comparison
 export const AllTypes: Story = {
   render: () => ({
-    setup() {
-      const MajorBanner = createMockedVersionBanner({ currentVersion: '1.0.0', latestVersion: '2.0.0', updateType: 'major' })
-      const MinorBanner = createMockedVersionBanner({ currentVersion: '1.2.0', latestVersion: '1.3.0', updateType: 'minor' })
-      const PatchBanner = createMockedVersionBanner({ currentVersion: '1.2.3', latestVersion: '1.2.4', updateType: 'patch' })
-      return { MajorBanner, MinorBanner, PatchBanner }
+    components: {
+      MajorBanner: createMockedVersionBanner({ currentVersion: '1.0.0', latestVersion: '2.0.0', updateType: 'major' }),
+      MinorBanner: createMockedVersionBanner({ currentVersion: '1.2.0', latestVersion: '1.3.0', updateType: 'minor' }),
+      PatchBanner: createMockedVersionBanner({ currentVersion: '1.2.3', latestVersion: '1.2.4', updateType: 'patch' }),
     },
     template: `
       <div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; background: #f8fafc;">
