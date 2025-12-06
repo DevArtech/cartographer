@@ -3,12 +3,12 @@
  * 
  * Commit message format: <type>(<scope>): <subject>
  * 
- * Types that trigger version bumps:
- *   - feat:     New feature (minor version bump)
- *   - fix:      Bug fix (patch version bump)
- *   - perf:     Performance improvement (patch version bump)
+ * Types that trigger AUTOMATIC version bumps on commit:
+ *   - feat:     New feature → MINOR version bump (0.x.0)
+ *   - fix:      Bug fix → PATCH version bump (0.0.x)
+ *   - perf:     Performance improvement → PATCH version bump (0.0.x)
  * 
- * Types that don't trigger version bumps:
+ * Types that do NOT trigger version bumps:
  *   - docs:     Documentation only
  *   - style:    Code style (formatting, semicolons, etc.)
  *   - refactor: Code refactoring (no feature/fix)
@@ -17,18 +17,21 @@
  *   - ci:       CI/CD changes
  *   - build:    Build system changes
  *   - revert:   Reverting previous commits
+ *   - lint:     Linting fixes
+ *   - config:   Configuration file changes
+ *   - wip:      Work in progress
  * 
  * Breaking changes:
  *   Add "BREAKING CHANGE:" in the commit body or "!" after type
  *   Example: feat!: new API endpoint
- *   This triggers a major version bump
+ *   Use "npm run release:major" for major version bumps
  * 
  * Examples:
- *   feat(auth): add OAuth2 support
- *   fix(network): resolve connection timeout issue
- *   docs: update README with deployment instructions
- *   refactor(backend): simplify database queries
- *   feat!: redesign API endpoints (breaking change)
+ *   feat(auth): add OAuth2 support         → bumps minor version
+ *   fix(network): resolve connection issue → bumps patch version
+ *   perf(db): optimize queries             → bumps patch version
+ *   docs: update README                    → no version bump
+ *   refactor(backend): simplify code       → no version bump
  */
 
 module.exports = {
@@ -39,20 +42,20 @@ module.exports = {
       2,
       'always',
       [
-        'feat',     // New feature (MINOR version bump)
-        'fix',      // Bug fix (PATCH version bump)
-        'docs',     // Documentation only changes
-        'style',    // Code style changes (formatting, semicolons, etc.)
-        'refactor', // Code refactoring (no feature change, no bug fix)
-        'perf',     // Performance improvements (PATCH version bump)
-        'test',     // Adding or updating tests
-        'chore',    // Maintenance tasks, dependency updates
-        'ci',       // CI/CD configuration changes
-        'build',    // Build system or external dependency changes
-        'revert',   // Reverting a previous commit
-        'lint',     // Linting fixes (custom type for this project)
-        'config',   // Configuration file changes
-        'wip'       // Work in progress (should be squashed before merge)
+        'feat',     // New feature → MINOR version bump
+        'fix',      // Bug fix → PATCH version bump
+        'perf',     // Performance improvements → PATCH version bump
+        'docs',     // Documentation only (no version bump)
+        'style',    // Code style changes (no version bump)
+        'refactor', // Code refactoring (no version bump)
+        'test',     // Adding or updating tests (no version bump)
+        'chore',    // Maintenance tasks (no version bump)
+        'ci',       // CI/CD configuration changes (no version bump)
+        'build',    // Build system changes (no version bump)
+        'revert',   // Reverting a previous commit (no version bump)
+        'lint',     // Linting fixes (no version bump)
+        'config',   // Configuration file changes (no version bump)
+        'wip'       // Work in progress (no version bump)
       ]
     ],
     // Type must be lowercase

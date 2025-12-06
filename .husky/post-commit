@@ -1,6 +1,11 @@
 #!/bin/sh
-# Post-commit hook: automatically run release after each commit
-# This updates the version, changelog, and creates a git tag
+# Post-commit hook: automatically bump version based on commit type
+# 
+# Version bump rules:
+#   - feat:  increment MINOR version (0.x.0)
+#   - fix:   increment PATCH version (0.0.x)
+#   - perf:  increment PATCH version (0.0.x)
+#   - others: no version bump
 
 # Skip if this is already a release commit (to prevent infinite loop)
 COMMIT_MSG=$(git log -1 --pretty=%B)
@@ -22,12 +27,38 @@ if [ "$SKIP_AUTO_RELEASE" = "1" ] || [ "$SKIP_AUTO_RELEASE" = "true" ]; then
     exit 0
 fi
 
-echo ""
-echo "🚀 Running automatic release..."
-echo ""
+# Extract commit type from the commit message
+# Format: type(scope): subject  or  type: subject
+COMMIT_TYPE=$(echo "$COMMIT_MSG" | head -1 | sed -E 's/^([a-z]+)(\(.+\))?!?:.*/\1/')
 
-# Run standard-version to bump version, update changelog, and create tag
-npm run release --silent
+# Determine version bump based on commit type
+case "$COMMIT_TYPE" in
+    feat)
+        RELEASE_TYPE="minor"
+        echo ""
+        echo "🚀 Running automatic release (feat → minor version bump)..."
+        echo ""
+        ;;
+    fix)
+        RELEASE_TYPE="patch"
+        echo ""
+        echo "🚀 Running automatic release (fix → patch version bump)..."
+        echo ""
+        ;;
+    perf)
+        RELEASE_TYPE="patch"
+        echo ""
+        echo "🚀 Running automatic release (perf → patch version bump)..."
+        echo ""
+        ;;
+    *)
+        echo "⏭️  Skipping auto-release for commit type: $COMMIT_TYPE (no version bump)"
+        exit 0
+        ;;
+esac
+
+# Run standard-version with the determined release type
+npm run release:$RELEASE_TYPE --silent
 
 # Check if release was successful
 if [ $? -eq 0 ]; then
@@ -39,7 +70,6 @@ if [ $? -eq 0 ]; then
     echo ""
 else
     echo ""
-    echo "⚠️  Release failed. You can run manually with: npm run release"
+    echo "⚠️  Release failed. You can run manually with: npm run release:$RELEASE_TYPE"
     echo ""
 fi
-
