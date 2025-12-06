@@ -21,6 +21,14 @@ from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
+# Check if HTTP/2 support is available
+try:
+    import h2  # noqa: F401
+    HTTP2_AVAILABLE = True
+except ImportError:
+    HTTP2_AVAILABLE = False
+    logger.warning("h2 package not installed - HTTP/2 disabled. Install with: pip install httpx[http2]")
+
 
 class CircuitState(Enum):
     """Circuit breaker states"""
@@ -126,9 +134,10 @@ class ServiceClient:
                 base_url=self.base_url,
                 limits=limits,
                 timeout=timeout,
-                http2=True  # Enable HTTP/2 for better multiplexing
+                http2=HTTP2_AVAILABLE  # Enable HTTP/2 if h2 package is available
             )
-            logger.info(f"Initialized HTTP client for {self.name} -> {self.base_url}")
+            protocol = "HTTP/2" if HTTP2_AVAILABLE else "HTTP/1.1"
+            logger.info(f"Initialized HTTP client for {self.name} -> {self.base_url} ({protocol})")
     
     async def close(self):
         """Close the HTTP client"""
