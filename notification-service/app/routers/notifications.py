@@ -25,6 +25,7 @@ from ..models import (
     ScheduledBroadcast,
     ScheduledBroadcastCreate,
     ScheduledBroadcastResponse,
+    get_default_priority_for_type,
 )
 from ..services.notification_manager import notification_manager
 from ..services.discord_service import discord_service, is_discord_configured, get_bot_invite_url
@@ -360,7 +361,7 @@ async def notify_cartographer_up(
     
     event = NetworkEvent(
         event_type=NotificationType.CARTOGRAPHER_UP,
-        priority=NotificationPriority.HIGH,
+        priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_UP),
         title="Cartographer is Back Online",
         message=message or f"{downtime_str}The Cartographer monitoring service is now operational.",
         details={
@@ -396,7 +397,7 @@ async def notify_cartographer_down(
     
     event = NetworkEvent(
         event_type=NotificationType.CARTOGRAPHER_DOWN,
-        priority=NotificationPriority.CRITICAL,
+        priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_DOWN),
         title="Cartographer Service Alert",
         message=message or f"{services_str}The Cartographer monitoring service may be unavailable.",
         details={

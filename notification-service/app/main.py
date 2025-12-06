@@ -19,7 +19,7 @@ from .services.discord_service import discord_service, is_discord_configured
 from .services.notification_manager import notification_manager
 from .services.anomaly_detector import anomaly_detector
 from .services.version_checker import version_checker
-from .models import NetworkEvent, NotificationType, NotificationPriority
+from .models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
 
 # Configure logging
 logging.basicConfig(
@@ -82,7 +82,7 @@ async def _send_cartographer_up_notification(previous_state: dict):
         
         event = NetworkEvent(
             event_type=NotificationType.CARTOGRAPHER_UP,
-            priority=NotificationPriority.HIGH,
+            priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_UP),
             title="Cartographer is Back Online",
             message=f"The Cartographer monitoring service has started successfully. {downtime_str}",
             details={
@@ -105,7 +105,7 @@ async def _send_cartographer_down_notification():
     try:
         event = NetworkEvent(
             event_type=NotificationType.CARTOGRAPHER_DOWN,
-            priority=NotificationPriority.HIGH,
+            priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_DOWN),
             title="Cartographer is Shutting Down",
             message="The Cartographer monitoring service is shutting down for maintenance or restart. You will receive a notification when it comes back online.",
             details={
