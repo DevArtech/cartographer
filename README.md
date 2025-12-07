@@ -13,34 +13,34 @@ Cartographer is a self-hosted app that maps out your home or office network. It 
 ```mermaid
 flowchart TB
     subgraph Client["🖥️ Client"]
-        Browser["Browser<br/>(Vue.js SPA)"]
+        Browser["Browser<br/><b>Vue.js 3</b> + <b>TypeScript</b><br/>Vite • Pinia • Cytoscape.js"]
     end
 
     subgraph Gateway["🚪 API Gateway"]
-        Backend["Backend Service<br/><i>:8000</i>"]
+        Backend["Backend Service<br/><i>:8000</i><br/><b>FastAPI</b> + <b>Python</b><br/>HTTPX • WebSocket Proxy"]
     end
 
     subgraph Services["⚙️ Microservices"]
-        Health["Health Service<br/><i>:8001</i><br/>Device Monitoring"]
-        Auth["Auth Service<br/><i>:8002</i><br/>JWT Authentication"]
-        Metrics["Metrics Service<br/><i>:8003</i><br/>Topology Aggregation"]
-        Assistant["Assistant Service<br/><i>:8004</i><br/>AI Chat"]
-        Notification["Notification Service<br/><i>:8005</i><br/>Alerts & Anomaly Detection"]
+        Health["Health Service<br/><i>:8001</i><br/><b>FastAPI</b><br/>ICMP • DNS • Speedtest"]
+        Auth["Auth Service<br/><i>:8002</i><br/><b>FastAPI</b><br/>JWT • bcrypt"]
+        Metrics["Metrics Service<br/><i>:8003</i><br/><b>FastAPI</b><br/>Redis Pub/Sub"]
+        Assistant["Assistant Service<br/><i>:8004</i><br/><b>FastAPI</b><br/>LangChain • Streaming"]
+        Notification["Notification Service<br/><i>:8005</i><br/><b>FastAPI</b><br/>Anomaly Detection ML"]
     end
 
     subgraph Storage["💾 Data Storage"]
-        Redis[("Redis<br/><i>:6379</i><br/>Pub/Sub & Cache")]
-        AuthData[("auth-data/<br/>users.json<br/>invites.json")]
-        HealthData[("health-data/<br/>health_history.json")]
-        NotifData[("notification-data/<br/>preferences.json<br/>history.json<br/>anomaly_state.json")]
-        MapData[("cartographer-data/<br/>saved_network_layout.json")]
+        Redis[("Redis<br/><i>:6379</i><br/><b>Pub/Sub & Cache</b>")]
+        AuthData[("auth-data/<br/><b>JSON</b><br/>users • invites")]
+        HealthData[("health-data/<br/><b>JSON</b><br/>health_history")]
+        NotifData[("notification-data/<br/><b>JSON</b><br/>preferences • history")]
+        MapData[("cartographer-data/<br/><b>JSON</b><br/>network_layout")]
     end
 
     subgraph External["🌐 External Services"]
-        LAN["LAN Devices<br/>(Ping/Scan)"]
-        AI["AI Providers<br/>OpenAI | Anthropic<br/>Google | Ollama"]
-        Email["Resend<br/>(Email)"]
-        Discord["Discord<br/>(Bot)"]
+        LAN["LAN Devices<br/><b>ARP</b> • <b>ICMP</b>"]
+        AI["AI Providers<br/><b>OpenAI</b> • <b>Anthropic</b><br/><b>Google Gemini</b> • <b>Ollama</b>"]
+        Email["<b>Resend</b><br/>Email API"]
+        Discord["<b>Discord</b><br/>Bot API"]
     end
 
     %% Client connections
@@ -216,6 +216,72 @@ Then edit `.env` with your settings. See `.example.env` for all available option
 - Your changes auto-save, but you can also use **Save Map** to be sure.
 - Open the **Assistant** panel and ask questions about your network in plain English.
 - Set up **Notifications** to stay informed — the more Cartographer monitors your network, the smarter its alerts get.
+
+## Load Testing
+
+Cartographer includes a comprehensive load testing suite built with [Locust](https://locust.io/), a modern Python-based load testing framework. Use it to verify performance, find bottlenecks, and ensure stability under heavy usage.
+
+### Quick Start
+
+```bash
+# Install dependencies
+cd load-tests
+pip install -r requirements.txt
+
+# Run a quick test on all services
+python run_load_tests.py -s all -u 10 -r 2 -t 60 --username YOUR_USERNAME --password YOUR_PASSWORD
+
+# Or open the interactive web UI
+python run_load_tests.py -s all --web --username YOUR_USERNAME --password YOUR_PASSWORD
+```
+
+### Technology
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Framework | [Locust](https://locust.io/) | Distributed load testing with Python |
+| HTTP Client | [HTTPX](https://www.python-httpx.org/) | Async HTTP requests |
+| Test Data | [Faker](https://faker.readthedocs.io/) | Generate realistic test data |
+
+### Available Test Targets
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `all` | 8000 | All services via the backend proxy |
+| `health` | 8001 | Device monitoring, ping, DNS |
+| `auth` | 8002 | Authentication and user management |
+| `metrics` | 8003 | Network snapshots, Redis pub/sub |
+| `assistant` | 8004 | AI chat, providers, context |
+| `notifications` | 8005 | Alerts, Discord, anomaly detection |
+
+### Common Test Scenarios
+
+```bash
+# Baseline test (10 users, 60 seconds)
+python run_load_tests.py -s all -u 10 -r 2 -t 60
+
+# Sustained load test with HTML report
+python run_load_tests.py -s all -u 50 -r 5 -t 600 --html report.html
+
+# Spike test (high load, short duration)
+python run_load_tests.py -s all -u 200 -r 50 -t 120
+
+# Read-only operations (dashboard simulation)
+python run_load_tests.py -s all -u 100 -r 10 -t 300 --tags read
+
+# Stress test a single service
+python run_load_tests.py -s metrics -u 100 -r 20 -t 300
+```
+
+### Target Metrics
+
+| Metric | Good | Acceptable | Poor |
+|--------|------|------------|------|
+| p50 Response | < 100ms | < 500ms | > 1s |
+| p95 Response | < 500ms | < 2s | > 5s |
+| Failure Rate | < 0.1% | < 1% | > 5% |
+
+See `load-tests/README.md` for advanced usage, distributed testing, CI/CD integration, and test customization.
 
 ## Contributing
 
