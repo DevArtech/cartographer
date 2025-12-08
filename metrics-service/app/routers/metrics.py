@@ -22,9 +22,13 @@ from ..models import (
     MetricsEvent,
     MetricsEventType,
     PublishConfig,
+    EndpointUsageRecord,
+    UsageRecordBatch,
+    UsageStatsResponse,
 )
 from ..services.redis_publisher import redis_publisher, CHANNEL_TOPOLOGY, CHANNEL_HEALTH, CHANNEL_SPEED_TEST
 from ..services.metrics_aggregator import metrics_aggregator
+from ..services.usage_tracker import usage_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -490,3 +494,77 @@ async def debug_layout():
         "nodes_with_notes": nodes_with_notes,
         "all_nodes": nodes,
     }
+
+
+# ==================== Usage Statistics Endpoints ====================
+
+@router.post("/usage/record")
+async def record_usage(record: EndpointUsageRecord):
+    """
+    Record a single endpoint usage event.
+    
+    This endpoint is called by microservices to report their endpoint usage.
+    """
+    try:
+        success = await usage_tracker.record_usage(record)
+        return JSONResponse({
+            "success": success,
+            "message": "Usage recorded" if success else "Recorded locally (Redis unavailable)"
+        })
+    except Exception as e:
+        logger.error(f"Failed to record usage: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to record usage: {e}")
+
+
+@router.post("/usage/record/batch")
+async def record_usage_batch(batch: UsageRecordBatch):
+    """
+    Record multiple endpoint usage events efficiently.
+    
+    This endpoint is called by microservices to batch report their endpoint usage.
+    """
+    try:
+        success_count = await usage_tracker.record_batch(batch.records)
+        return JSONResponse({
+            "success": True,
+            "recorded": success_count,
+            "total": len(batch.records),
+            "message": f"Recorded {success_count}/{len(batch.records)} usage events"
+        })
+    except Exception as e:
+        logger.error(f"Failed to record batch usage: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to record batch usage: {e}")
+
+
+@router.get("/usage/stats", response_model=UsageStatsResponse)
+async def get_usage_stats(service: Optional[str] = Query(None, description="Filter by service name")):
+    """
+    Get aggregated endpoint usage statistics.
+    
+    Returns usage metrics for all services or a specific service.
+    """
+    try:
+        stats = await usage_tracker.get_usage_stats(service)
+        return stats
+    except Exception as e:
+        logger.error(f"Failed to get usage stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get usage stats: {e}")
+
+
+@router.delete("/usage/stats")
+async def reset_usage_stats(service: Optional[str] = Query(None, description="Service to reset, or all if not specified")):
+    """
+    Reset usage statistics.
+    
+    Can reset stats for a specific service or all services.
+    """
+    try:
+        success = await usage_tracker.reset_stats(service)
+        target = f"service '{service}'" if service else "all services"
+        return JSONResponse({
+            "success": success,
+            "message": f"Reset usage stats for {target}" if success else "Failed to reset stats"
+        })
+    except Exception as e:
+        logger.error(f"Failed to reset usage stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset usage stats: {e}")

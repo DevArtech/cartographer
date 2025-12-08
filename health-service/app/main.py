@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.health import router as health_router
 from .services.health_checker import health_checker
+from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +44,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Usage tracking middleware - reports endpoint usage to metrics service
+    app.add_middleware(UsageTrackingMiddleware, service_name="health-service")
 
     # Include routers
     app.include_router(health_router, prefix="/api")

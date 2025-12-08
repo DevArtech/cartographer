@@ -29,6 +29,11 @@ from app.models import (
     MetricsEvent,
     SubscriptionRequest,
     PublishConfig,
+    EndpointUsage,
+    EndpointUsageRecord,
+    ServiceUsageSummary,
+    UsageStatsResponse,
+    UsageRecordBatch,
 )
 
 
@@ -383,4 +388,227 @@ class TestPublishConfig:
         )
         assert config.enabled is False
         assert config.publish_interval_seconds == 60
+
+
+# ==================== Usage Statistics Models ====================
+
+class TestEndpointUsage:
+    """Tests for EndpointUsage model"""
+    
+    def test_endpoint_usage_basic(self):
+        """Should create basic endpoint usage"""
+        usage = EndpointUsage(
+            endpoint="/api/health/status",
+            method="GET",
+            service="health-service"
+        )
+        assert usage.endpoint == "/api/health/status"
+        assert usage.method == "GET"
+        assert usage.service == "health-service"
+        assert usage.request_count == 0
+    
+    def test_endpoint_usage_full(self):
+        """Should create full endpoint usage"""
+        now = datetime.utcnow()
+        usage = EndpointUsage(
+            endpoint="/api/health/status",
+            method="GET",
+            service="health-service",
+            request_count=100,
+            success_count=95,
+            error_count=5,
+            total_response_time_ms=4500.0,
+            avg_response_time_ms=45.0,
+            min_response_time_ms=10.0,
+            max_response_time_ms=250.0,
+            last_accessed=now,
+            first_accessed=now,
+            status_codes={"200": 95, "500": 5}
+        )
+        assert usage.request_count == 100
+        assert usage.success_count == 95
+        assert usage.error_count == 5
+        assert usage.avg_response_time_ms == 45.0
+        assert "200" in usage.status_codes
+    
+    def test_endpoint_usage_defaults(self):
+        """Should use defaults for optional fields"""
+        usage = EndpointUsage(
+            endpoint="/api/test",
+            method="POST",
+            service="test-service"
+        )
+        assert usage.request_count == 0
+        assert usage.success_count == 0
+        assert usage.error_count == 0
+        assert usage.total_response_time_ms == 0.0
+        assert usage.avg_response_time_ms is None
+        assert usage.status_codes == {}
+
+
+class TestEndpointUsageRecord:
+    """Tests for EndpointUsageRecord model"""
+    
+    def test_endpoint_usage_record(self):
+        """Should create usage record"""
+        now = datetime.utcnow()
+        record = EndpointUsageRecord(
+            endpoint="/api/health/ping/192.168.1.1",
+            method="GET",
+            service="health-service",
+            status_code=200,
+            response_time_ms=45.5,
+            timestamp=now
+        )
+        assert record.endpoint == "/api/health/ping/192.168.1.1"
+        assert record.method == "GET"
+        assert record.service == "health-service"
+        assert record.status_code == 200
+        assert record.response_time_ms == 45.5
+        assert record.timestamp == now
+    
+    def test_endpoint_usage_record_default_timestamp(self):
+        """Should use default timestamp if not provided"""
+        record = EndpointUsageRecord(
+            endpoint="/api/test",
+            method="POST",
+            service="test-service",
+            status_code=201,
+            response_time_ms=10.0
+        )
+        assert record.timestamp is not None
+    
+    def test_endpoint_usage_record_validation(self):
+        """Should require all fields"""
+        with pytest.raises(ValidationError):
+            EndpointUsageRecord(
+                endpoint="/api/test",
+                method="GET"
+                # missing service, status_code, response_time_ms
+            )
+
+
+class TestServiceUsageSummary:
+    """Tests for ServiceUsageSummary model"""
+    
+    def test_service_usage_summary_basic(self):
+        """Should create basic service summary"""
+        summary = ServiceUsageSummary(service="health-service")
+        assert summary.service == "health-service"
+        assert summary.total_requests == 0
+        assert summary.total_successes == 0
+        assert summary.total_errors == 0
+    
+    def test_service_usage_summary_full(self):
+        """Should create full service summary"""
+        now = datetime.utcnow()
+        endpoint = EndpointUsage(
+            endpoint="/api/health/status",
+            method="GET",
+            service="health-service",
+            request_count=50
+        )
+        summary = ServiceUsageSummary(
+            service="health-service",
+            total_requests=100,
+            total_successes=95,
+            total_errors=5,
+            avg_response_time_ms=45.0,
+            endpoints=[endpoint],
+            last_updated=now
+        )
+        assert summary.total_requests == 100
+        assert summary.avg_response_time_ms == 45.0
+        assert len(summary.endpoints) == 1
+        assert summary.last_updated == now
+    
+    def test_service_usage_summary_defaults(self):
+        """Should use defaults"""
+        summary = ServiceUsageSummary(service="test-service")
+        assert summary.avg_response_time_ms is None
+        assert summary.endpoints == []
+        assert summary.last_updated is None
+
+
+class TestUsageStatsResponse:
+    """Tests for UsageStatsResponse model"""
+    
+    def test_usage_stats_response_empty(self):
+        """Should create empty stats response"""
+        response = UsageStatsResponse()
+        assert response.services == {}
+        assert response.total_requests == 0
+        assert response.total_services == 0
+    
+    def test_usage_stats_response_full(self):
+        """Should create full stats response"""
+        now = datetime.utcnow()
+        summary = ServiceUsageSummary(
+            service="health-service",
+            total_requests=100
+        )
+        response = UsageStatsResponse(
+            services={"health-service": summary},
+            total_requests=100,
+            total_services=1,
+            collection_started=now,
+            last_updated=now
+        )
+        assert response.total_services == 1
+        assert response.total_requests == 100
+        assert "health-service" in response.services
+        assert response.collection_started == now
+
+
+class TestUsageRecordBatch:
+    """Tests for UsageRecordBatch model"""
+    
+    def test_usage_record_batch(self):
+        """Should create batch of records"""
+        records = [
+            EndpointUsageRecord(
+                endpoint="/api/test/1",
+                method="GET",
+                service="test-service",
+                status_code=200,
+                response_time_ms=10.0
+            ),
+            EndpointUsageRecord(
+                endpoint="/api/test/2",
+                method="POST",
+                service="test-service",
+                status_code=201,
+                response_time_ms=15.0
+            )
+        ]
+        batch = UsageRecordBatch(records=records)
+        assert len(batch.records) == 2
+        assert batch.records[0].endpoint == "/api/test/1"
+        assert batch.records[1].method == "POST"
+    
+    def test_usage_record_batch_empty(self):
+        """Should allow empty batch"""
+        batch = UsageRecordBatch(records=[])
+        assert len(batch.records) == 0
+    
+    def test_usage_record_batch_serialization(self):
+        """Should serialize to JSON correctly"""
+        now = datetime.utcnow()
+        records = [
+            EndpointUsageRecord(
+                endpoint="/api/test",
+                method="GET",
+                service="test-service",
+                status_code=200,
+                response_time_ms=10.0,
+                timestamp=now
+            )
+        ]
+        batch = UsageRecordBatch(records=records)
+        
+        # Serialize to dict
+        data = batch.model_dump(mode="json")
+        assert "records" in data
+        assert len(data["records"]) == 1
+        assert data["records"][0]["endpoint"] == "/api/test"
 

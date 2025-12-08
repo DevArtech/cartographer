@@ -305,3 +305,57 @@ class PublishConfig(BaseModel):
     include_history: bool = True
     history_hours: int = 24
     channels: List[str] = Field(default=["metrics:topology"])
+
+
+# ==================== Endpoint Usage Statistics ====================
+
+class EndpointUsage(BaseModel):
+    """Usage statistics for a single endpoint"""
+    endpoint: str = Field(description="The endpoint path (e.g., /api/health/status)")
+    method: str = Field(description="HTTP method (GET, POST, etc.)")
+    service: str = Field(description="Service name (e.g., health-service)")
+    request_count: int = Field(default=0, description="Total number of requests")
+    success_count: int = Field(default=0, description="Number of successful responses (2xx)")
+    error_count: int = Field(default=0, description="Number of error responses (4xx, 5xx)")
+    total_response_time_ms: float = Field(default=0.0, description="Sum of response times in ms")
+    avg_response_time_ms: Optional[float] = Field(default=None, description="Average response time in ms")
+    min_response_time_ms: Optional[float] = Field(default=None, description="Minimum response time in ms")
+    max_response_time_ms: Optional[float] = Field(default=None, description="Maximum response time in ms")
+    last_accessed: Optional[datetime] = Field(default=None, description="Last access timestamp")
+    first_accessed: Optional[datetime] = Field(default=None, description="First access timestamp")
+    status_codes: Dict[str, int] = Field(default_factory=dict, description="Count by status code")
+
+
+class EndpointUsageRecord(BaseModel):
+    """A single request record to be sent to the metrics service"""
+    endpoint: str
+    method: str
+    service: str
+    status_code: int
+    response_time_ms: float
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ServiceUsageSummary(BaseModel):
+    """Aggregated usage statistics for a service"""
+    service: str
+    total_requests: int = 0
+    total_successes: int = 0
+    total_errors: int = 0
+    avg_response_time_ms: Optional[float] = None
+    endpoints: List[EndpointUsage] = []
+    last_updated: Optional[datetime] = None
+
+
+class UsageStatsResponse(BaseModel):
+    """Response containing usage statistics"""
+    services: Dict[str, ServiceUsageSummary] = Field(default_factory=dict)
+    total_requests: int = 0
+    total_services: int = 0
+    collection_started: Optional[datetime] = None
+    last_updated: Optional[datetime] = None
+
+
+class UsageRecordBatch(BaseModel):
+    """Batch of usage records for efficient reporting"""
+    records: List[EndpointUsageRecord]

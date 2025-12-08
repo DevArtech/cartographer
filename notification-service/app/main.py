@@ -19,6 +19,7 @@ from .services.discord_service import discord_service, is_discord_configured
 from .services.notification_manager import notification_manager
 from .services.anomaly_detector import anomaly_detector
 from .services.version_checker import version_checker
+from .services.usage_middleware import UsageTrackingMiddleware
 from .models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
 
 # Configure logging
@@ -219,6 +220,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Usage tracking middleware - reports endpoint usage to metrics service
+    app.add_middleware(UsageTrackingMiddleware, service_name="notification-service")
     
     # Include routers
     app.include_router(notifications_router, prefix="/api/notifications")

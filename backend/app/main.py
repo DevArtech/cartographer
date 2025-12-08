@@ -13,6 +13,7 @@ from .routers.metrics_proxy import router as metrics_proxy_router
 from .routers.assistant_proxy import router as assistant_proxy_router
 from .routers.notification_proxy import router as notification_proxy_router
 from .services.http_client import http_pool
+from .services.usage_middleware import UsageTrackingMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,9 @@ def create_app() -> FastAPI:
 		allow_methods=["*"],
 		allow_headers=["*"],
 	)
+	
+	# Usage tracking middleware - reports endpoint usage to metrics service
+	app.add_middleware(UsageTrackingMiddleware, service_name="backend")
 
 	# API routes - these MUST be registered before static file handling
 	app.include_router(mapper_router, prefix="/api")

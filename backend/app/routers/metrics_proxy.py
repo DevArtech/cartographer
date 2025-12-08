@@ -138,6 +138,42 @@ async def reconnect_redis(user: AuthenticatedUser = Depends(require_write_access
 
 # ==================== WebSocket Proxy ====================
 
+# ==================== Usage Statistics Endpoints ====================
+
+@router.post("/usage/record")
+async def record_usage(request: Request):
+    """Proxy record usage event. No auth required - called by internal services."""
+    body = await request.json()
+    return await proxy_request("POST", "/usage/record", json_body=body)
+
+
+@router.post("/usage/record/batch")
+async def record_usage_batch(request: Request):
+    """Proxy record batch usage events. No auth required - called by internal services."""
+    body = await request.json()
+    return await proxy_request("POST", "/usage/record/batch", json_body=body)
+
+
+@router.get("/usage/stats")
+async def get_usage_stats(service: Optional[str] = None, user: AuthenticatedUser = Depends(require_auth)):
+    """Proxy get usage stats. Requires authentication."""
+    params = {}
+    if service:
+        params["service"] = service
+    return await proxy_request("GET", "/usage/stats", params=params if params else None)
+
+
+@router.delete("/usage/stats")
+async def reset_usage_stats(service: Optional[str] = None, user: AuthenticatedUser = Depends(require_write_access)):
+    """Proxy reset usage stats. Requires write access."""
+    params = {}
+    if service:
+        params["service"] = service
+    return await proxy_request("DELETE", "/usage/stats", params=params if params else None)
+
+
+# ==================== WebSocket Proxy ====================
+
 @router.websocket("/ws")
 async def websocket_proxy(websocket: WebSocket):
     """

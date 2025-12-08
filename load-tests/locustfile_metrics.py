@@ -222,6 +222,45 @@ class MetricsServiceUser(AuthenticatedMetricsUser):
         """Get raw layout data - useful for debugging"""
         self.client.get("/api/metrics/debug/layout", headers=self._auth_headers())
     
+    # ==================== Usage Statistics Endpoints ====================
+    
+    @task(6)
+    @tag("usage", "read")
+    def get_usage_stats(self):
+        """Get endpoint usage statistics - common dashboard view"""
+        self.client.get("/api/metrics/usage/stats", headers=self._auth_headers())
+    
+    @task(3)
+    @tag("usage", "read")
+    def get_usage_stats_filtered(self):
+        """Get usage statistics for a specific service"""
+        services = ["health-service", "metrics-service", "auth-service", "backend"]
+        service = random.choice(services)
+        with self.client.get(
+            f"/api/metrics/usage/stats?service={service}",
+            headers=self._auth_headers(),
+            name="/api/metrics/usage/stats?service=[service]",
+            catch_response=True
+        ) as response:
+            if response.status_code in [200, 404]:
+                response.success()
+    
+    @task(1)
+    @tag("usage", "write")
+    def reset_usage_stats(self):
+        """Reset usage statistics - low frequency admin action"""
+        # Only reset for a random service, not all
+        services = ["test-service"]  # Use test service to avoid clearing real data
+        service = random.choice(services)
+        with self.client.delete(
+            f"/api/metrics/usage/stats?service={service}",
+            headers=self._auth_headers(),
+            name="/api/metrics/usage/stats (reset)",
+            catch_response=True
+        ) as response:
+            if response.status_code in [200, 404, 500]:
+                response.success()
+    
     # ==================== Healthcheck ====================
     
     @task(5)

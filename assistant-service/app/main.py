@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.assistant import router as assistant_router
+from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -103,6 +104,9 @@ This service provides intelligent assistance by:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Usage tracking middleware - reports endpoint usage to metrics service
+    app.add_middleware(UsageTrackingMiddleware, service_name="assistant-service")
     
     # Include routers
     app.include_router(assistant_router, prefix="/api")

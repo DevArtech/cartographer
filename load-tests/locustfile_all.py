@@ -224,6 +224,29 @@ class CartographerReadUser(AuthenticatedUser):
     def notifications_version(self):
         """Get version status"""
         self.client.get("/api/notifications/version", headers=self._auth_headers())
+    
+    # ==================== Usage Statistics ====================
+    
+    @task(8)
+    @tag("usage", "read")
+    def usage_get_stats(self):
+        """Get endpoint usage statistics - common dashboard view"""
+        self.client.get("/api/metrics/usage/stats", headers=self._auth_headers())
+    
+    @task(4)
+    @tag("usage", "read")
+    def usage_get_stats_by_service(self):
+        """Get usage stats for specific service"""
+        services = ["health-service", "metrics-service", "auth-service", "backend", "assistant-service"]
+        service = random.choice(services)
+        with self.client.get(
+            f"/api/metrics/usage/stats?service={service}",
+            headers=self._auth_headers(),
+            name="/api/metrics/usage/stats?service=[service]",
+            catch_response=True
+        ) as r:
+            if r.status_code in [200, 404]:
+                r.success()
 
 
 class CartographerWriteUser(AuthenticatedUser):

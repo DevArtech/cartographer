@@ -765,6 +765,82 @@ class TestMetricsProxyRouter:
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/redis/reconnect" in call_kwargs["path"]
+    
+    # ==================== Usage Statistics Tests ====================
+    
+    async def test_record_usage(self, mock_http_pool):
+        """record_usage should POST without auth"""
+        from app.routers.metrics_proxy import record_usage
+        
+        mock_request = MagicMock()
+        mock_request.json = AsyncMock(return_value={
+            "endpoint": "/api/health/status",
+            "method": "GET",
+            "service": "health-service",
+            "status_code": 200,
+            "response_time_ms": 45.0
+        })
+        
+        await record_usage(request=mock_request)
+        
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert "/usage/record" in call_kwargs["path"]
+        assert call_kwargs["method"] == "POST"
+    
+    async def test_record_usage_batch(self, mock_http_pool):
+        """record_usage_batch should POST without auth"""
+        from app.routers.metrics_proxy import record_usage_batch
+        
+        mock_request = MagicMock()
+        mock_request.json = AsyncMock(return_value={
+            "records": [
+                {"endpoint": "/api/test", "method": "GET", "service": "test", "status_code": 200, "response_time_ms": 10.0}
+            ]
+        })
+        
+        await record_usage_batch(request=mock_request)
+        
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert "/usage/record/batch" in call_kwargs["path"]
+        assert call_kwargs["method"] == "POST"
+    
+    async def test_get_usage_stats(self, mock_http_pool, owner_user):
+        """get_usage_stats should GET with auth"""
+        from app.routers.metrics_proxy import get_usage_stats
+        
+        await get_usage_stats(service=None, user=owner_user)
+        
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert "/usage/stats" in call_kwargs["path"]
+        assert call_kwargs["method"] == "GET"
+    
+    async def test_get_usage_stats_filtered(self, mock_http_pool, owner_user):
+        """get_usage_stats should filter by service"""
+        from app.routers.metrics_proxy import get_usage_stats
+        
+        await get_usage_stats(service="health-service", user=owner_user)
+        
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert call_kwargs["params"]["service"] == "health-service"
+    
+    async def test_reset_usage_stats(self, mock_http_pool, readwrite_user):
+        """reset_usage_stats should DELETE with write access"""
+        from app.routers.metrics_proxy import reset_usage_stats
+        
+        await reset_usage_stats(service=None, user=readwrite_user)
+        
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert "/usage/stats" in call_kwargs["path"]
+        assert call_kwargs["method"] == "DELETE"
+    
+    async def test_reset_usage_stats_single_service(self, mock_http_pool, readwrite_user):
+        """reset_usage_stats should filter by service"""
+        from app.routers.metrics_proxy import reset_usage_stats
+        
+        await reset_usage_stats(service="health-service", user=readwrite_user)
+        
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert call_kwargs["params"]["service"] == "health-service"
 
 
 # ==================== Assistant Proxy Tests ====================

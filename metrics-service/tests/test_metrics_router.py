@@ -19,6 +19,11 @@ from app.models import (
     TestIPMetrics,
     SpeedTestMetrics,
     PublishConfig,
+    EndpointUsageRecord,
+    UsageRecordBatch,
+    UsageStatsResponse,
+    ServiceUsageSummary,
+    EndpointUsage,
 )
 
 
@@ -583,4 +588,201 @@ class TestWebSocketEndpoint:
                     websocket.send_json({"action": "request_snapshot"})
                     data = websocket.receive_json()
                     assert data["type"] == "snapshot"
+
+
+class TestUsageEndpoints:
+    """Tests for usage statistics endpoints"""
+    
+    @pytest.fixture
+    def sample_usage_record(self):
+        """Create sample usage record"""
+        return {
+            "endpoint": "/api/health/status",
+            "method": "GET",
+            "service": "health-service",
+            "status_code": 200,
+            "response_time_ms": 45.5,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    @pytest.fixture
+    def sample_usage_stats(self):
+        """Create sample usage stats response"""
+        return UsageStatsResponse(
+            services={
+                "health-service": ServiceUsageSummary(
+                    service="health-service",
+                    total_requests=100,
+                    total_successes=95,
+                    total_errors=5,
+                    avg_response_time_ms=45.0,
+                    endpoints=[
+                        EndpointUsage(
+                            endpoint="/api/health/status",
+                            method="GET",
+                            service="health-service",
+                            request_count=80,
+                            success_count=78,
+                            error_count=2,
+                            avg_response_time_ms=40.0
+                        )
+                    ]
+                )
+            },
+            total_requests=100,
+            total_services=1,
+            collection_started=datetime.now(timezone.utc),
+            last_updated=datetime.now(timezone.utc)
+        )
+    
+    def test_record_usage_success(self, client, sample_usage_record):
+        """Should record single usage event"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.record_usage = AsyncMock(return_value=True)
+            
+            response = client.post("/api/metrics/usage/record", json=sample_usage_record)
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert "Usage recorded" in data["message"]
+    
+    def test_record_usage_fallback(self, client, sample_usage_record):
+        """Should indicate fallback to local when Redis unavailable"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.record_usage = AsyncMock(return_value=False)
+            
+            response = client.post("/api/metrics/usage/record", json=sample_usage_record)
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
+            assert "locally" in data["message"]
+    
+    def test_record_usage_error(self, client, sample_usage_record):
+        """Should handle errors gracefully"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.record_usage = AsyncMock(side_effect=Exception("Test error"))
+            
+            response = client.post("/api/metrics/usage/record", json=sample_usage_record)
+            
+            assert response.status_code == 500
+    
+    def test_record_usage_batch_success(self, client, sample_usage_record):
+        """Should record batch of usage events"""
+        batch = {"records": [sample_usage_record, sample_usage_record, sample_usage_record]}
+        
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.record_batch = AsyncMock(return_value=3)
+            
+            response = client.post("/api/metrics/usage/record/batch", json=batch)
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["recorded"] == 3
+            assert data["total"] == 3
+    
+    def test_record_usage_batch_partial(self, client, sample_usage_record):
+        """Should handle partial batch success"""
+        batch = {"records": [sample_usage_record, sample_usage_record, sample_usage_record]}
+        
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.record_batch = AsyncMock(return_value=2)
+            
+            response = client.post("/api/metrics/usage/record/batch", json=batch)
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["recorded"] == 2
+            assert data["total"] == 3
+    
+    def test_record_usage_batch_error(self, client, sample_usage_record):
+        """Should handle batch errors"""
+        batch = {"records": [sample_usage_record]}
+        
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.record_batch = AsyncMock(side_effect=Exception("Test error"))
+            
+            response = client.post("/api/metrics/usage/record/batch", json=batch)
+            
+            assert response.status_code == 500
+    
+    def test_get_usage_stats_all(self, client, sample_usage_stats):
+        """Should get all usage stats"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.get_usage_stats = AsyncMock(return_value=sample_usage_stats)
+            
+            response = client.get("/api/metrics/usage/stats")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["total_services"] == 1
+            assert data["total_requests"] == 100
+            assert "health-service" in data["services"]
+    
+    def test_get_usage_stats_filtered(self, client, sample_usage_stats):
+        """Should filter by service"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.get_usage_stats = AsyncMock(return_value=sample_usage_stats)
+            
+            response = client.get("/api/metrics/usage/stats?service=health-service")
+            
+            assert response.status_code == 200
+            mock_tracker.get_usage_stats.assert_called_once_with("health-service")
+    
+    def test_get_usage_stats_error(self, client):
+        """Should handle stats retrieval error"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.get_usage_stats = AsyncMock(side_effect=Exception("Test error"))
+            
+            response = client.get("/api/metrics/usage/stats")
+            
+            assert response.status_code == 500
+    
+    def test_reset_usage_stats_all(self, client):
+        """Should reset all usage stats"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.reset_stats = AsyncMock(return_value=True)
+            
+            response = client.delete("/api/metrics/usage/stats")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert "all services" in data["message"]
+            mock_tracker.reset_stats.assert_called_once_with(None)
+    
+    def test_reset_usage_stats_single_service(self, client):
+        """Should reset single service stats"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.reset_stats = AsyncMock(return_value=True)
+            
+            response = client.delete("/api/metrics/usage/stats?service=health-service")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert "health-service" in data["message"]
+            mock_tracker.reset_stats.assert_called_once_with("health-service")
+    
+    def test_reset_usage_stats_failure(self, client):
+        """Should handle reset failure"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.reset_stats = AsyncMock(return_value=False)
+            
+            response = client.delete("/api/metrics/usage/stats")
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
+    
+    def test_reset_usage_stats_error(self, client):
+        """Should handle reset error"""
+        with patch('app.routers.metrics.usage_tracker') as mock_tracker:
+            mock_tracker.reset_stats = AsyncMock(side_effect=Exception("Test error"))
+            
+            response = client.delete("/api/metrics/usage/stats")
+            
+            assert response.status_code == 500
 

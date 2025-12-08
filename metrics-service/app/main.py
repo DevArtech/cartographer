@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routers.metrics import router as metrics_router
 from .services.redis_publisher import redis_publisher
 from .services.metrics_aggregator import metrics_aggregator
+from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -128,6 +129,9 @@ by other services and real-time dashboards.
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Usage tracking middleware - tracks own endpoint usage
+    app.add_middleware(UsageTrackingMiddleware, service_name="metrics-service")
     
     # Include routers
     app.include_router(metrics_router, prefix="/api")

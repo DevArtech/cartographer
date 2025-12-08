@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.auth import router as auth_router
+from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +27,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Usage tracking middleware - reports endpoint usage to metrics service
+    app.add_middleware(UsageTrackingMiddleware, service_name="auth-service")
 
     # Include routers
     app.include_router(auth_router, prefix="/api/auth")
