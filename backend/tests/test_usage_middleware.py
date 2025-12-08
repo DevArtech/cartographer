@@ -286,3 +286,262 @@ class TestMiddlewareExclusions:
         
         assert "/" in EXCLUDED_PATHS
 
+
+class TestGetClient:
+    """Tests for _get_client method"""
+    
+    @pytest.fixture
+    def middleware(self):
+        """Create middleware instance for testing"""
+        from app.services.usage_middleware import UsageTrackingMiddleware
+        
+        async def app(scope, receive, send):
+            pass
+        
+        return UsageTrackingMiddleware(app, service_name="test-service")
+    
+    async def test_get_client_creates_new_client(self, middleware):
+        """Should create a new client when none exists"""
+        client = await middleware._get_client()
+        
+        assert client is not None
+        assert middleware._client is not None
+        
+        # Cleanup
+        await client.aclose()
+    
+    async def test_get_client_returns_existing_client(self, middleware):
+        """Should return existing client if available"""
+        client1 = await middleware._get_client()
+        client2 = await middleware._get_client()
+        
+        assert client1 is client2
+        
+        # Cleanup
+        await client1.aclose()
+    
+    async def test_get_client_creates_new_if_closed(self, middleware):
+        """Should create new client if existing is closed"""
+        client1 = await middleware._get_client()
+        await client1.aclose()
+        
+        client2 = await middleware._get_client()
+        
+        assert client2 is not client1
+        assert not client2.is_closed
+        
+        # Cleanup
+        await client2.aclose()
+
+
+class TestStartFlushTask:
+    """Tests for _start_flush_task method"""
+    
+    @pytest.fixture
+    def middleware(self):
+        """Create middleware instance for testing"""
+        from app.services.usage_middleware import UsageTrackingMiddleware
+        
+        async def app(scope, receive, send):
+            pass
+        
+        return UsageTrackingMiddleware(app, service_name="test-service")
+    
+    async def test_start_flush_task_starts_task(self, middleware):
+        """Should start flush task when not running"""
+        assert middleware._running is False
+        assert middleware._flush_task is None
+        
+        await middleware._start_flush_task()
+        
+        assert middleware._running is True
+        assert middleware._flush_task is not None
+        
+        # Cleanup
+        middleware._running = False
+        middleware._flush_task.cancel()
+        try:
+            await middleware._flush_task
+        except asyncio.CancelledError:
+            pass
+    
+    async def test_start_flush_task_noop_if_running(self, middleware):
+        """Should not start new task if already running"""
+        middleware._running = True
+        
+        await middleware._start_flush_task()
+        
+        # Should not have created a task
+        assert middleware._flush_task is None
+
+
+class TestFlushLoop:
+    """Tests for _flush_loop method"""
+    
+    @pytest.fixture
+    def middleware(self):
+        """Create middleware instance for testing"""
+        from app.services.usage_middleware import UsageTrackingMiddleware
+        
+        async def app(scope, receive, send):
+            pass
+        
+        return UsageTrackingMiddleware(app, service_name="test-service")
+    
+    async def test_flush_loop_exits_on_cancelled_error(self, middleware):
+        """Should exit gracefully on CancelledError"""
+        middleware._running = True
+        
+        task = asyncio.create_task(middleware._flush_loop())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        
+        # Task should have exited
+        assert task.done()
+    
+    async def test_flush_loop_handles_generic_exception(self, middleware):
+        """Should handle generic exceptions in loop"""
+        from app.services import usage_middleware
+        
+        middleware._running = True
+        call_count = 0
+        
+        async def failing_flush():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise Exception("Test error")
+            middleware._running = False
+        
+        original_interval = usage_middleware.BATCH_INTERVAL_SECONDS
+        usage_middleware.BATCH_INTERVAL_SECONDS = 0.01  # Speed up for test
+        
+        try:
+            with patch.object(middleware, '_flush_buffer', failing_flush):
+                task = asyncio.create_task(middleware._flush_loop())
+                await asyncio.sleep(0.1)
+                middleware._running = False
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                
+                # Should have continued after error
+                assert call_count >= 1
+        finally:
+            usage_middleware.BATCH_INTERVAL_SECONDS = original_interval
+
+
+class TestFlushBufferHTTP:
+    """Tests for _flush_buffer HTTP behavior"""
+    
+    @pytest.fixture
+    def middleware(self):
+        """Create middleware instance with records"""
+        from app.services.usage_middleware import UsageTrackingMiddleware, UsageRecord
+        
+        async def app(scope, receive, send):
+            pass
+        
+        mw = UsageTrackingMiddleware(app, service_name="test-service")
+        
+        # Add records to buffer
+        for i in range(3):
+            mw._buffer.append(UsageRecord(
+                endpoint=f"/api/test/{i}",
+                method="GET",
+                status_code=200,
+                response_time_ms=10.0 + i,
+                timestamp=datetime.utcnow()
+            ))
+        
+        return mw
+    
+    async def test_flush_buffer_puts_back_on_non_200(self, middleware):
+        """Should put records back on non-200 response"""
+        initial_count = len(middleware._buffer)
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        
+        with patch.object(middleware, '_get_client') as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
+            
+            await middleware._flush_buffer()
+            
+            # Records should be put back
+            assert len(middleware._buffer) > 0
+
+
+class TestShutdownWithClient:
+    """Tests for shutdown with HTTP client"""
+    
+    @pytest.fixture
+    def middleware(self):
+        """Create middleware instance"""
+        from app.services.usage_middleware import UsageTrackingMiddleware
+        
+        async def app(scope, receive, send):
+            pass
+        
+        return UsageTrackingMiddleware(app, service_name="test-service")
+    
+    async def test_shutdown_closes_client(self, middleware):
+        """Should close HTTP client during shutdown"""
+        # Create a client
+        client = await middleware._get_client()
+        
+        await middleware.shutdown()
+        
+        # Client should be closed
+        assert middleware._client is None or middleware._client.is_closed
+
+
+class TestDispatchExcludedPrefixes:
+    """Tests for dispatch with excluded prefixes"""
+    
+    @pytest.fixture
+    def app(self):
+        """Create a simple test app with middleware"""
+        from app.services.usage_middleware import UsageTrackingMiddleware
+        from starlette.applications import Starlette
+        from starlette.responses import JSONResponse
+        from starlette.routing import Route
+        
+        async def test_endpoint(request):
+            return JSONResponse({"status": "ok"})
+        
+        routes = [
+            Route("/api/test", test_endpoint),
+            Route("/api/metrics/usage/record", test_endpoint),
+            Route("/assets/test.js", test_endpoint),
+            Route("/docs/test", test_endpoint),
+        ]
+        
+        app = Starlette(routes=routes)
+        app.add_middleware(UsageTrackingMiddleware, service_name="test-service")
+        return app
+    
+    @pytest.fixture
+    def client(self, app):
+        """Create test client"""
+        return TestClient(app)
+    
+    def test_dispatch_excludes_assets(self, client):
+        """Should exclude /assets/ prefix"""
+        response = client.get("/assets/test.js")
+        assert response.status_code == 200
+    
+    def test_dispatch_excludes_metrics_usage(self, client):
+        """Should exclude /api/metrics/usage prefix"""
+        response = client.get("/api/metrics/usage/record")
+        assert response.status_code == 200
+

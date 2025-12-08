@@ -496,3 +496,193 @@ class TestStatusCodeClassification:
         assert summary.total_successes == 0
         assert summary.total_errors == 4
 
+
+class TestGetServiceSummary:
+    """Tests for _get_service_summary method"""
+    
+    @pytest.fixture
+    def tracker(self):
+        """Create a fresh UsageTracker instance"""
+        return UsageTracker()
+    
+    async def test_get_service_summary_returns_none_for_empty(self, tracker):
+        """Should return None when no summary data exists"""
+        mock_redis = AsyncMock()
+        mock_redis.hgetall = AsyncMock(return_value={})
+        
+        result = await tracker._get_service_summary(mock_redis, "test-service")
+        
+        assert result is None
+    
+    async def test_get_service_summary_with_data(self, tracker):
+        """Should return summary with data"""
+        mock_redis = AsyncMock()
+        mock_redis.hgetall = AsyncMock(return_value={
+            b"total_requests": b"100",
+            b"total_successes": b"90",
+            b"total_errors": b"10",
+            b"total_response_time_ms": b"5000.0",
+            b"last_updated": datetime.now(timezone.utc).isoformat().encode()
+        })
+        mock_redis.smembers = AsyncMock(return_value=set())
+        
+        result = await tracker._get_service_summary(mock_redis, "test-service")
+        
+        assert result is not None
+        assert result.total_requests == 100
+        assert result.total_successes == 90
+        assert result.total_errors == 10
+        assert result.avg_response_time_ms == 50.0
+    
+    async def test_get_service_summary_handles_exception(self, tracker):
+        """Should return None on exception"""
+        mock_redis = AsyncMock()
+        mock_redis.hgetall = AsyncMock(side_effect=Exception("Redis error"))
+        
+        result = await tracker._get_service_summary(mock_redis, "test-service")
+        
+        assert result is None
+
+
+class TestGetEndpointUsage:
+    """Tests for _get_endpoint_usage method"""
+    
+    @pytest.fixture
+    def tracker(self):
+        """Create a fresh UsageTracker instance"""
+        return UsageTracker()
+    
+    async def test_get_endpoint_usage_returns_none_for_empty(self, tracker):
+        """Should return None when no data exists"""
+        mock_redis = AsyncMock()
+        mock_redis.hgetall = AsyncMock(return_value={})
+        
+        result = await tracker._get_endpoint_usage(mock_redis, "usage:test:GET:api_test")
+        
+        assert result is None
+    
+    async def test_get_endpoint_usage_with_full_data(self, tracker):
+        """Should return endpoint usage with all fields"""
+        now = datetime.now(timezone.utc)
+        mock_redis = AsyncMock()
+        mock_redis.hgetall = AsyncMock(return_value={
+            b"endpoint": b"/api/test",
+            b"method": b"GET",
+            b"service": b"test-service",
+            b"request_count": b"50",
+            b"success_count": b"45",
+            b"error_count": b"5",
+            b"total_response_time_ms": b"2500.0",
+            b"min_response_time_ms": b"10.0",
+            b"max_response_time_ms": b"200.0",
+            b"last_accessed": now.isoformat().encode(),
+            b"first_accessed": now.isoformat().encode(),
+            b"status:200": b"45",
+            b"status:500": b"5",
+        })
+        
+        result = await tracker._get_endpoint_usage(mock_redis, "usage:test:GET:api_test")
+        
+        assert result is not None
+        assert result.endpoint == "/api/test"
+        assert result.method == "GET"
+        assert result.service == "test-service"
+        assert result.request_count == 50
+        assert result.success_count == 45
+        assert result.error_count == 5
+        assert result.avg_response_time_ms == 50.0
+        assert result.min_response_time_ms == 10.0
+        assert result.max_response_time_ms == 200.0
+        assert result.status_codes == {"200": 45, "500": 5}
+    
+    async def test_get_endpoint_usage_handles_exception(self, tracker):
+        """Should return None on exception"""
+        mock_redis = AsyncMock()
+        mock_redis.hgetall = AsyncMock(side_effect=Exception("Redis error"))
+        
+        result = await tracker._get_endpoint_usage(mock_redis, "usage:test:GET:api_test")
+        
+        assert result is None
+
+
+class TestRecordUsageWithErrors:
+    """Tests for error recording in record_usage"""
+    
+    @pytest.fixture
+    def tracker(self):
+        """Create a fresh UsageTracker instance"""
+        return UsageTracker()
+    
+    async def test_record_usage_counts_error_status(self, tracker):
+        """Should count 4xx status as error in Redis"""
+        error_record = EndpointUsageRecord(
+            endpoint="/api/test",
+            method="POST",
+            service="test-service",
+            status_code=404,
+            response_time_ms=50.0,
+            timestamp=datetime.now(timezone.utc)
+        )
+        
+        with patch('app.services.usage_tracker.redis_publisher') as mock_publisher:
+            mock_publisher._redis = None
+            
+            result = await tracker.record_usage(error_record)
+            
+            # Without Redis, falls back to local cache
+            assert result is False
+            assert tracker._local_cache["test-service"].total_errors == 1
+
+
+class TestResetStatsWithService:
+    """Tests for reset_stats with specific service"""
+    
+    @pytest.fixture
+    def tracker(self):
+        """Create a tracker with pre-populated data"""
+        tracker = UsageTracker()
+        tracker._local_cache = {
+            "service-a": ServiceUsageSummary(service="service-a", total_requests=50),
+            "service-b": ServiceUsageSummary(service="service-b", total_requests=30),
+        }
+        return tracker
+    
+    async def test_reset_single_service_with_redis(self, tracker):
+        """Should reset only specified service in Redis"""
+        mock_redis = AsyncMock()
+        mock_redis.smembers = AsyncMock(return_value={b"usage:service-a:GET:api_test"})
+        mock_pipe = AsyncMock()
+        mock_pipe.delete = MagicMock()
+        mock_pipe.srem = MagicMock()
+        mock_pipe.execute = AsyncMock(return_value=[])
+        mock_redis.pipeline = MagicMock(return_value=mock_pipe)
+        
+        with patch('app.services.usage_tracker.redis_publisher') as mock_publisher:
+            mock_publisher._redis = mock_redis
+            
+            result = await tracker.reset_stats(service="service-a")
+            
+            assert result is True
+            assert "service-a" not in tracker._local_cache
+            assert "service-b" in tracker._local_cache
+
+
+class TestResetStatsErrors:
+    """Tests for error handling in reset_stats"""
+    
+    @pytest.fixture
+    def tracker(self):
+        return UsageTracker()
+    
+    async def test_reset_stats_handles_redis_exception(self, tracker):
+        """Should return False on Redis exception"""
+        mock_redis = AsyncMock()
+        mock_redis.smembers = AsyncMock(side_effect=Exception("Redis error"))
+        
+        with patch('app.services.usage_tracker.redis_publisher') as mock_publisher:
+            mock_publisher._redis = mock_redis
+            
+            result = await tracker.reset_stats()
+            
+            assert result is False
+
