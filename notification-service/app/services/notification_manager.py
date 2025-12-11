@@ -97,14 +97,34 @@ class NotificationManager:
             with open(PREFERENCES_FILE, 'r') as f:
                 data = json.load(f)
             
-            for user_id, prefs_data in data.items():
+            for key, prefs_data in data.items():
                 # Parse datetime strings
                 if "created_at" in prefs_data and isinstance(prefs_data["created_at"], str):
                     prefs_data["created_at"] = datetime.fromisoformat(prefs_data["created_at"].replace("Z", "+00:00"))
                 if "updated_at" in prefs_data and isinstance(prefs_data["updated_at"], str):
                     prefs_data["updated_at"] = datetime.fromisoformat(prefs_data["updated_at"].replace("Z", "+00:00"))
                 
-                self._preferences[user_id] = NotificationPreferences(**prefs_data)
+                # Handle migration from old user_id based preferences to network_id based
+                # Old format had 'user_id', new format has 'network_id'
+                if "user_id" in prefs_data and "network_id" not in prefs_data:
+                    # Skip old user-based preferences (they'll be recreated per-network)
+                    logger.info(f"Skipping old user-based preferences for key {key}")
+                    continue
+                
+                # Ensure network_id exists (for new format)
+                if "network_id" not in prefs_data:
+                    # Try to use key as network_id if it looks like an integer
+                    try:
+                        prefs_data["network_id"] = int(key)
+                    except ValueError:
+                        logger.warning(f"Skipping preferences with invalid key: {key}")
+                        continue
+                
+                try:
+                    self._preferences[key] = NotificationPreferences(**prefs_data)
+                except Exception as e:
+                    logger.warning(f"Failed to load preferences for key {key}: {e}")
+                    continue
             
             logger.info(f"Loaded {len(self._preferences)} notification preferences")
                 
@@ -135,7 +155,18 @@ class NotificationManager:
             for record_data in data:
                 if "timestamp" in record_data and isinstance(record_data["timestamp"], str):
                     record_data["timestamp"] = datetime.fromisoformat(record_data["timestamp"].replace("Z", "+00:00"))
-                self._history.append(NotificationRecord(**record_data))
+                
+                # Handle migration from old user_id based records to network_id based
+                if "user_id" in record_data and "network_id" not in record_data:
+                    # Set network_id to 0 for old records (they'll still be viewable)
+                    record_data["network_id"] = 0
+                    del record_data["user_id"]
+                
+                try:
+                    self._history.append(NotificationRecord(**record_data))
+                except Exception as e:
+                    logger.warning(f"Failed to load history record: {e}")
+                    continue
             
             logger.info(f"Loaded {len(self._history)} notification records")
         except Exception as e:
