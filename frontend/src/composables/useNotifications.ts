@@ -247,8 +247,9 @@ export function useNotifications(networkId?: number) {
     return response.data;
   }
 
-  // Send broadcast notification (owner only)
+  // Send broadcast notification (owner only, network-scoped)
   async function sendBroadcastNotification(
+    networkId: number,
     title: string,
     message: string,
     eventType: NotificationType = 'scheduled_maintenance',
@@ -257,6 +258,7 @@ export function useNotifications(networkId?: number) {
     const response = await axios.post<{ success: boolean; users_notified: number }>(
       `${API_BASE}/broadcast`,
       {
+        network_id: networkId,
         title,
         message,
         event_type: eventType,
@@ -275,8 +277,9 @@ export function useNotifications(networkId?: number) {
     return response.data;
   }
 
-  // Schedule a broadcast (owner only)
+  // Schedule a broadcast (owner only, network-scoped)
   async function scheduleBroadcast(
+    networkId: number,
     title: string,
     message: string,
     scheduledAt: Date,
@@ -286,6 +289,7 @@ export function useNotifications(networkId?: number) {
     const response = await axios.post<ScheduledBroadcast>(
       `${API_BASE}/scheduled`,
       {
+        network_id: networkId,
         title,
         message,
         event_type: eventType,
@@ -337,6 +341,40 @@ export function useNotifications(networkId?: number) {
     return response.data.silenced;
   }
 
+  // ==================== Global Preferences (Cartographer Up/Down) ====================
+
+  export interface GlobalUserPreferences {
+    user_id: string;
+    email_address?: string;
+    cartographer_up_enabled: boolean;
+    cartographer_down_enabled: boolean;
+    created_at: string;
+    updated_at: string;
+  }
+
+  export interface GlobalUserPreferencesUpdate {
+    email_address?: string;
+    cartographer_up_enabled?: boolean;
+    cartographer_down_enabled?: boolean;
+  }
+
+  // Get global notification preferences (Cartographer Up/Down)
+  async function getGlobalPreferences(): Promise<GlobalUserPreferences> {
+    const response = await axios.get<GlobalUserPreferences>(`${API_BASE}/global/preferences`);
+    return response.data;
+  }
+
+  // Update global notification preferences (Cartographer Up/Down)
+  async function updateGlobalPreferences(
+    update: GlobalUserPreferencesUpdate
+  ): Promise<GlobalUserPreferences> {
+    const response = await axios.put<GlobalUserPreferences>(
+      `${API_BASE}/global/preferences`,
+      update
+    );
+    return response.data;
+  }
+
   return {
     isLoading,
     error,
@@ -361,6 +399,8 @@ export function useNotifications(networkId?: number) {
     silenceDevice,
     unsilenceDevice,
     isDeviceSilenced,
+    getGlobalPreferences,
+    updateGlobalPreferences,
   };
 }
 

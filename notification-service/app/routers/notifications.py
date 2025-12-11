@@ -10,6 +10,8 @@ from datetime import datetime
 from ..models import (
     NotificationPreferences,
     NotificationPreferencesUpdate,
+    GlobalUserPreferences,
+    GlobalUserPreferencesUpdate,
     NotificationHistoryResponse,
     NotificationStatsResponse,
     TestNotificationRequest,
@@ -226,6 +228,7 @@ async def sync_current_devices(device_ips: List[str]):
 async def process_health_check(
     device_ip: str,
     success: bool,
+    network_id: int,
     latency_ms: Optional[float] = None,
     packet_loss: Optional[float] = None,
     device_name: Optional[str] = None,
@@ -236,10 +239,20 @@ async def process_health_check(
     
     This endpoint should be called by the health service after each check.
     It will train the ML model and potentially send notifications.
+    
+    Args:
+        device_ip: IP address of the device
+        success: Whether the health check succeeded
+        network_id: The network this device belongs to (required)
+        latency_ms: Optional latency measurement
+        packet_loss: Optional packet loss percentage
+        device_name: Optional device name
+        previous_state: Optional previous state (online/offline)
     """
     await notification_manager.process_health_check(
         device_ip=device_ip,
         success=success,
+        network_id=network_id,
         latency_ms=latency_ms,
         packet_loss=packet_loss,
         device_name=device_name,
@@ -247,6 +260,28 @@ async def process_health_check(
     )
     
     return {"success": True}
+
+
+@router.post("/networks/{network_id}/send-notification")
+async def send_network_notification(
+    network_id: int,
+    event: NetworkEvent,
+):
+    """
+    Send a notification to a specific network (for broadcasts).
+    
+    This sends to the network's configured notification channels.
+    TODO: Enhance to send to all network members when backend integration is available.
+    """
+    # Ensure event has the correct network_id
+    event.network_id = network_id
+    
+    records = await notification_manager.send_notification_to_network(network_id, event, force=True)
+    return {
+        "success": len([r for r in records if r.success]) > 0,
+        "records": [r.model_dump() for r in records],
+        "network_id": network_id,
+    }
 
 
 @router.post("/send-notification")
@@ -257,14 +292,15 @@ async def send_manual_notification(
     """
     Manually send a notification (for testing or admin use).
     
-    If user_id is provided, sends only to that user.
-    Otherwise, broadcasts to all users.
+    DEPRECATED: Use /networks/{network_id}/send-notification for network-scoped notifications.
     """
     if user_id:
-        records = await notification_manager.send_notification(user_id, event, force=True)
+        # Legacy support - try to find network_id from user_id (not recommended)
+        logger.warning("send_notification with user_id is deprecated, use network_id instead")
+        # For backwards compatibility, we'll skip this
         return {
-            "success": len([r for r in records if r.success]) > 0,
-            "records": [r.model_dump() for r in records],
+            "success": False,
+            "error": "user_id parameter is deprecated, use network_id instead",
         }
     else:
         results = await notification_manager.broadcast_notification(event)
@@ -307,6 +343,7 @@ async def create_scheduled_broadcast(
         message=request.message,
         scheduled_at=request.scheduled_at,
         created_by=x_username,
+        network_id=request.network_id,
         event_type=request.event_type,
         priority=request.priority,
     )
@@ -375,6 +412,25 @@ async def check_device_silenced(device_ip: str):
     return {"device_ip": device_ip, "silenced": is_silenced}
 
 
+# ==================== Global User Preferences (for Cartographer Up/Down) ====================
+
+@router.get("/global/preferences", response_model=GlobalUserPreferences)
+async def get_global_preferences(
+    x_user_id: str = Header(..., description="User ID from auth service"),
+):
+    """Get global notification preferences for the current user (Cartographer Up/Down)"""
+    return notification_manager.get_global_preferences(x_user_id)
+
+
+@router.put("/global/preferences", response_model=GlobalUserPreferences)
+async def update_global_preferences(
+    update: GlobalUserPreferencesUpdate,
+    x_user_id: str = Header(..., description="User ID from auth service"),
+):
+    """Update global notification preferences for the current user (Cartographer Up/Down)"""
+    return notification_manager.update_global_preferences(x_user_id, update)
+
+
 # ==================== Cartographer Service Status Notifications ====================
 
 @router.post("/service-status/up")
@@ -397,6 +453,7 @@ async def notify_cartographer_up(
         priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_UP),
         title="Cartographer is Back Online",
         message=message or f"{downtime_str}The Cartographer monitoring service is now operational.",
+        network_id=None,  # Global notification, not network-specific
         details={
             "service": "cartographer",
             "downtime_minutes": downtime_minutes,
@@ -404,7 +461,7 @@ async def notify_cartographer_up(
         },
     )
     
-    results = await notification_manager.broadcast_notification(event)
+    results = await notification_manager.broadcast_global_notification(event)
     return {
         "success": True,
         "users_notified": len(results),
@@ -433,6 +490,7 @@ async def notify_cartographer_down(
         priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_DOWN),
         title="Cartographer Service Alert",
         message=message or f"{services_str}The Cartographer monitoring service may be unavailable.",
+        network_id=None,  # Global notification, not network-specific
         details={
             "service": "cartographer",
             "affected_services": affected_services or [],
@@ -440,7 +498,7 @@ async def notify_cartographer_down(
         },
     )
     
-    results = await notification_manager.broadcast_notification(event)
+    results = await notification_manager.broadcast_global_notification(event)
     return {
         "success": True,
         "users_notified": len(results),

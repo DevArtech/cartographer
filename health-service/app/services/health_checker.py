@@ -62,7 +62,8 @@ class HealthChecker:
         self._history_max_size = 1440  # 24 hours at 1-minute intervals
         
         # Background monitoring state
-        self._monitored_devices: Set[str] = set()
+        # Map device IP to network_id for multi-tenant support
+        self._monitored_devices: Dict[str, int] = {}  # IP -> network_id
         self._monitoring_config = MonitoringConfig()
         self._monitoring_task: Optional[asyncio.Task] = None
         self._last_check_time: Optional[datetime] = None
@@ -446,9 +447,12 @@ class HealthChecker:
         self._metrics_cache[ip] = metrics
         
         # Report to notification service (async, fire-and-forget to not slow down checks)
+        # Get network_id if device is being monitored
+        network_id = self._monitored_devices.get(ip)
         asyncio.create_task(report_health_check(
             device_ip=ip,
             success=ping_result.success,
+            network_id=network_id,
             latency_ms=ping_result.avg_latency_ms,
             packet_loss=ping_result.packet_loss_percent / 100.0 if ping_result.packet_loss_percent else None,
             device_name=dns_result.resolved_hostname if dns_result and dns_result.resolved_hostname else None,
@@ -784,25 +788,35 @@ class HealthChecker:
     
     # ==================== Background Monitoring ====================
     
-    def register_devices(self, ips: List[str]) -> None:
-        """Register devices to be monitored passively"""
-        self._monitored_devices.update(ips)
-        logger.info(f"Registered {len(ips)} devices for monitoring. Total: {len(self._monitored_devices)}")
+    def register_devices(self, devices: Dict[str, int]) -> None:
+        """
+        Register devices to be monitored passively.
+        
+        Args:
+            devices: Dict mapping device IP to network_id
+        """
+        self._monitored_devices.update(devices)
+        logger.info(f"Registered {len(devices)} devices for monitoring. Total: {len(self._monitored_devices)}")
     
     def unregister_devices(self, ips: List[str]) -> None:
         """Unregister devices from passive monitoring"""
         for ip in ips:
-            self._monitored_devices.discard(ip)
+            self._monitored_devices.pop(ip, None)
         logger.info(f"Unregistered {len(ips)} devices. Remaining: {len(self._monitored_devices)}")
     
-    def set_monitored_devices(self, ips: List[str]) -> None:
-        """Set the full list of devices to monitor (replaces existing)"""
-        self._monitored_devices = set(ips)
+    def set_monitored_devices(self, devices: Dict[str, int]) -> None:
+        """
+        Set the full list of devices to monitor (replaces existing).
+        
+        Args:
+            devices: Dict mapping device IP to network_id
+        """
+        self._monitored_devices = devices.copy()
         logger.info(f"Set {len(self._monitored_devices)} devices for monitoring")
     
     def get_monitored_devices(self) -> List[str]:
-        """Get list of currently monitored devices"""
-        return list(self._monitored_devices)
+        """Get list of currently monitored device IPs"""
+        return list(self._monitored_devices.keys())
     
     def get_monitoring_config(self) -> MonitoringConfig:
         """Get current monitoring configuration"""
@@ -825,7 +839,7 @@ class HealthChecker:
             enabled=self._monitoring_config.enabled,
             check_interval_seconds=self._monitoring_config.check_interval_seconds,
             include_dns=self._monitoring_config.include_dns,
-            monitored_devices=list(self._monitored_devices),
+            monitored_devices=list(self._monitored_devices.keys()),
             last_check=self._last_check_time,
             next_check=self._next_check_time
         )

@@ -263,35 +263,71 @@ async def reset_all_ml_data(user: AuthenticatedUser = Depends(require_owner)):
 # ==================== Global Notifications (Owner Only) ====================
 
 @router.post("/broadcast")
-async def send_global_notification(request: Request, user: AuthenticatedUser = Depends(require_owner)):
+async def send_global_notification(
+    request: Request, 
+    user: AuthenticatedUser = Depends(require_owner)
+):
     """
-    Send a global notification to all users. Owner only.
+    Send a network-scoped broadcast notification to all users in a network. Owner only.
     
     Expects a JSON body with:
+    - network_id: int - The network to broadcast to (required)
     - title: str - The notification title
     - message: str - The notification message
     - event_type: str - The type of notification (e.g., 'scheduled_maintenance', 'system_status')
     - priority: str - The priority level ('low', 'medium', 'high', 'critical')
     """
     body = await request.json()
+    network_id = body.get("network_id")
+    
+    if not network_id:
+        raise HTTPException(status_code=400, detail="network_id is required")
     
     # Build the network event for the notification service
     event = {
-        "event_id": f"global-{user.user_id}-{body.get('title', 'notification')[:20]}",
+        "event_id": f"broadcast-{user.user_id}-{network_id}-{body.get('title', 'notification')[:20]}",
         "event_type": body.get("event_type", "scheduled_maintenance"),
         "priority": body.get("priority", "medium"),
         "title": body.get("title", "System Notification"),
         "message": body.get("message", ""),
+        "network_id": network_id,
         "details": {
             "sent_by": user.username,
-            "is_global": True,
+            "is_broadcast": True,
         }
     }
     
+    # Send to the specific network
+    # TODO: Enhance to send to all network members when backend integration is available
+    # For now, this sends to the network's preferences (owner's email/discord)
     return await proxy_request(
         "POST",
-        "/send-notification",
+        f"/networks/{network_id}/send-notification",
         json_body=event,
+    )
+
+
+# ==================== Global Preferences (Cartographer Up/Down) ====================
+
+@router.get("/global/preferences")
+async def get_global_preferences(user: AuthenticatedUser = Depends(require_auth)):
+    """Get global notification preferences for the current user (Cartographer Up/Down)."""
+    return await proxy_request(
+        "GET",
+        "/global/preferences",
+        headers={"X-User-Id": user.user_id}
+    )
+
+
+@router.put("/global/preferences")
+async def update_global_preferences(request: Request, user: AuthenticatedUser = Depends(require_auth)):
+    """Update global notification preferences for the current user (Cartographer Up/Down)."""
+    body = await request.json()
+    return await proxy_request(
+        "PUT",
+        "/global/preferences",
+        json_body=body,
+        headers={"X-User-Id": user.user_id}
     )
 
 

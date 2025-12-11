@@ -754,13 +754,13 @@ function getSilencedDeviceIPs(root: TreeNode): string[] {
 
 // Register devices for health monitoring whenever parsed changes
 watch(() => parsed.value?.root, async (root) => {
-	if (root) {
+	if (root && props.networkId) {
 		const ips = getMonitoredDeviceIPs(root);
 		
 		if (ips.length > 0) {
-			await registerDevices(ips);
+			await registerDevices(ips, props.networkId);
 			hasRegisteredDevices = true;
-			console.log(`[Health] Registered ${ips.length} device IPs for monitoring`);
+			console.log(`[Health] Registered ${ips.length} device IPs for monitoring (network ${props.networkId})`);
 		}
 		
 		// Sync silenced devices with notification service
@@ -785,12 +785,12 @@ onMounted(async () => {
 	
 	// If we already have parsed data (from MapControls loading saved layout),
 	// register devices now
-	if (parsed.value?.root && !hasRegisteredDevices) {
+	if (parsed.value?.root && !hasRegisteredDevices && props.networkId) {
 		const ips = getMonitoredDeviceIPs(parsed.value.root);
 		if (ips.length > 0) {
-			await registerDevices(ips);
+			await registerDevices(ips, props.networkId);
 			hasRegisteredDevices = true;
-			console.log(`[Health] Registered ${ips.length} device IPs for monitoring (on mount)`);
+			console.log(`[Health] Registered ${ips.length} device IPs for monitoring (on mount, network ${props.networkId})`);
 		}
 		
 		// Sync silenced devices with notification service on initial load
@@ -1149,7 +1149,9 @@ async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
 		console.log(`[Health] Total devices tracked by ML: ${ips.length}`, ips);
 		
 		// Send full device list to backend - ML anomaly detection tracks ALL devices
-		await registerDevices(ips, false);
+		if (props.networkId) {
+			await registerDevices(ips, props.networkId, false);
+		}
 		
 		// Update notification service silenced devices list
 		// This ensures the device is also excluded from notification tracking

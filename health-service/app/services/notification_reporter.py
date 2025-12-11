@@ -25,6 +25,7 @@ _previous_states: Dict[str, str] = {}
 async def report_health_check(
     device_ip: str,
     success: bool,
+    network_id: Optional[int] = None,
     latency_ms: Optional[float] = None,
     packet_loss: Optional[float] = None,
     device_name: Optional[str] = None,
@@ -36,7 +37,18 @@ async def report_health_check(
     - ML-based anomaly detection
     - Automatic notification dispatch
     
+    Args:
+        device_ip: IP address of the device
+        success: Whether the health check succeeded
+        network_id: The network this device belongs to (required for notifications)
+        latency_ms: Optional latency measurement
+        packet_loss: Optional packet loss percentage
+        device_name: Optional device name
+    
     Returns True if successfully reported, False otherwise.
+    
+    Note: If network_id is None, the notification service will not send notifications
+    but will still train the ML model.
     """
     global _previous_states
     
@@ -47,11 +59,17 @@ async def report_health_check(
     current_state = "online" if success else "offline"
     _previous_states[device_ip] = current_state
     
+    # Skip reporting if no network_id (device not part of a monitored network)
+    if network_id is None:
+        logger.debug(f"Skipping notification report for {device_ip} (no network_id)")
+        return False
+    
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             params = {
                 "device_ip": device_ip,
                 "success": success,
+                "network_id": network_id,
             }
             
             if latency_ms is not None:

@@ -144,14 +144,17 @@ async def register_devices(request: RegisterDevicesRequest):
     Register devices for passive monitoring.
     These devices will be checked periodically in the background.
     """
-    health_checker.set_monitored_devices(request.ips)
+    # Create mapping of IP to network_id
+    devices_map = {ip: request.network_id for ip in request.ips}
+    health_checker.set_monitored_devices(devices_map)
     
     # Sync with notification service so ML anomaly detection tracks only current devices
     await sync_devices_with_notification_service(request.ips)
     
     return {
         "message": f"Registered {len(request.ips)} devices for monitoring",
-        "devices": request.ips
+        "devices": request.ips,
+        "network_id": request.network_id
     }
 
 
@@ -164,7 +167,7 @@ async def get_monitored_devices():
 @router.delete("/monitoring/devices")
 async def clear_monitored_devices():
     """Clear all devices from monitoring"""
-    health_checker.set_monitored_devices([])
+    health_checker.set_monitored_devices({})
     
     # Sync with notification service to clear device tracking
     await sync_devices_with_notification_service([])

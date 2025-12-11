@@ -19,6 +19,8 @@ import uuid
 from ..models import (
     NotificationPreferences,
     NotificationPreferencesUpdate,
+    GlobalUserPreferences,
+    GlobalUserPreferencesUpdate,
     NetworkEvent,
     NotificationType,
     NotificationPriority,
@@ -44,6 +46,7 @@ logger = logging.getLogger(__name__)
 # Persistence
 DATA_DIR = Path(os.environ.get("NOTIFICATION_DATA_DIR", "/app/data"))
 PREFERENCES_FILE = DATA_DIR / "notification_preferences.json"
+GLOBAL_PREFERENCES_FILE = DATA_DIR / "global_user_preferences.json"
 HISTORY_FILE = DATA_DIR / "notification_history.json"
 SCHEDULED_FILE = DATA_DIR / "scheduled_broadcasts.json"
 SILENCED_DEVICES_FILE = DATA_DIR / "silenced_devices.json"
@@ -59,14 +62,16 @@ class NotificationManager:
     
     def __init__(self):
         self._preferences: Dict[str, NotificationPreferences] = {}
+        self._global_preferences: Dict[str, GlobalUserPreferences] = {}  # user_id -> preferences
         self._history: deque = deque(maxlen=MAX_HISTORY_SIZE)
-        self._rate_limits: Dict[str, deque] = {}  # user_id -> deque of timestamps
+        self._rate_limits: Dict[str, deque] = {}  # network_id -> deque of timestamps
         self._scheduled_broadcasts: Dict[str, ScheduledBroadcast] = {}
         self._scheduler_task: Optional[asyncio.Task] = None
         self._silenced_devices: set = set()  # Device IPs with monitoring disabled
         
         # Load persisted data
         self._load_preferences()
+        self._load_global_preferences()
         self._load_history()
         self._load_scheduled_broadcasts()
         self._load_silenced_devices()
@@ -320,7 +325,13 @@ class NotificationManager:
                 await self._send_scheduled_broadcast(broadcast_id)
     
     async def _send_scheduled_broadcast(self, broadcast_id: str):
-        """Send a scheduled broadcast"""
+        """
+        Send a scheduled broadcast to all users in the network.
+        
+        Note: Currently sends to the network's preferences (owner's email/discord).
+        TODO: Enhance to send to all network members (owner + users with permissions)
+        when backend integration is available to query network membership.
+        """
         broadcast = self._scheduled_broadcasts.get(broadcast_id)
         if not broadcast:
             return
@@ -333,6 +344,7 @@ class NotificationManager:
                 priority=broadcast.priority,
                 title=broadcast.title,
                 message=broadcast.message,
+                network_id=broadcast.network_id,
                 details={
                     "scheduled_by": broadcast.created_by,
                     "scheduled_at": broadcast.scheduled_at.isoformat(),
@@ -340,15 +352,16 @@ class NotificationManager:
                 }
             )
             
-            # Broadcast to all users
-            results = await self.broadcast_notification(event)
+            # Send to the specific network (scoped to network members)
+            # TODO: Enhance to send to all network members when backend integration is available
+            records = await self.send_notification_to_network(broadcast.network_id, event)
             
             # Update broadcast status
             broadcast.status = ScheduledBroadcastStatus.SENT
             broadcast.sent_at = datetime.utcnow()
-            broadcast.users_notified = len(results)
+            broadcast.users_notified = len(records)
             
-            logger.info(f"Scheduled broadcast {broadcast_id} sent to {len(results)} users")
+            logger.info(f"Scheduled broadcast {broadcast_id} sent to network {broadcast.network_id} ({len(records)} channels)")
             
         except Exception as e:
             broadcast.status = ScheduledBroadcastStatus.FAILED
@@ -365,10 +378,22 @@ class NotificationManager:
         message: str,
         scheduled_at: datetime,
         created_by: str,
+        network_id: int,
         event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE,
         priority: NotificationPriority = NotificationPriority.MEDIUM,
     ) -> ScheduledBroadcast:
-        """Create a new scheduled broadcast"""
+        """
+        Create a new scheduled broadcast for a specific network.
+        
+        Args:
+            title: Broadcast title
+            message: Broadcast message
+            scheduled_at: When to send the broadcast
+            created_by: Username of the owner creating the broadcast
+            network_id: The network this broadcast belongs to (required)
+            event_type: Type of notification event
+            priority: Notification priority
+        """
         broadcast_id = str(uuid.uuid4())
         
         broadcast = ScheduledBroadcast(
@@ -377,6 +402,7 @@ class NotificationManager:
             message=message,
             event_type=event_type,
             priority=priority,
+            network_id=network_id,
             scheduled_at=scheduled_at,
             created_by=created_by,
         )
@@ -384,7 +410,7 @@ class NotificationManager:
         self._scheduled_broadcasts[broadcast_id] = broadcast
         self._save_scheduled_broadcasts()
         
-        logger.info(f"Scheduled broadcast created: {broadcast_id} for {scheduled_at}")
+        logger.info(f"Scheduled broadcast created: {broadcast_id} for network {network_id} at {scheduled_at}")
         return broadcast
     
     def get_scheduled_broadcasts(
@@ -501,6 +527,104 @@ class NotificationManager:
             int(network_id) for network_id, prefs in self._preferences.items()
             if prefs.enabled and (prefs.email.enabled or prefs.discord.enabled)
         ]
+    
+    # ==================== Global User Preferences Management ====================
+    
+    def _save_global_preferences(self):
+        """Save global preferences to disk"""
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            
+            data = {
+                user_id: prefs.model_dump(mode="json")
+                for user_id, prefs in self._global_preferences.items()
+            }
+            
+            with open(GLOBAL_PREFERENCES_FILE, 'w') as f:
+                json.dump(data, f, indent=2, default=str)
+            
+            logger.debug(f"Saved {len(self._global_preferences)} global user preferences")
+        except Exception as e:
+            logger.error(f"Failed to save global preferences: {e}")
+    
+    def _load_global_preferences(self):
+        """Load global preferences from disk"""
+        try:
+            if not GLOBAL_PREFERENCES_FILE.exists():
+                return
+            
+            with open(GLOBAL_PREFERENCES_FILE, 'r') as f:
+                data = json.load(f)
+            
+            for user_id, prefs_data in data.items():
+                # Parse datetime strings
+                if "created_at" in prefs_data and isinstance(prefs_data["created_at"], str):
+                    prefs_data["created_at"] = datetime.fromisoformat(prefs_data["created_at"].replace("Z", "+00:00"))
+                if "updated_at" in prefs_data and isinstance(prefs_data["updated_at"], str):
+                    prefs_data["updated_at"] = datetime.fromisoformat(prefs_data["updated_at"].replace("Z", "+00:00"))
+                
+                try:
+                    self._global_preferences[user_id] = GlobalUserPreferences(**prefs_data)
+                except Exception as e:
+                    logger.warning(f"Failed to load global preferences for user {user_id}: {e}")
+                    continue
+            
+            logger.info(f"Loaded {len(self._global_preferences)} global user preferences")
+        except Exception as e:
+            logger.error(f"Failed to load global preferences: {e}")
+    
+    def get_global_preferences(self, user_id: str) -> GlobalUserPreferences:
+        """Get global notification preferences for a user (creates default if not exists)"""
+        if user_id not in self._global_preferences:
+            self._global_preferences[user_id] = GlobalUserPreferences(user_id=user_id)
+            self._save_global_preferences()
+        
+        return self._global_preferences[user_id]
+    
+    def update_global_preferences(self, user_id: str, update: GlobalUserPreferencesUpdate) -> GlobalUserPreferences:
+        """Update global notification preferences for a user"""
+        prefs = self.get_global_preferences(user_id)
+        
+        # Get current preferences as dict
+        current_data = prefs.model_dump()
+        
+        # Get update data (only fields that were set)
+        update_data = update.model_dump(exclude_unset=True)
+        
+        # Merge update into current data
+        for key, value in update_data.items():
+            if value is not None:
+                current_data[key] = value
+        
+        # Update timestamp
+        current_data['updated_at'] = datetime.utcnow()
+        
+        # Recreate the preferences model with validated data
+        self._global_preferences[user_id] = GlobalUserPreferences(**current_data)
+        self._save_global_preferences()
+        
+        return self._global_preferences[user_id]
+    
+    def get_all_users_with_global_notifications_enabled(self, event_type: NotificationType) -> List[str]:
+        """
+        Get list of user IDs who have global notifications enabled for a specific event type.
+        
+        Only returns users who have:
+        - cartographer_up_enabled=True for CARTOGRAPHER_UP events
+        - cartographer_down_enabled=True for CARTOGRAPHER_DOWN events
+        - email_address configured
+        """
+        if event_type == NotificationType.CARTOGRAPHER_UP:
+            return [
+                user_id for user_id, prefs in self._global_preferences.items()
+                if prefs.cartographer_up_enabled and prefs.email_address
+            ]
+        elif event_type == NotificationType.CARTOGRAPHER_DOWN:
+            return [
+                user_id for user_id, prefs in self._global_preferences.items()
+                if prefs.cartographer_down_enabled and prefs.email_address
+            ]
+        return []
     
     # ==================== Rate Limiting ====================
     
@@ -637,30 +761,34 @@ class NotificationManager:
         
         return True, ""
     
-    async def send_notification(
+    async def send_notification_to_network(
         self,
-        user_id: str,
+        network_id: int,
         event: NetworkEvent,
         force: bool = False,
     ) -> List[NotificationRecord]:
         """
-        Send a notification to a user across all their enabled channels.
+        Send a notification to a network using the network's preferences.
         
         Args:
-            user_id: The user to notify
+            network_id: The network to notify
             event: The network event to notify about
             force: If True, bypass preference checks (for test notifications)
         
         Returns:
             List of NotificationRecord for each channel attempted
         """
-        prefs = self.get_preferences(user_id)
+        prefs = self.get_preferences(network_id)
         records = []
+        
+        # Set network_id on event if not already set
+        if event.network_id is None:
+            event.network_id = network_id
         
         if not force:
             should_notify, reason = self._should_notify(prefs, event)
             if not should_notify:
-                logger.info(f"Skipping {event.event_type.value} notification for {user_id}: {reason}")
+                logger.info(f"Skipping {event.event_type.value} notification for network {network_id}: {reason}")
                 return records
         
         notification_id = str(uuid.uuid4())
@@ -672,7 +800,7 @@ class NotificationManager:
                 event=event,
                 notification_id=notification_id,
             )
-            record.user_id = user_id
+            record.network_id = network_id
             records.append(record)
             self._history.append(record)
         
@@ -682,20 +810,40 @@ class NotificationManager:
                 config=prefs.discord,
                 event=event,
                 notification_id=notification_id,
-                user_id=user_id,
+                user_id=prefs.owner_user_id or "",
             )
+            record.network_id = network_id
             records.append(record)
             self._history.append(record)
         
         # Record for rate limiting
         if records and not force:
-            self._record_rate_limit(user_id)
+            self._record_rate_limit(network_id)
         
         # Save history periodically
         if len(self._history) % 50 == 0:
             self._save_history()
         
         return records
+    
+    async def send_notification(
+        self,
+        network_id: int,
+        event: NetworkEvent,
+        force: bool = False,
+    ) -> List[NotificationRecord]:
+        """
+        Send a notification to a network (alias for send_notification_to_network for backwards compatibility).
+        
+        Args:
+            network_id: The network to notify
+            event: The network event to notify about
+            force: If True, bypass preference checks (for test notifications)
+        
+        Returns:
+            List of NotificationRecord for each channel attempted
+        """
+        return await self.send_notification_to_network(network_id, event, force)
     
     async def broadcast_notification(self, event: NetworkEvent) -> Dict[str, List[NotificationRecord]]:
         """
@@ -710,6 +858,72 @@ class NotificationManager:
             if records:
                 results[str(network_id)] = records
         
+        return results
+    
+    async def broadcast_global_notification(self, event: NetworkEvent) -> Dict[str, List[NotificationRecord]]:
+        """
+        Send a global notification (Cartographer Up/Down) to all users who have global preferences enabled.
+        
+        This is separate from network-scoped notifications and uses global user preferences.
+        Only sends via email (global preferences don't support Discord).
+        
+        Returns a dict of user_id -> list of records.
+        """
+        results = {}
+        
+        # Only handle Cartographer Up/Down events
+        if event.event_type not in (NotificationType.CARTOGRAPHER_UP, NotificationType.CARTOGRAPHER_DOWN):
+            logger.warning(f"broadcast_global_notification called for non-global event type: {event.event_type}")
+            return results
+        
+        # Get all users who have this notification type enabled
+        user_ids = self.get_all_users_with_global_notifications_enabled(event.event_type)
+        
+        if not user_ids:
+            logger.debug(f"No users have global notifications enabled for {event.event_type.value}")
+            return results
+        
+        notification_id = str(uuid.uuid4())
+        
+        # Send email to each user
+        for user_id in user_ids:
+            prefs = self._global_preferences[user_id]
+            
+            if not prefs.email_address:
+                continue
+            
+            try:
+                record = await send_notification_email(
+                    to_email=prefs.email_address,
+                    event=event,
+                    notification_id=notification_id,
+                )
+                # Use network_id=0 for global notifications (not network-specific)
+                record.network_id = 0
+                results[user_id] = [record]
+                self._history.append(record)
+            except Exception as e:
+                logger.error(f"Failed to send global notification to user {user_id}: {e}")
+                # Create a failed record
+                record = NotificationRecord(
+                    notification_id=notification_id,
+                    event_id=event.event_id,
+                    network_id=0,
+                    channel=NotificationChannel.EMAIL,
+                    success=False,
+                    error_message=str(e),
+                    title=event.title,
+                    message=event.message,
+                    priority=event.priority,
+                )
+                results[user_id] = [record]
+                self._history.append(record)
+        
+        # Save history periodically
+        if len(self._history) % 50 == 0:
+            self._save_history()
+        
+        logger.info(f"Broadcasted global notification to {len(results)} users: {event.title}")
         return results
     
     async def send_test_notification(
@@ -833,6 +1047,7 @@ class NotificationManager:
         self,
         device_ip: str,
         success: bool,
+        network_id: int,
         latency_ms: Optional[float] = None,
         packet_loss: Optional[float] = None,
         device_name: Optional[str] = None,
@@ -843,6 +1058,15 @@ class NotificationManager:
         
         This should be called after each health check to train the ML model
         and potentially send notifications.
+        
+        Args:
+            device_ip: IP address of the device
+            success: Whether the health check succeeded
+            network_id: The network this device belongs to
+            latency_ms: Optional latency measurement
+            packet_loss: Optional packet loss percentage
+            device_name: Optional device name
+            previous_state: Optional previous state (online/offline)
         
         Note: Devices with monitoring disabled (silenced) will still train the
         ML model but will not trigger notifications.
@@ -862,9 +1086,15 @@ class NotificationManager:
         )
         
         if event and not is_silenced:
-            # Broadcast to all users who should receive this notification
-            results = await self.broadcast_notification(event)
-            logger.info(f"Broadcasted notification to {len(results)} users: {event.title}")
+            # Set network_id on the event
+            event.network_id = network_id
+            
+            # Send notification only to the specific network
+            records = await self.send_notification_to_network(network_id, event)
+            if records:
+                logger.info(f"Sent notification to network {network_id} for device {device_ip}: {event.title}")
+            else:
+                logger.debug(f"No notifications sent for network {network_id} (preferences may have filtered it out)")
         elif event and is_silenced:
             logger.debug(f"Skipping notification for silenced device {device_ip}: {event.title}")
 

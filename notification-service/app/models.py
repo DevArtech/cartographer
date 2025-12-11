@@ -388,6 +388,7 @@ class ScheduledBroadcast(BaseModel):
     message: str
     event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE
     priority: NotificationPriority = NotificationPriority.MEDIUM
+    network_id: int  # The network this broadcast belongs to (required)
     scheduled_at: datetime
     created_at: datetime = Field(default_factory=datetime.utcnow)
     created_by: str  # Username of the owner who created it
@@ -403,6 +404,7 @@ class ScheduledBroadcastCreate(BaseModel):
     message: str
     event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE
     priority: NotificationPriority = NotificationPriority.MEDIUM
+    network_id: int  # The network this broadcast belongs to (required)
     scheduled_at: datetime
 
 
@@ -455,4 +457,23 @@ class DiscordUserInfo(BaseModel):
     discriminator: Optional[str] = None
     avatar_url: Optional[str] = None
     email: Optional[str] = None
+
+
+# ==================== Global User Preferences (for Cartographer Up/Down) ====================
+
+class GlobalUserPreferences(BaseModel):
+    """Global notification preferences for app-wide notifications (Cartographer Up/Down)"""
+    user_id: str
+    email_address: Optional[str] = None
+    cartographer_up_enabled: bool = True
+    cartographer_down_enabled: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class GlobalUserPreferencesUpdate(BaseModel):
+    """Request to update global user preferences"""
+    email_address: Optional[str] = None
+    cartographer_up_enabled: Optional[bool] = None
+    cartographer_down_enabled: Optional[bool] = None
 

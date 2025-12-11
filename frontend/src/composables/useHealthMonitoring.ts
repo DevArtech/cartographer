@@ -31,11 +31,14 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 export function useHealthMonitoring() {
 	/**
 	 * Register devices for passive monitoring and trigger immediate check
+	 * @param ips - List of device IP addresses
+	 * @param networkId - The network these devices belong to (required)
+	 * @param triggerCheck - Whether to trigger an immediate check after registration
 	 */
-	async function registerDevices(ips: string[], triggerCheck = true): Promise<void> {
+	async function registerDevices(ips: string[], networkId: number, triggerCheck = true): Promise<void> {
 		try {
-			console.log(`[Health] Sending ${ips.length} IPs to backend for monitoring:`, ips);
-			const response = await axios.post('/api/health/monitoring/devices', { ips });
+			console.log(`[Health] Sending ${ips.length} IPs to backend for monitoring (network ${networkId}):`, ips);
+			const response = await axios.post('/api/health/monitoring/devices', { ips, network_id: networkId });
 			console.log(`[Health] Backend response:`, response.data);
 			
 			// Trigger an immediate check so we have data right away

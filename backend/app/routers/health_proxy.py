@@ -95,8 +95,17 @@ async def check_dns(ip: str, user: AuthenticatedUser = Depends(require_auth)):
 
 @router.post("/monitoring/devices")
 async def register_devices(request: Request, user: AuthenticatedUser = Depends(require_write_access)):
-    """Proxy register devices for monitoring. Requires write access."""
+    """
+    Proxy register devices for monitoring. Requires write access.
+    
+    Expects JSON body with:
+    - ips: List[str] - Device IP addresses
+    - network_id: int - The network these devices belong to (required)
+    """
     body = await request.json()
+    # Validate network_id is present
+    if "network_id" not in body:
+        raise HTTPException(status_code=400, detail="network_id is required")
     return await proxy_request("POST", "/monitoring/devices", json_body=body)
 
 
