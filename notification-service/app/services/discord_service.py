@@ -384,8 +384,13 @@ async def send_discord_notification(
     notification_id: str,
     user_id: str = "",
 ) -> NotificationRecord:
-    """Convenience function to send Discord notification"""
-    return await discord_service.send_notification(config, event, notification_id, user_id)
+    """
+    Convenience function to send Discord notification.
+    
+    Note: user_id parameter is accepted for API compatibility but is not used.
+    The Discord service uses config.discord_user_id from the config instead.
+    """
+    return await discord_service.send_notification(config, event, notification_id)
 
 
 async def send_test_discord(config: DiscordConfig) -> Dict[str, Any]:
