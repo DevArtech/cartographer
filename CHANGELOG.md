@@ -5,6 +5,13 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.5.10](https://github.com/devartech/cartographer/compare/v0.5.9...v0.5.10) (2025-12-11)
+
+
+### 🐛 Bug Fixes
+
+* test fixes v2 ([23daf4b](https://github.com/devartech/cartographer/commit/23daf4bfdb35e3d462e67579313273b318a2a41d))
+
 ### [0.5.9](https://github.com/devartech/cartographer/compare/v0.5.8...v0.5.9) (2025-12-11)
 
 
