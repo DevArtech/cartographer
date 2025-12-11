@@ -893,6 +893,10 @@ const detectedTimezone = computed(() => {
 	}
 });
 
+const props = defineProps<{
+	networkId: number;
+}>();
+
 defineEmits<{
 	(e: "close"): void;
 }>();
@@ -913,7 +917,7 @@ const {
 	getScheduledBroadcasts,
 	scheduleBroadcast,
 	cancelScheduledBroadcast,
-} = useNotifications();
+} = useNotifications(props.networkId);
 
 // State
 const preferences = ref<NotificationPreferences | null>(null);

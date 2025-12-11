@@ -45,7 +45,9 @@ export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
 export type NotificationTypePriorityOverrides = Partial<Record<NotificationType, NotificationPriority>>;
 
 export interface NotificationPreferences {
-  user_id: string;
+  network_id: number;
+  network_name?: string;
+  owner_user_id?: string;
   enabled: boolean;
   email: EmailConfig;
   discord: DiscordConfig;
@@ -136,16 +138,33 @@ export interface ScheduledBroadcastResponse {
 
 const API_BASE = '/api/notifications';
 
-export function useNotifications() {
+export function useNotifications(networkId?: number) {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  const currentNetworkId = ref<number | undefined>(networkId);
 
-  // Get notification preferences
-  async function getPreferences(): Promise<NotificationPreferences> {
+  // Set the network ID for subsequent calls
+  function setNetworkId(id: number) {
+    currentNetworkId.value = id;
+  }
+
+  // Get network-specific API path
+  function getNetworkPath(): string {
+    if (!currentNetworkId.value) {
+      throw new Error('Network ID is required for notification operations');
+    }
+    return `${API_BASE}/networks/${currentNetworkId.value}`;
+  }
+
+  // Get notification preferences for a network
+  async function getPreferences(netId?: number): Promise<NotificationPreferences> {
+    const id = netId ?? currentNetworkId.value;
+    if (!id) throw new Error('Network ID is required');
+    
     isLoading.value = true;
     error.value = null;
     try {
-      const response = await axios.get<NotificationPreferences>(`${API_BASE}/preferences`);
+      const response = await axios.get<NotificationPreferences>(`${API_BASE}/networks/${id}/preferences`);
       return response.data;
     } catch (e: any) {
       error.value = e.response?.data?.detail || e.message;
@@ -155,14 +174,18 @@ export function useNotifications() {
     }
   }
 
-  // Update notification preferences
+  // Update notification preferences for a network
   // Note: Does not set isLoading to avoid UI flicker/scroll reset during background saves
   async function updatePreferences(
-    update: Partial<NotificationPreferences>
+    update: Partial<NotificationPreferences>,
+    netId?: number
   ): Promise<NotificationPreferences> {
+    const id = netId ?? currentNetworkId.value;
+    if (!id) throw new Error('Network ID is required');
+    
     error.value = null;
     try {
-      const response = await axios.put<NotificationPreferences>(`${API_BASE}/preferences`, update);
+      const response = await axios.put<NotificationPreferences>(`${API_BASE}/networks/${id}/preferences`, update);
       return response.data;
     } catch (e: any) {
       error.value = e.response?.data?.detail || e.message;
@@ -202,18 +225,25 @@ export function useNotifications() {
     return response.data.invite_url;
   }
 
-  // Send test notification
+  // Send test notification for a network
   async function sendTestNotification(
     channel: 'email' | 'discord',
-    message?: string
+    message?: string,
+    netId?: number
   ): Promise<TestNotificationResult> {
-    const response = await axios.post<TestNotificationResult>(`${API_BASE}/test`, { channel, message });
+    const id = netId ?? currentNetworkId.value;
+    if (!id) throw new Error('Network ID is required');
+    
+    const response = await axios.post<TestNotificationResult>(`${API_BASE}/networks/${id}/test`, { channel, message });
     return response.data;
   }
 
-  // Get notification stats
-  async function getStats(): Promise<NotificationStats> {
-    const response = await axios.get<NotificationStats>(`${API_BASE}/stats`);
+  // Get notification stats for a network
+  async function getStats(netId?: number): Promise<NotificationStats> {
+    const id = netId ?? currentNetworkId.value;
+    if (!id) throw new Error('Network ID is required');
+    
+    const response = await axios.get<NotificationStats>(`${API_BASE}/networks/${id}/stats`);
     return response.data;
   }
 
@@ -310,6 +340,8 @@ export function useNotifications() {
   return {
     isLoading,
     error,
+    currentNetworkId,
+    setNetworkId,
     getPreferences,
     updatePreferences,
     getServiceStatus,

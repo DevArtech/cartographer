@@ -37,7 +37,13 @@
 		>
 			<!-- User Menu Slot -->
 			<template #user-menu>
-				<UserMenu @logout="onLogout" @manageUsers="showUserManagement = true" @notifications="showNotificationSettings = true" @updates="showUpdateSettings = true" />
+				<UserMenu 
+					:showNotifications="!!props.networkId"
+					@logout="onLogout" 
+					@manageUsers="showUserManagement = true" 
+					@notifications="showNotificationSettings = true" 
+					@updates="showUpdateSettings = true" 
+				/>
 			</template>
 		</MapControls>
 		<div class="flex flex-1 min-h-0">
@@ -470,7 +476,7 @@
 
 		<!-- User Management Modal -->
 		<UserManagement v-if="showUserManagement" @close="showUserManagement = false" />
-		<NotificationSettings v-if="showNotificationSettings" @close="showNotificationSettings = false" />
+		<NotificationSettings v-if="showNotificationSettings && props.networkId" :networkId="props.networkId" @close="showNotificationSettings = false" />
 		<UpdateSettings :isOpen="showUpdateSettings" @close="showUpdateSettings = false" />
 
 		<!-- Assistant Panel (Slide-in from right) -->
@@ -720,7 +726,8 @@ function stopResize() {
 const { applySavedPositions, clearPositions, exportLayout } = useMapLayout();
 const { parseNetworkMap } = useNetworkData();
 const { registerDevices, startPolling, stopPolling, cachedMetrics } = useHealthMonitoring();
-const { silenceDevice, unsilenceDevice, setSilencedDevices } = useNotifications();
+const notificationsApi = useNotifications(props.networkId);
+const { silenceDevice, unsilenceDevice, setSilencedDevices } = notificationsApi;
 
 // Track if we've done initial registration
 let hasRegisteredDevices = false;
