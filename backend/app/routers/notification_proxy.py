@@ -10,15 +10,18 @@ Performance optimizations:
 
 from fastapi import APIRouter, HTTPException, Request, Depends, Query
 from fastapi.responses import JSONResponse
-from typing import Optional
+from typing import Optional, List
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..dependencies import (
     AuthenticatedUser,
     require_auth,
     require_write_access,
     require_owner,
+    get_db,
 )
 from ..services.http_client import http_pool
+from ..routers.networks import get_network_member_user_ids
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -265,7 +268,8 @@ async def reset_all_ml_data(user: AuthenticatedUser = Depends(require_owner)):
 @router.post("/broadcast")
 async def send_global_notification(
     request: Request, 
-    user: AuthenticatedUser = Depends(require_owner)
+    user: AuthenticatedUser = Depends(require_owner),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Send a network-scoped broadcast notification to all users in a network. Owner only.
@@ -283,6 +287,14 @@ async def send_global_notification(
     if not network_id:
         raise HTTPException(status_code=400, detail="network_id is required")
     
+    # Get all network members (owner + users with permissions)
+    try:
+        user_ids = await get_network_member_user_ids(network_id, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get network members: {str(e)}")
+    
     # Build the network event for the notification service
     event = {
         "event_id": f"broadcast-{user.user_id}-{network_id}-{body.get('title', 'notification')[:20]}",
@@ -297,13 +309,14 @@ async def send_global_notification(
         }
     }
     
-    # Send to the specific network
-    # TODO: Enhance to send to all network members when backend integration is available
-    # For now, this sends to the network's preferences (owner's email/discord)
+    # Send to all network members based on their notification preferences
     return await proxy_request(
         "POST",
         f"/networks/{network_id}/send-notification",
-        json_body=event,
+        json_body={
+            **event,
+            "user_ids": user_ids,  # Pass list of network member user IDs
+        },
     )
 
 

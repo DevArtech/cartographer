@@ -136,6 +136,23 @@ export interface ScheduledBroadcastResponse {
   total_count: number;
 }
 
+// ==================== Global Preferences (Cartographer Up/Down) ====================
+
+export interface GlobalUserPreferences {
+  user_id: string;
+  email_address?: string;
+  cartographer_up_enabled: boolean;
+  cartographer_down_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GlobalUserPreferencesUpdate {
+  email_address?: string;
+  cartographer_up_enabled?: boolean;
+  cartographer_down_enabled?: boolean;
+}
+
 const API_BASE = '/api/notifications';
 
 export function useNotifications(networkId?: number) {
@@ -339,23 +356,6 @@ export function useNotifications(networkId?: number) {
       `${API_BASE}/silenced-devices/${encodeURIComponent(deviceIp)}`
     );
     return response.data.silenced;
-  }
-
-  // ==================== Global Preferences (Cartographer Up/Down) ====================
-
-  export interface GlobalUserPreferences {
-    user_id: string;
-    email_address?: string;
-    cartographer_up_enabled: boolean;
-    cartographer_down_enabled: boolean;
-    created_at: string;
-    updated_at: string;
-  }
-
-  export interface GlobalUserPreferencesUpdate {
-    email_address?: string;
-    cartographer_up_enabled?: boolean;
-    cartographer_down_enabled?: boolean;
   }
 
   // Get global notification preferences (Cartographer Up/Down)

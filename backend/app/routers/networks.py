@@ -83,6 +83,42 @@ async def get_network_with_access(
     return network, False, permission.role
 
 
+async def get_network_member_user_ids(
+    network_id: int,
+    db: AsyncSession,
+) -> List[str]:
+    """
+    Get all user IDs who have access to a network.
+    Returns a list of user IDs including:
+    - The network owner
+    - All users with viewer/editor permissions
+    """
+    # Fetch the network
+    result = await db.execute(select(Network).where(Network.id == network_id))
+    network = result.scalar_one_or_none()
+
+    if not network:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Network not found",
+        )
+
+    # Start with the owner
+    user_ids = [network.user_id]
+
+    # Add all users with permissions
+    perm_result = await db.execute(
+        select(NetworkPermission.user_id).where(
+            NetworkPermission.network_id == network_id
+        )
+    )
+    permission_user_ids = perm_result.scalars().all()
+    user_ids.extend(permission_user_ids)
+
+    # Remove duplicates (in case owner somehow has a permission entry)
+    return list(set(user_ids))
+
+
 # ============================================================================
 # Network CRUD
 # ============================================================================

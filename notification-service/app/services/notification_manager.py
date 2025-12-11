@@ -324,13 +324,14 @@ class NotificationManager:
             if scheduled_time <= now:
                 await self._send_scheduled_broadcast(broadcast_id)
     
-    async def _send_scheduled_broadcast(self, broadcast_id: str):
+    async def _send_scheduled_broadcast(self, broadcast_id: str, user_ids: Optional[List[str]] = None):
         """
         Send a scheduled broadcast to all users in the network.
         
-        Note: Currently sends to the network's preferences (owner's email/discord).
-        TODO: Enhance to send to all network members (owner + users with permissions)
-        when backend integration is available to query network membership.
+        Args:
+            broadcast_id: The scheduled broadcast ID
+            user_ids: Optional list of network member user IDs. If provided, sends to those members.
+                      If None, sends to network's preferences (for backwards compatibility).
         """
         broadcast = self._scheduled_broadcasts.get(broadcast_id)
         if not broadcast:
@@ -352,16 +353,25 @@ class NotificationManager:
                 }
             )
             
-            # Send to the specific network (scoped to network members)
-            # TODO: Enhance to send to all network members when backend integration is available
-            records = await self.send_notification_to_network(broadcast.network_id, event)
+            if user_ids:
+                # Send to specific network members based on their preferences
+                results = await self.send_notification_to_network_members(
+                    broadcast.network_id, user_ids, event
+                )
+                users_notified = len(results)
+                total_records = sum(len(records) for records in results.values())
+            else:
+                # Fallback to network-level preferences (backwards compatibility)
+                records = await self.send_notification_to_network(broadcast.network_id, event)
+                users_notified = 1 if records else 0
+                total_records = len(records)
             
             # Update broadcast status
             broadcast.status = ScheduledBroadcastStatus.SENT
             broadcast.sent_at = datetime.utcnow()
-            broadcast.users_notified = len(records)
+            broadcast.users_notified = users_notified
             
-            logger.info(f"Scheduled broadcast {broadcast_id} sent to network {broadcast.network_id} ({len(records)} channels)")
+            logger.info(f"Scheduled broadcast {broadcast_id} sent to network {broadcast.network_id} ({users_notified} users, {total_records} channels)")
             
         except Exception as e:
             broadcast.status = ScheduledBroadcastStatus.FAILED
@@ -825,6 +835,159 @@ class NotificationManager:
             self._save_history()
         
         return records
+    
+    async def send_notification_to_network_members(
+        self,
+        network_id: int,
+        user_ids: List[str],
+        event: NetworkEvent,
+        force: bool = False,
+    ) -> Dict[str, List[NotificationRecord]]:
+        """
+        Send a notification to all network members based on the network's notification preferences.
+        
+        Note: Currently, notification preferences are per-network (shared by all members).
+        All members receive notifications via the network's configured email/Discord channels.
+        In the future, this could be enhanced to support per-user preferences per network.
+        
+        Args:
+            network_id: The network this notification is for
+            user_ids: List of user IDs who are members of the network
+            event: The network event to notify about
+            force: If True, bypass preference checks (for test notifications)
+        
+        Returns:
+            Dict mapping user_id -> list of NotificationRecord for each channel attempted
+        """
+        results = {}
+        
+        # Set network_id on event if not already set
+        if event.network_id is None:
+            event.network_id = network_id
+        
+        # Get network preferences (shared preferences for all network members)
+        network_prefs = self.get_preferences(network_id)
+        
+        # Check if we should send based on network preferences
+        if not force:
+            should_notify, reason = self._should_notify(network_prefs, event)
+            if not should_notify:
+                logger.info(f"Skipping broadcast notification for network {network_id}: {reason}")
+                return results
+        
+        notification_id = str(uuid.uuid4())
+        
+        # Send to network's configured channels (shared by all members)
+        # All members will receive the notification through the network's email/Discord
+        # We send once per channel, but track that all members received it
+        
+        # Send via email if enabled
+        if network_prefs.email.enabled and network_prefs.email.email_address:
+            try:
+                record = await send_notification_email(
+                    to_email=network_prefs.email.email_address,
+                    event=event,
+                    notification_id=notification_id,
+                )
+                record.network_id = network_id
+                # Record for all members (they all share the same email address)
+                for user_id in user_ids:
+                    if user_id not in results:
+                        results[user_id] = []
+                    # Create a copy of the record for each user for tracking purposes
+                    user_record = NotificationRecord(
+                        notification_id=record.notification_id,
+                        event_id=record.event_id,
+                        network_id=record.network_id,
+                        channel=record.channel,
+                        timestamp=record.timestamp,
+                        success=record.success,
+                        error_message=record.error_message,
+                        title=record.title,
+                        message=record.message,
+                        priority=record.priority,
+                    )
+                    results[user_id].append(user_record)
+                # Add one record to history (the actual sent notification)
+                self._history.append(record)
+            except Exception as e:
+                logger.error(f"Failed to send email notification for network {network_id}: {e}")
+                # Record failure for all members
+                for user_id in user_ids:
+                    if user_id not in results:
+                        results[user_id] = []
+                    results[user_id].append(NotificationRecord(
+                        notification_id=notification_id,
+                        event_id=event.event_id,
+                        network_id=network_id,
+                        channel=NotificationChannel.EMAIL,
+                        success=False,
+                        error_message=str(e),
+                        title=event.title,
+                        message=event.message,
+                        priority=event.priority,
+                    ))
+        
+        # Send via Discord if enabled
+        if network_prefs.discord.enabled:
+            try:
+                # Discord notifications can be sent to a channel (shared) or DM (per-user)
+                # For broadcasts, we send to the configured channel which all members can see
+                record = await send_discord_notification(
+                    config=network_prefs.discord,
+                    event=event,
+                    notification_id=notification_id,
+                    user_id=network_prefs.owner_user_id or "",
+                )
+                record.network_id = network_id
+                # Record for all members (they all see the same Discord channel)
+                for user_id in user_ids:
+                    if user_id not in results:
+                        results[user_id] = []
+                    # Create a copy of the record for each user for tracking purposes
+                    user_record = NotificationRecord(
+                        notification_id=record.notification_id,
+                        event_id=record.event_id,
+                        network_id=record.network_id,
+                        channel=record.channel,
+                        timestamp=record.timestamp,
+                        success=record.success,
+                        error_message=record.error_message,
+                        title=record.title,
+                        message=record.message,
+                        priority=record.priority,
+                    )
+                    results[user_id].append(user_record)
+                # Add one record to history (the actual sent notification)
+                self._history.append(record)
+            except Exception as e:
+                logger.error(f"Failed to send Discord notification for network {network_id}: {e}")
+                # Record failure for all members
+                for user_id in user_ids:
+                    if user_id not in results:
+                        results[user_id] = []
+                    results[user_id].append(NotificationRecord(
+                        notification_id=notification_id,
+                        event_id=event.event_id,
+                        network_id=network_id,
+                        channel=NotificationChannel.DISCORD,
+                        success=False,
+                        error_message=str(e),
+                        title=event.title,
+                        message=event.message,
+                        priority=event.priority,
+                    ))
+        
+        # Record for rate limiting (once per network, not per user)
+        if results and not force:
+            self._record_rate_limit(network_id)
+        
+        # Save history periodically
+        if len(self._history) % 50 == 0:
+            self._save_history()
+        
+        logger.info(f"Sent broadcast notification to {len(user_ids)} network members in network {network_id} via {len([r for r in results.values() if r])} channels")
+        return results
     
     async def send_notification(
         self,

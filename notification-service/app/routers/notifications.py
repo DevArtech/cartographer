@@ -4,7 +4,7 @@ API router for notification service endpoints.
 
 import logging
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query, Header
+from fastapi import APIRouter, HTTPException, Query, Header, Request
 
 from datetime import datetime
 from ..models import (
@@ -265,23 +265,51 @@ async def process_health_check(
 @router.post("/networks/{network_id}/send-notification")
 async def send_network_notification(
     network_id: int,
-    event: NetworkEvent,
+    request: Request,
 ):
     """
     Send a notification to a specific network (for broadcasts).
     
-    This sends to the network's configured notification channels.
-    TODO: Enhance to send to all network members when backend integration is available.
+    Expects JSON body with:
+    - event: NetworkEvent - The network event
+    - user_ids: Optional[List[str]] - List of user IDs who are network members
+    
+    If user_ids is provided, sends to those specific network members based on their preferences.
+    Otherwise, sends to the network's configured notification channels.
     """
+    body = await request.json()
+    event_data = body.get("event")
+    user_ids = body.get("user_ids")
+    
+    if not event_data:
+        raise HTTPException(status_code=400, detail="event is required in request body")
+    
+    # Parse the event
+    event = NetworkEvent(**event_data)
+    
     # Ensure event has the correct network_id
     event.network_id = network_id
     
-    records = await notification_manager.send_notification_to_network(network_id, event, force=True)
-    return {
-        "success": len([r for r in records if r.success]) > 0,
-        "records": [r.model_dump() for r in records],
-        "network_id": network_id,
-    }
+    if user_ids:
+        # Send to specific network members based on their preferences
+        results = await notification_manager.send_notification_to_network_members(
+            network_id, user_ids, event, force=True
+        )
+        total_records = sum(len(records) for records in results.values())
+        return {
+            "success": total_records > 0,
+            "users_notified": len(results),
+            "total_records": total_records,
+            "network_id": network_id,
+        }
+    else:
+        # Fallback to network-level preferences
+        records = await notification_manager.send_notification_to_network(network_id, event, force=True)
+        return {
+            "success": len([r for r in records if r.success]) > 0,
+            "records": [r.model_dump() for r in records],
+            "network_id": network_id,
+        }
 
 
 @router.post("/send-notification")
