@@ -1171,28 +1171,65 @@ class NotificationManager:
         """
         results = {}
         
+        logger.info(f"Processing global notification: {event.event_type.value} - {event.title}")
+        
         # Only handle Cartographer Up/Down events
         if event.event_type not in (NotificationType.CARTOGRAPHER_UP, NotificationType.CARTOGRAPHER_DOWN):
             logger.warning(f"broadcast_global_notification called for non-global event type: {event.event_type}")
             return results
         
+        # Check email service configuration
+        email_configured = is_email_configured()
+        if not email_configured:
+            logger.error(
+                f"✗ Cannot send global {event.event_type.value} notification: "
+                f"Email service not configured (RESEND_API_KEY not set)"
+            )
+            return results
+        
         # Get all users who have this notification type enabled
         user_ids = self.get_all_users_with_global_notifications_enabled(event.event_type)
         
+        logger.info(
+            f"Global {event.event_type.value} notification: "
+            f"Found {len(user_ids)} users with notifications enabled "
+            f"(out of {len(self._global_preferences)} total global preference entries)"
+        )
+        
         if not user_ids:
-            logger.debug(f"No users have global notifications enabled for {event.event_type.value}")
+            logger.warning(
+                f"✗ No users have global {event.event_type.value} notifications enabled. "
+                f"Users need to configure global preferences with email_address and "
+                f"{'cartographer_up_enabled=True' if event.event_type == NotificationType.CARTOGRAPHER_UP else 'cartographer_down_enabled=True'}"
+            )
+            # Log all global preferences for debugging
+            if self._global_preferences:
+                logger.info("Current global preferences:")
+                for uid, prefs in self._global_preferences.items():
+                    logger.info(
+                        f"  User {uid}: email={prefs.email_address or 'NOT SET'}, "
+                        f"up_enabled={prefs.cartographer_up_enabled}, "
+                        f"down_enabled={prefs.cartographer_down_enabled}"
+                    )
+            else:
+                logger.info("No global preferences found - users need to configure them first")
             return results
         
         notification_id = str(uuid.uuid4())
+        successful = 0
+        failed = 0
         
         # Send email to each user
         for user_id in user_ids:
             prefs = self._global_preferences[user_id]
             
             if not prefs.email_address:
+                logger.warning(f"Skipping user {user_id}: email_address not set in global preferences")
+                failed += 1
                 continue
             
             try:
+                logger.info(f"Attempting to send global {event.event_type.value} notification to {prefs.email_address} (user {user_id})")
                 record = await send_notification_email(
                     to_email=prefs.email_address,
                     event=event,
@@ -1200,10 +1237,19 @@ class NotificationManager:
                 )
                 # Use network_id=0 for global notifications (not network-specific)
                 record.network_id = 0
+                
+                if record.success:
+                    logger.info(f"✓ Global {event.event_type.value} notification sent successfully to {prefs.email_address} (user {user_id})")
+                    successful += 1
+                else:
+                    logger.error(f"✗ Global {event.event_type.value} notification failed for {prefs.email_address} (user {user_id}): {record.error_message}")
+                    failed += 1
+                
                 results[user_id] = [record]
                 self._history.append(record)
             except Exception as e:
-                logger.error(f"Failed to send global notification to user {user_id}: {e}")
+                logger.error(f"✗ Exception while sending global notification to user {user_id} ({prefs.email_address}): {e}", exc_info=True)
+                failed += 1
                 # Create a failed record
                 record = NotificationRecord(
                     notification_id=notification_id,
@@ -1218,6 +1264,13 @@ class NotificationManager:
                 )
                 results[user_id] = [record]
                 self._history.append(record)
+        
+        logger.info(
+            f"Global {event.event_type.value} notification complete: "
+            f"{successful} successful, {failed} failed out of {len(user_ids)} users"
+        )
+        
+        return results
         
         # Save history periodically
         if len(self._history) % 50 == 0:
