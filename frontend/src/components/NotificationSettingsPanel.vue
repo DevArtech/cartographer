@@ -229,14 +229,49 @@ async function handleTestGlobalDiscord() {
 async function handleLinkDiscord() {
 	try {
 		const { authorization_url } = await initiateDiscordOAuth();
-		window.open(authorization_url, 'discord_oauth', 'width=600,height=700');
+		const popup = window.open(authorization_url, 'discord_oauth', 'width=600,height=700');
 		
-		// Poll for Discord link completion
+		if (!popup) {
+			alert('Popup blocked. Please allow popups for this site and try again.');
+			return;
+		}
+		
+		// Listen for message from popup
+		const messageHandler = (event: MessageEvent) => {
+			if (event.origin !== window.location.origin) {
+				return;
+			}
+			
+			if (event.data && event.data.type === 'discord_oauth_callback') {
+				window.removeEventListener('message', messageHandler);
+				
+				if (event.data.status === 'success') {
+					// Reload Discord link status
+					loadData();
+				} else {
+					alert('Discord linking failed: ' + (event.data.message || 'Unknown error'));
+				}
+			}
+		};
+		
+		window.addEventListener('message', messageHandler);
+		
+		// Fallback: Poll for Discord link completion (in case postMessage doesn't work)
 		const pollInterval = setInterval(async () => {
 			try {
+				// Check if popup is still open
+				if (popup.closed) {
+					clearInterval(pollInterval);
+					window.removeEventListener('message', messageHandler);
+					// Reload to check if link was successful
+					await loadData();
+					return;
+				}
+				
 				const link = await getDiscordLink();
 				if (link.linked) {
 					clearInterval(pollInterval);
+					window.removeEventListener('message', messageHandler);
 					discordLink.value = link;
 					await loadData(); // Reload to get updated preferences
 				}
@@ -246,7 +281,10 @@ async function handleLinkDiscord() {
 		}, 2000);
 		
 		// Stop polling after 5 minutes
-		setTimeout(() => clearInterval(pollInterval), 300000);
+		setTimeout(() => {
+			clearInterval(pollInterval);
+			window.removeEventListener('message', messageHandler);
+		}, 300000);
 	} catch (e: any) {
 		alert('Failed to initiate Discord OAuth: ' + (e.message || 'Unknown error'));
 	}
@@ -266,12 +304,8 @@ async function handleUnlinkDiscord() {
 	}
 }
 
-// Watch for OAuth callback
-watch(() => window.location.search, (search) => {
-	if (search.includes('discord_oauth=success')) {
-		loadData();
-	}
-}, { immediate: true });
+// Note: OAuth callback handling is now done via postMessage in App.vue
+// This watch is kept for backwards compatibility but shouldn't be needed
 
 onMounted(() => {
 	loadData();
