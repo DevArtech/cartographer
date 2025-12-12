@@ -1,12 +1,12 @@
 <template>
 	<!-- Loading State (checking auth) -->
-	<div v-if="authLoading" class="h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+	<div v-if="authLoading" class="h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-white dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
 		<div class="text-center">
 			<svg class="animate-spin h-12 w-12 text-cyan-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 			</svg>
-			<p class="text-slate-400">Loading Cartographer...</p>
+			<p class="text-slate-500 dark:text-slate-400">Loading Cartographer...</p>
 		</div>
 	</div>
 
@@ -17,9 +17,9 @@
 	<LoginScreen v-else-if="!isAuthenticated" @success="onLoginSuccess" />
 
 	<!-- Main Dashboard -->
-	<div v-else class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+	<div v-else class="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-white dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 transition-colors">
 		<!-- Navigation Header -->
-		<header class="sticky top-0 z-50 flex items-center h-14 px-4 border-b border-slate-700/50 bg-slate-900/95 backdrop-blur-lg">
+		<header class="sticky top-0 z-50 flex items-center h-14 px-4 border-b border-slate-200 dark:border-slate-700/50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg transition-colors">
 			<!-- Left: Branding -->
 			<div class="flex items-center gap-3 mr-6">
 				<div class="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shadow-sm">
@@ -28,8 +28,8 @@
 					</svg>
 				</div>
 				<div class="flex flex-col">
-					<span class="text-sm font-semibold text-white tracking-tight">Cartographer</span>
-					<span class="text-[10px] text-slate-500 -mt-0.5">Networks</span>
+					<span class="text-sm font-semibold text-slate-900 dark:text-white tracking-tight">Cartographer</span>
+					<span class="text-[10px] text-slate-400 dark:text-slate-500 -mt-0.5">Networks</span>
 				</div>
 			</div>
 
@@ -41,7 +41,7 @@
 				<!-- Dark Mode Toggle -->
 				<button
 					@click="toggleDarkMode"
-					class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700/50 transition-colors"
+					class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
 					:title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
 				>
 					<!-- Sun icon (shown in dark mode - click to go light) -->
@@ -64,15 +64,15 @@
 			<div class="max-w-6xl mx-auto">
 				<!-- Header -->
 				<div class="mb-10">
-					<h1 class="text-3xl font-bold text-white mb-2">
+					<h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-2">
 						Your Networks
 					</h1>
-					<p class="text-slate-400">Select a network to view and manage, or create a new one.</p>
+					<p class="text-slate-500 dark:text-slate-400">Select a network to view and manage, or create a new one.</p>
 				</div>
 
 				<!-- Loading Networks -->
 				<div v-if="networksLoading" class="flex items-center justify-center py-20">
-					<svg class="w-8 h-8 text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24">
+					<svg class="w-8 h-8 text-cyan-500 dark:text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24">
 						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
 						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
 					</svg>
@@ -80,13 +80,13 @@
 
 				<!-- No Networks State -->
 				<div v-else-if="networks.length === 0" class="text-center py-20">
-					<div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center">
-						<svg class="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 flex items-center justify-center">
+						<svg class="w-10 h-10 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
 						</svg>
 					</div>
-					<h2 class="text-xl font-bold text-white mb-3">No networks yet</h2>
-					<p class="text-slate-400 mb-8 max-w-md mx-auto">
+					<h2 class="text-xl font-bold text-slate-900 dark:text-white mb-3">No networks yet</h2>
+					<p class="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">
 						Create your first network to start mapping and monitoring your devices.
 					</p>
 					<button
@@ -100,7 +100,7 @@
 				<!-- Networks Grid -->
 				<div v-else>
 					<div class="flex items-center justify-between mb-6">
-						<h2 class="text-xl font-semibold text-white">{{ networks.length }} Network{{ networks.length !== 1 ? 's' : '' }}</h2>
+						<h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ networks.length }} Network{{ networks.length !== 1 ? 's' : '' }}</h2>
 						<button
 							@click="showCreateModal = true"
 							class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-medium rounded-lg shadow-lg shadow-cyan-500/20 transition-all hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98]"
@@ -113,40 +113,40 @@
 						<div
 							v-for="network in networks"
 							:key="network.id"
-							class="relative bg-slate-800/50 backdrop-blur border border-slate-700/50 rounded-xl p-6 hover:bg-slate-800/70 hover:border-slate-600/50 transition-all group"
+							class="relative bg-white dark:bg-slate-800/50 backdrop-blur border border-slate-200 dark:border-slate-700/50 rounded-xl p-6 hover:bg-slate-50 dark:hover:bg-slate-800/70 hover:border-slate-300 dark:hover:border-slate-600/50 transition-all group shadow-sm"
 						>
 							<router-link
 								:to="`/network/${network.id}`"
 								class="block"
 						>
 							<div class="flex items-start justify-between mb-4">
-								<div class="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
-									<svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<div class="w-12 h-12 rounded-xl bg-cyan-100 dark:bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-200 dark:group-hover:bg-cyan-500/20 transition-colors">
+									<svg class="w-6 h-6 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
 									</svg>
 								</div>
 								<div class="flex items-center gap-2">
 									<span
 										v-if="network.is_owner"
-										class="px-2 py-0.5 text-xs rounded-full bg-amber-500/20 text-amber-400"
+										class="px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400"
 									>
 										Owner
 									</span>
 									<span
 										v-else-if="network.permission"
-										class="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-400"
+										class="px-2 py-0.5 text-xs rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
 									>
 										{{ network.permission }}
 									</span>
 								</div>
 							</div>
 
-							<h3 class="text-lg font-semibold text-white mb-1 group-hover:text-cyan-400 transition-colors">{{ network.name }}</h3>
-							<p class="text-sm text-slate-400 mb-4 line-clamp-2">{{ network.description || 'No description' }}</p>
+							<h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-1 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">{{ network.name }}</h3>
+							<p class="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">{{ network.description || 'No description' }}</p>
 
-							<div class="flex items-center justify-between text-xs text-slate-500">
+							<div class="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
 								<span>Updated {{ formatDate(network.updated_at) }}</span>
-								<svg class="w-4 h-4 text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<svg class="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 								</svg>
 							</div>
@@ -156,7 +156,7 @@
 							<button
 								v-if="canWriteNetwork(network)"
 								@click.stop="openEditModal(network)"
-								class="absolute top-4 right-4 p-2 rounded-lg bg-slate-700/50 text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-600/50 hover:text-white transition-all"
+								class="absolute top-4 right-4 p-2 rounded-lg bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-600/50 hover:text-slate-700 dark:hover:text-white transition-all"
 								title="Edit network"
 							>
 								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,7 +179,7 @@
 			leave-to-class="opacity-0"
 		>
 			<div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-6">
-				<div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="closeCreateModal" />
+				<div class="absolute inset-0 bg-black/50 dark:bg-slate-950/80 backdrop-blur-sm" @click="closeCreateModal" />
 
 				<Transition
 					enter-active-class="transition duration-200 delay-75"
@@ -189,12 +189,12 @@
 					leave-from-class="opacity-100 scale-100"
 					leave-to-class="opacity-0 scale-95"
 				>
-					<div v-if="showCreateModal" class="relative bg-slate-800/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-						<h2 class="text-xl font-bold text-white mb-6">Create Network</h2>
+					<div v-if="showCreateModal" class="relative bg-white dark:bg-slate-800/90 backdrop-blur-xl border border-slate-200 dark:border-slate-700/50 rounded-2xl p-8 w-full max-w-md shadow-2xl">
+						<h2 class="text-xl font-bold text-slate-900 dark:text-white mb-6">Create Network</h2>
 
 						<form @submit.prevent="createNetwork" class="space-y-4">
 							<div>
-								<label for="networkName" class="block text-sm font-medium text-slate-300 mb-1.5">
+								<label for="networkName" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
 									Network Name
 								</label>
 								<input
@@ -202,20 +202,20 @@
 									v-model="newNetwork.name"
 									type="text"
 									required
-									class="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
+									class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
 									placeholder="Home Network"
 								/>
 							</div>
 
 							<div>
-								<label for="networkDescription" class="block text-sm font-medium text-slate-300 mb-1.5">
+								<label for="networkDescription" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
 									Description (optional)
 								</label>
 								<textarea
 									id="networkDescription"
 									v-model="newNetwork.description"
 									rows="3"
-									class="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition resize-none"
+									class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition resize-none"
 									placeholder="Describe this network..."
 								></textarea>
 							</div>
@@ -225,8 +225,8 @@
 								enter-from-class="opacity-0"
 								enter-to-class="opacity-100"
 							>
-								<div v-if="createError" class="p-4 bg-red-900/30 border border-red-500/50 rounded-xl">
-									<p class="text-sm text-red-400">{{ createError }}</p>
+								<div v-if="createError" class="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-500/50 rounded-xl">
+									<p class="text-sm text-red-600 dark:text-red-400">{{ createError }}</p>
 								</div>
 							</Transition>
 
@@ -234,7 +234,7 @@
 								<button
 									type="button"
 									@click="closeCreateModal"
-									class="flex-1 py-3 text-slate-400 hover:text-white transition-colors"
+									class="flex-1 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
 								>
 									Cancel
 								</button>
@@ -269,7 +269,7 @@
 			leave-to-class="opacity-0"
 		>
 			<div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-6">
-				<div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" @click="closeEditModal" />
+				<div class="absolute inset-0 bg-black/50 dark:bg-slate-950/80 backdrop-blur-sm" @click="closeEditModal" />
 
 				<Transition
 					enter-active-class="transition duration-200 delay-75"
@@ -279,12 +279,12 @@
 					leave-from-class="opacity-100 scale-100"
 					leave-to-class="opacity-0 scale-95"
 				>
-					<div v-if="showEditModal" class="relative bg-slate-800/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 w-full max-w-md shadow-2xl">
-						<h2 class="text-xl font-bold text-white mb-6">Edit Network</h2>
+					<div v-if="showEditModal" class="relative bg-white dark:bg-slate-800/90 backdrop-blur-xl border border-slate-200 dark:border-slate-700/50 rounded-2xl p-8 w-full max-w-md shadow-2xl">
+						<h2 class="text-xl font-bold text-slate-900 dark:text-white mb-6">Edit Network</h2>
 
 						<form @submit.prevent="saveEditNetwork" class="space-y-4">
 							<div>
-								<label for="editNetworkName" class="block text-sm font-medium text-slate-300 mb-1.5">
+								<label for="editNetworkName" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
 									Network Name
 								</label>
 								<input
@@ -292,20 +292,20 @@
 									v-model="editNetwork.name"
 									type="text"
 									required
-									class="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
+									class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition"
 									placeholder="Home Network"
 								/>
 							</div>
 
 							<div>
-								<label for="editNetworkDescription" class="block text-sm font-medium text-slate-300 mb-1.5">
+								<label for="editNetworkDescription" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
 									Description (optional)
 								</label>
 								<textarea
 									id="editNetworkDescription"
 									v-model="editNetwork.description"
 									rows="3"
-									class="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition resize-none"
+									class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition resize-none"
 									placeholder="Describe this network..."
 								></textarea>
 							</div>
@@ -315,8 +315,8 @@
 								enter-from-class="opacity-0"
 								enter-to-class="opacity-100"
 							>
-								<div v-if="editError" class="p-4 bg-red-900/30 border border-red-500/50 rounded-xl">
-									<p class="text-sm text-red-400">{{ editError }}</p>
+								<div v-if="editError" class="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-500/50 rounded-xl">
+									<p class="text-sm text-red-600 dark:text-red-400">{{ editError }}</p>
 								</div>
 							</Transition>
 
@@ -324,7 +324,7 @@
 								<button
 									type="button"
 									@click="closeEditModal"
-									class="flex-1 py-3 text-slate-400 hover:text-white transition-colors"
+									class="flex-1 py-3 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
 								>
 									Cancel
 								</button>
