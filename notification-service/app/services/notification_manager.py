@@ -1496,71 +1496,11 @@ class NotificationManager:
         """
         Process a health check result and send notifications if needed.
         
-        This should be called after each health check to train the ML model
-        and potentially send notifications.
-        
-        Args:
-            device_ip: IP address of the device
-            success: Whether the health check succeeded
-            network_id: The network this device belongs to
-            latency_ms: Optional latency measurement
-            packet_loss: Optional packet loss percentage
-            device_name: Optional device name
-            previous_state: Optional previous state (online/offline)
-        
-        Note: Devices with monitoring disabled (silenced) will still train the
-        ML model but will not trigger notifications.
+        DEPRECATED: This method is kept for backwards compatibility but should
+        use the per-network anomaly detector directly via the router.
         """
-        # Check if device has monitoring disabled (silenced)
-        is_silenced = self.is_device_silenced(device_ip)
-        
-        # Let the anomaly detector analyze and potentially create an event
-        # We still train the ML model even for silenced devices
-        event = anomaly_detector.create_network_event(
-            device_ip=device_ip,
-            success=success,
-            latency_ms=latency_ms,
-            packet_loss=packet_loss,
-            device_name=device_name,
-            previous_state=previous_state,
-        )
-        
-        if event and not is_silenced:
-            # Set network_id on the event
-            event.network_id = network_id
-            
-            logger.info(f"Processing health check for device {device_ip} in network {network_id}: event_type={event.event_type.value}, success={success}")
-            
-            # Send notification only to the specific network
-            records = await self.send_notification_to_network(network_id, event)
-            if records:
-                successful = [r for r in records if r.success]
-                failed = [r for r in records if not r.success]
-                if successful:
-                    logger.info(
-                        f"✓ Sent notification to network {network_id} for device {device_ip}: {event.title} "
-                        f"({len(successful)} successful, {len(failed)} failed)"
-                    )
-                else:
-                    logger.error(
-                        f"✗ All notification channels failed for network {network_id}, device {device_ip}: {event.title}. "
-                        f"Errors: {[r.error_message for r in failed]}"
-                    )
-            else:
-                # Get preferences to see why it was filtered
-                prefs = self.get_preferences(network_id)
-                should_notify, reason = self._should_notify(prefs, event)
-                logger.warning(
-                    f"✗ No notifications sent for network {network_id}, device {device_ip}, event {event.event_type.value}: {reason}. "
-                    f"Prefs: enabled={prefs.enabled}, email={prefs.email.enabled} ({'SET' if prefs.email.email_address else 'NOT SET'}), "
-                    f"discord={prefs.discord.enabled}, "
-                    f"event_type_in_enabled={event.event_type in prefs.enabled_notification_types}, "
-                    f"min_priority={prefs.minimum_priority.value}"
-                )
-        elif event and is_silenced:
-            logger.debug(f"Skipping notification for silenced device {device_ip}: {event.title}")
-        elif not event:
-            logger.debug(f"No event created for device {device_ip} (network {network_id}) - likely not notification-worthy")
+        # This method is now handled by the router using network_anomaly_detector_manager
+        logger.warning("process_health_check called on notification_manager - should use network_anomaly_detector_manager directly")
 
 
 # Singleton instance

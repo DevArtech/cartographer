@@ -37,15 +37,29 @@
 		>
 			<!-- User Menu Slot -->
 			<template #user-menu>
-				<UserMenu 
-					:showNotifications="!!props.networkId"
-					:isNetworkContext="!!props.networkId"
-					:isNetworkOwner="props.isNetworkOwner"
-					@logout="onLogout" 
-					@manageUsers="showUserManagement = true" 
-					@notifications="showNotificationSettings = true" 
-					@updates="showUpdateSettings = true" 
-				/>
+				<div class="flex items-center gap-2">
+					<!-- Send Notification Button (Network Owners/Admins) -->
+					<button
+						v-if="props.networkId && effectiveCanWrite"
+						@click="showSendNotification = true"
+						class="px-3 py-1.5 text-sm font-medium text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30 hover:bg-violet-200 dark:hover:bg-violet-900/50 rounded-lg transition-colors flex items-center gap-2"
+						title="Send notification to network"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+						</svg>
+						Send Notification
+					</button>
+					<UserMenu 
+						:showNotifications="!!props.networkId"
+						:isNetworkContext="!!props.networkId"
+						:isNetworkOwner="props.isNetworkOwner"
+						@logout="onLogout" 
+						@manageUsers="showUserManagement = true" 
+						@notifications="showNotificationSettings = true" 
+						@updates="showUpdateSettings = true" 
+					/>
+				</div>
 			</template>
 		</MapControls>
 		<div class="flex flex-1 min-h-0">
@@ -486,7 +500,17 @@
 		/>
 		<!-- App-level user management otherwise -->
 		<UserManagement v-else-if="showUserManagement" @close="showUserManagement = false" />
-		<NotificationSettings v-if="showNotificationSettings && props.networkId" :networkId="props.networkId" @close="showNotificationSettings = false" />
+		<NotificationSettingsPanel 
+			v-if="showNotificationSettings" 
+			:networkId="props.networkId" 
+			@close="showNotificationSettings = false" 
+		/>
+		<SendNetworkNotification
+			v-if="showSendNotification && props.networkId"
+			:networkId="props.networkId"
+			@close="showSendNotification = false"
+			@sent="handleNotificationSent"
+		/>
 		<UpdateSettings :isOpen="showUpdateSettings" @close="showUpdateSettings = false" />
 
 		<!-- Assistant Panel (Slide-in from right) -->
@@ -533,7 +557,8 @@ import UserMenu from "./UserMenu.vue";
 import UserManagement from "./UserManagement.vue";
 import NetworkUserManagement from "./NetworkUserManagement.vue";
 import AssistantChat from "./AssistantChat.vue";
-import NotificationSettings from "./NotificationSettings.vue";
+import NotificationSettingsPanel from "./NotificationSettingsPanel.vue";
+import SendNetworkNotification from "./SendNetworkNotification.vue";
 import VersionBanner from "./VersionBanner.vue";
 import UpdateSettings from "./UpdateSettings.vue";
 import type { ParsedNetworkMap, TreeNode, NodeVersion, LanPortsConfig } from "../types/network";
@@ -559,6 +584,7 @@ const needsSetup = ref(false);
 const showUserManagement = ref(false);
 const showAssistant = ref(false);
 const showNotificationSettings = ref(false);
+const showSendNotification = ref(false);
 const showUpdateSettings = ref(false);
 
 // Network context (from props or defaults)
@@ -606,6 +632,15 @@ function onSetupComplete() {
 function onLoginSuccess() {
 	// Auth state is already updated by the composable
 	console.log("[App] Login successful");
+}
+
+function onNotifications() {
+	showNotificationSettings.value = true;
+}
+
+function handleNotificationSent() {
+	// Refresh or show success message
+	console.log('Notification sent successfully');
 }
 
 function onLogout() {

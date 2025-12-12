@@ -16,6 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.notifications import router as notifications_router
 from .routers.cartographer_status import router as cartographer_status_router
+from .routers.user_notifications import router as user_notifications_router
+from .routers.user_notifications_send import router as user_notifications_send_router
+from .routers.discord_oauth import router as discord_oauth_router
 from .services.discord_service import discord_service, is_discord_configured
 from .services.notification_manager import notification_manager
 from .services.cartographer_status import cartographer_status_service
@@ -227,6 +230,9 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(notifications_router, prefix="/api/notifications")
     app.include_router(cartographer_status_router, prefix="/api/cartographer-status")
+    app.include_router(user_notifications_router, prefix="/api")
+    app.include_router(user_notifications_send_router, prefix="/api")
+    app.include_router(discord_oauth_router, prefix="/api")
     
     @app.get("/")
     def root():

@@ -9,6 +9,7 @@ Performance optimizations:
 """
 
 from fastapi import APIRouter, HTTPException, Request, Depends, Query
+from fastapi import Request as FastAPIRequest
 from fastapi.responses import JSONResponse
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,17 +34,24 @@ async def proxy_request(
     json_body: dict = None,
     headers: dict = None,
     timeout: float = 30.0,
+    use_user_path: bool = False,
 ):
     """Forward a request to the notification service using the shared client pool"""
+    if use_user_path:
+        # Use direct API path (not /api/notifications prefix)
+        full_path = f"/api{path}"
+    else:
+        full_path = f"/api/notifications{path}"
+    
     return await http_pool.request(
         service_name="notification",
         method=method,
-        path=f"/api/notifications{path}",
+        path=full_path,
         params=params,
         json_body=json_body,
         headers=headers,
         timeout=timeout
-            )
+    )
 
 
 # ==================== Per-Network Preferences Endpoints ====================
@@ -230,9 +238,15 @@ async def get_notification_stats(user: AuthenticatedUser = Depends(require_auth)
 # ==================== ML / Anomaly Detection ====================
 
 @router.get("/ml/status")
-async def get_ml_model_status(user: AuthenticatedUser = Depends(require_auth)):
+async def get_ml_model_status(
+    network_id: int = Query(None, description="Network ID for per-network stats"),
+    user: AuthenticatedUser = Depends(require_auth),
+):
     """Get ML anomaly detection model status."""
-    return await proxy_request("GET", "/ml/status")
+    params = {}
+    if network_id is not None:
+        params["network_id"] = network_id
+    return await proxy_request("GET", "/ml/status", params=params)
 
 
 @router.get("/ml/baseline/{device_ip}")
@@ -616,4 +630,193 @@ async def test_global_discord(
 ):
     """Test Discord notifications for global settings"""
     return await proxy_cartographer_status_request("POST", "/test/discord", json_body=body, user=user)
+
+
+# ==================== User-Specific Notification Preferences ====================
+
+@router.get("/users/me/networks/{network_id}/preferences")
+async def get_user_network_preferences(
+    network_id: int,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Get current user's notification preferences for a specific network."""
+    return await proxy_request(
+        "GET",
+        f"/users/{user.user_id}/networks/{network_id}/preferences",
+        use_user_path=True,
+    )
+
+
+@router.put("/users/me/networks/{network_id}/preferences")
+async def update_user_network_preferences(
+    network_id: int,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Update current user's notification preferences for a network."""
+    body = await request.json()
+    return await proxy_request(
+        "PUT",
+        f"/users/{user.user_id}/networks/{network_id}/preferences",
+        json_body=body,
+        use_user_path=True,
+    )
+
+
+@router.delete("/users/me/networks/{network_id}/preferences")
+async def delete_user_network_preferences(
+    network_id: int,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Delete current user's network notification preferences (reset to defaults)."""
+    return await proxy_request(
+        "DELETE",
+        f"/users/{user.user_id}/networks/{network_id}/preferences",
+        use_user_path=True,
+    )
+
+
+@router.get("/users/me/global/preferences")
+async def get_user_global_preferences(
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Get current user's global notification preferences."""
+    return await proxy_request(
+        "GET",
+        f"/users/{user.user_id}/global/preferences",
+        use_user_path=True,
+    )
+
+
+@router.put("/users/me/global/preferences")
+async def update_user_global_preferences(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Update current user's global notification preferences."""
+    body = await request.json()
+    return await proxy_request(
+        "PUT",
+        f"/users/{user.user_id}/global/preferences",
+        json_body=body,
+        use_user_path=True,
+    )
+
+
+@router.post("/users/me/networks/{network_id}/test")
+async def test_user_network_notification(
+    network_id: int,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Send a test notification for current user's network preferences."""
+    body = await request.json()
+    return await proxy_request(
+        "POST",
+        f"/users/{user.user_id}/networks/{network_id}/test",
+        json_body=body,
+        use_user_path=True,
+    )
+
+
+@router.post("/users/me/global/test")
+async def test_user_global_notification(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Send a test notification for current user's global preferences."""
+    body = await request.json()
+    return await proxy_request(
+        "POST",
+        f"/users/{user.user_id}/global/test",
+        json_body=body,
+        use_user_path=True,
+    )
+
+
+# ==================== Discord OAuth ====================
+
+@router.get("/auth/discord/link")
+async def initiate_discord_oauth(
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Initiate Discord OAuth flow for current user."""
+    return await proxy_request(
+        "GET",
+        f"/auth/discord/link?user_id={user.user_id}",
+        use_user_path=True,
+    )
+
+
+@router.get("/auth/discord/callback")
+async def discord_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(...),
+):
+    """Handle Discord OAuth callback (no auth required - handled by notification service)."""
+    return await proxy_request(
+        "GET",
+        f"/auth/discord/callback?code={code}&state={state}",
+        use_user_path=True,
+    )
+
+
+@router.delete("/users/me/discord/link")
+async def unlink_discord(
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Unlink Discord account from current user."""
+    return await proxy_request(
+        "DELETE",
+        f"/users/{user.user_id}/discord/link",
+        use_user_path=True,
+    )
+
+
+@router.get("/users/me/discord")
+async def get_discord_info(
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Get linked Discord account info for current user."""
+    return await proxy_request(
+        "GET",
+        f"/users/{user.user_id}/discord",
+        use_user_path=True,
+    )
+
+
+# ==================== Send Network Notification ====================
+
+@router.post("/networks/{network_id}/send")
+async def send_network_notification(
+    network_id: int,
+    request: FastAPIRequest,
+    user: AuthenticatedUser = Depends(require_write_access),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Send a notification to all users in a network.
+    
+    Backend fetches network members, then proxies to notification service.
+    """
+    body = await request.json()
+    
+    # Get all network members
+    try:
+        user_ids = await get_network_member_user_ids(network_id, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get network members: {str(e)}")
+    
+    # Proxy to notification service with user_ids
+    return await proxy_request(
+        "POST",
+        f"/networks/{network_id}/notifications/send",
+        json_body={
+            **body,
+            "user_ids": user_ids,
+        },
+        use_user_path=True,
+    )
 

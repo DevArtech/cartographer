@@ -55,7 +55,11 @@
 				</button>
 
 				<!-- User Menu -->
-				<UserMenu @logout="onLogout" @manageUsers="showUserManagement = true" />
+				<UserMenu 
+					@logout="onLogout" 
+					@manageUsers="showUserManagement = true"
+					@notifications="showNotificationSettings = true"
+				/>
 			</div>
 		</header>
 
@@ -351,6 +355,11 @@
 
 		<!-- User Management Modal -->
 		<UserManagement v-if="showUserManagement" @close="showUserManagement = false" />
+		<NotificationSettingsPanel 
+			v-if="showNotificationSettings" 
+			:networkId="null" 
+			@close="showNotificationSettings = false" 
+		/>
 	</div>
 </template>
 
@@ -362,6 +371,7 @@ import { useNetworks, type Network } from "../composables/useNetworks";
 import SetupWizard from "./SetupWizard.vue";
 import LoginScreen from "./LoginScreen.vue";
 import UserMenu from "./UserMenu.vue";
+import NotificationSettingsPanel from "./NotificationSettingsPanel.vue";
 import UserManagement from "./UserManagement.vue";
 
 const router = useRouter();
@@ -372,6 +382,7 @@ const { networks, loading: networksLoading, clearNetworks, fetchNetworks, create
 const authLoading = ref(true);
 const needsSetup = ref(false);
 const showUserManagement = ref(false);
+const showNotificationSettings = ref(false);
 
 // Dark mode state
 const isDark = ref(true);

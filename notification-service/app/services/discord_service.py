@@ -397,3 +397,24 @@ async def send_test_discord(config: DiscordConfig) -> Dict[str, Any]:
     """Convenience function to send test Discord notification"""
     return await discord_service.send_test_notification(config)
 
+
+async def send_discord_dm(
+    discord_user_id: str,
+    event: NetworkEvent,
+    notification_id: str,
+) -> NotificationRecord:
+    """
+    Send a Discord DM directly to a user by their Discord user ID.
+    Used for per-user notifications.
+    """
+    from ..models import DiscordConfig, DiscordDeliveryMethod
+    
+    # Create a temporary config for DM delivery
+    config = DiscordConfig(
+        enabled=True,
+        delivery_method=DiscordDeliveryMethod.DM,
+        discord_user_id=discord_user_id,
+    )
+    
+    return await discord_service.send_notification(config, event, notification_id)
+

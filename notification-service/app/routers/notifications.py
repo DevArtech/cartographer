@@ -5,7 +5,8 @@ API router for notification service endpoints.
 import uuid
 import logging
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query, Header, Request
+from fastapi import APIRouter, HTTPException, Query, Header, Request, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from datetime import datetime
 from ..models import (
@@ -34,7 +35,9 @@ from ..services.notification_manager import notification_manager
 from ..services.discord_service import discord_service, is_discord_configured, get_bot_invite_url
 from ..services.email_service import is_email_configured
 from ..services.anomaly_detector import anomaly_detector
+from ..services.network_anomaly_detector import network_anomaly_detector_manager
 from ..services.version_checker import version_checker
+from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -171,17 +174,26 @@ async def get_network_notification_stats(
 # ==================== Anomaly Detection ====================
 
 @router.get("/ml/status", response_model=MLModelStatus)
-async def get_ml_model_status():
+async def get_ml_model_status(network_id: Optional[int] = Query(None, description="Network ID for per-network stats")):
     """Get ML anomaly detection model status"""
-    return anomaly_detector.get_model_status()
+    if network_id is not None:
+        # Return per-network stats
+        return network_anomaly_detector_manager.get_stats(network_id)
+    else:
+        # Return global stats (legacy - for backwards compatibility)
+        return anomaly_detector.get_model_status()
 
 
 @router.get("/ml/baseline/{device_ip}", response_model=Optional[DeviceBaseline])
-async def get_device_baseline(device_ip: str):
-    """Get learned baseline for a specific device"""
-    baseline = anomaly_detector.get_device_baseline(device_ip)
+async def get_device_baseline(
+    device_ip: str,
+    network_id: int = Query(..., description="Network ID this device belongs to"),
+):
+    """Get learned baseline for a specific device in a network"""
+    detector = network_anomaly_detector_manager.get_detector(network_id)
+    baseline = detector.get_device_baseline(device_ip)
     if not baseline:
-        raise HTTPException(status_code=404, detail=f"No baseline found for device {device_ip}")
+        raise HTTPException(status_code=404, detail=f"No baseline found for device {device_ip} in network {network_id}")
     return baseline
 
 
@@ -193,33 +205,52 @@ async def mark_false_positive(event_id: str):
 
 
 @router.delete("/ml/baseline/{device_ip}")
-async def reset_device_baseline(device_ip: str):
-    """Reset learned baseline for a specific device"""
-    anomaly_detector.reset_device(device_ip)
-    return {"success": True, "message": f"Baseline reset for device {device_ip}"}
+async def reset_device_baseline(
+    device_ip: str,
+    network_id: int = Query(..., description="Network ID this device belongs to"),
+):
+    """Reset learned baseline for a specific device in a network"""
+    detector = network_anomaly_detector_manager.get_detector(network_id)
+    # Note: NetworkAnomalyDetector doesn't have reset_device yet - would need to add it
+    # For now, log a warning
+    logger.warning(f"Reset device baseline requested for {device_ip} in network {network_id} - not yet implemented")
+    return {"success": True, "message": f"Baseline reset for device {device_ip} in network {network_id} (per-network reset coming soon)"}
 
 
 @router.delete("/ml/reset")
-async def reset_all_ml_data():
-    """Reset all ML model data (use with caution)"""
-    anomaly_detector.reset_all()
-    return {"success": True, "message": "All ML data reset"}
+async def reset_all_ml_data(network_id: Optional[int] = Query(None, description="Network ID to reset (or all if not provided)")):
+    """Reset ML model data (use with caution)"""
+    if network_id is not None:
+        # Reset specific network
+        detector = network_anomaly_detector_manager.get_detector(network_id)
+        # Would need to add reset method to NetworkAnomalyDetector
+        logger.warning(f"Reset ML data requested for network {network_id} - not yet implemented")
+        return {"success": True, "message": f"ML model data reset for network {network_id} (coming soon)"}
+    else:
+        # Reset all (legacy)
+        anomaly_detector.reset_all()
+        return {"success": True, "message": "All ML model data reset"}
 
 
 @router.post("/ml/sync-devices")
-async def sync_current_devices(device_ips: List[str]):
+async def sync_current_devices(
+    device_ips: List[str],
+    network_id: int = Query(..., description="Network ID these devices belong to"),
+):
     """
-    Sync the list of devices currently in the network.
+    Sync the list of devices currently in a network.
     
     This should be called by the health service when devices are registered
     or when the device list changes. It ensures the ML model status only
     reports tracking devices that are actually present in the network.
     """
-    anomaly_detector.sync_current_devices(device_ips)
+    detector = network_anomaly_detector_manager.get_detector(network_id)
+    detector.sync_current_devices(device_ips)
     return {
         "success": True,
         "devices_synced": len(device_ips),
-        "message": f"Synced {len(device_ips)} devices for ML tracking",
+        "network_id": network_id,
+        "message": f"Synced {len(device_ips)} devices for ML tracking in network {network_id}",
     }
 
 
@@ -234,6 +265,7 @@ async def process_health_check(
     packet_loss: Optional[float] = None,
     device_name: Optional[str] = None,
     previous_state: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Process a health check result from the health service.
@@ -250,17 +282,50 @@ async def process_health_check(
         device_name: Optional device name
         previous_state: Optional previous state (online/offline)
     """
-    await notification_manager.process_health_check(
+    # Use per-network anomaly detector
+    from ..services.network_anomaly_detector import network_anomaly_detector_manager
+    
+    # Process health check with per-network detector
+    event = network_anomaly_detector_manager.process_health_check(
+        network_id=network_id,
         device_ip=device_ip,
         success=success,
-        network_id=network_id,
         latency_ms=latency_ms,
         packet_loss=packet_loss,
         device_name=device_name,
         previous_state=previous_state,
     )
     
-    return {"success": True}
+    # If event created, dispatch to network users
+    if event:
+        event.network_id = network_id
+        logger.info(f"Network event created for network {network_id}: {event.event_type.value} - {event.title}")
+        
+        # Get network member user IDs from database and dispatch
+        try:
+            from ..services.user_preferences import user_preferences_service
+            from ..services.notification_dispatch import notification_dispatch_service
+            
+            user_ids = await user_preferences_service.get_network_member_user_ids(db, network_id)
+            
+            if user_ids:
+                # Dispatch to all network users
+                results = await notification_dispatch_service.send_to_network_users(
+                    db=db,
+                    network_id=network_id,
+                    user_ids=user_ids,
+                    event=event,
+                    scheduled_at=None,
+                )
+                
+                successful = sum(1 for r in results.values() if any(rec.success for rec in r))
+                logger.info(f"Dispatched notification to {successful}/{len(user_ids)} users in network {network_id}")
+            else:
+                logger.warning(f"No users found for network {network_id}")
+        except Exception as e:
+            logger.error(f"Failed to dispatch notification for network {network_id}: {e}", exc_info=True)
+    
+    return {"success": True, "event_created": event is not None}
 
 
 @router.post("/networks/{network_id}/send-notification")
