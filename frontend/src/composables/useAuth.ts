@@ -34,8 +34,8 @@ let interceptorSetup = false;
 // Computed properties
 const isAuthenticated = computed(() => !!token.value && !!user.value);
 const isOwner = computed(() => user.value?.role === "owner");
-const canWrite = computed(() => user.value?.role === "owner" || user.value?.role === "readwrite");
-const isReadOnly = computed(() => user.value?.role === "readonly");
+const canWrite = computed(() => user.value?.role === "owner" || user.value?.role === "admin");
+const isReadOnly = computed(() => user.value?.role === "member");
 
 // Setup axios response interceptor to handle 401 errors
 function setupAxiosInterceptor(): void {

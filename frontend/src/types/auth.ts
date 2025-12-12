@@ -1,5 +1,5 @@
 // User permission levels
-export type UserRole = "owner" | "readwrite" | "readonly";
+export type UserRole = "owner" | "admin" | "member";
 
 // User data returned from API (no password)
 export interface User {
@@ -90,7 +90,7 @@ export interface AuthState {
 
 // Permission helpers
 export function canWrite(role: UserRole): boolean {
-	return role === "owner" || role === "readwrite";
+	return role === "owner" || role === "admin";
 }
 
 export function canManageUsers(role: UserRole): boolean {
@@ -101,9 +101,9 @@ export function getRoleLabel(role: UserRole): string {
 	switch (role) {
 		case "owner":
 			return "Owner";
-		case "readwrite":
+		case "admin":
 			return "Admin";
-		case "readonly":
+		case "member":
 			return "Member";
 		default:
 			return role;
@@ -114,9 +114,9 @@ export function getRoleDescription(role: UserRole): string {
 	switch (role) {
 		case "owner":
 			return "Full access - can manage users and modify the network map";
-		case "readwrite":
+		case "admin":
 			return "Admin - Can view and modify the network map";
-		case "readonly":
+		case "member":
 			return "Member - Can only view the network map";
 		default:
 			return "";

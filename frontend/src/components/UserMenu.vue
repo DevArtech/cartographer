@@ -314,14 +314,14 @@ const showManageUsers = computed(() => {
 // Get the appropriate label and description for Manage Users
 const manageUsersLabel = computed(() => {
 	if (props.isNetworkContext) {
-		return "Manage Network Access";
+		return "Network Access";
 	}
 	return "Manage Users";
 });
 
 const manageUsersDescription = computed(() => {
 	if (props.isNetworkContext) {
-		return "Control who can access this network";
+		return "Manage user permissions";
 	}
 	return "Add, edit, remove users";
 });
@@ -357,9 +357,9 @@ const roleBadgeClass = computed(() => {
 	switch (user.value?.role) {
 		case "owner":
 			return "text-amber-600 dark:text-amber-400";
-		case "readwrite":
+		case "admin":
 			return "text-emerald-600 dark:text-emerald-400";
-		case "readonly":
+		case "member":
 			return "text-slate-500 dark:text-slate-400";
 		default:
 			return "text-slate-500 dark:text-slate-400";

@@ -313,8 +313,8 @@
 							v-model="userForm.role"
 							class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
 						>
-							<option value="readonly">Member - Can only view the network map</option>
-							<option value="readwrite">Admin - Can view and modify the network map</option>
+							<option value="member">Member - Can only view the network map</option>
+							<option value="admin">Admin - Can view and modify the network map</option>
 						</select>
 					</div>
 
@@ -472,8 +472,8 @@
 							v-model="inviteForm.role"
 							class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
 						>
-							<option value="readonly">Member - Can only view the network map</option>
-							<option value="readwrite">Admin - Can view and modify the network map</option>
+							<option value="member">Member - Standard user of Cartographer</option>
+							<option value="admin">Admin - Can see statistics on networks in Cartographer</option>
 						</select>
 					</div>
 
@@ -566,7 +566,7 @@ const userForm = ref({
 	firstName: "",
 	lastName: "",
 	email: "",
-	role: "readonly" as UserRole,
+	role: "member" as UserRole,
 	password: "",
 	sendInvite: true, // Default to sending invitation
 });
@@ -581,7 +581,7 @@ const revokingInvite = ref<Invite | null>(null);
 
 const inviteForm = ref({
 	email: "",
-	role: "readonly" as UserRole,
+	role: "member" as UserRole,
 });
 
 // Computed
@@ -607,9 +607,9 @@ function getRoleBadgeClass(role: UserRole): string {
 	switch (role) {
 		case "owner":
 			return "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400";
-		case "readwrite":
+		case "admin":
 			return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400";
-		case "readonly":
+		case "member":
 			return "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400";
 		default:
 			return "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400";
@@ -652,7 +652,7 @@ function closeUserForm() {
 		firstName: "",
 		lastName: "",
 		email: "",
-		role: "readonly",
+		role: "member",
 		password: "",
 		sendInvite: true,
 	};
@@ -734,14 +734,14 @@ async function loadInvites() {
 }
 
 function openInviteForm() {
-	inviteForm.value = { email: "", role: "readonly" };
+	inviteForm.value = { email: "", role: "member" };
 	inviteFormError.value = null;
 	showInviteForm.value = true;
 }
 
 function closeInviteForm() {
 	showInviteForm.value = false;
-	inviteForm.value = { email: "", role: "readonly" };
+	inviteForm.value = { email: "", role: "member" };
 	inviteFormError.value = null;
 }
 
