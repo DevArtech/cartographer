@@ -207,11 +207,11 @@ class NotificationManager:
             
             for broadcast_id, broadcast_data in data.items():
                 try:
-                # Parse datetime strings
-                for field in ["scheduled_at", "created_at", "sent_at"]:
-                    if field in broadcast_data and broadcast_data[field] and isinstance(broadcast_data[field], str):
-                        broadcast_data[field] = datetime.fromisoformat(broadcast_data[field].replace("Z", "+00:00"))
-                
+                    # Parse datetime strings
+                    for field in ["scheduled_at", "created_at", "sent_at"]:
+                        if field in broadcast_data and broadcast_data[field] and isinstance(broadcast_data[field], str):
+                            broadcast_data[field] = datetime.fromisoformat(broadcast_data[field].replace("Z", "+00:00"))
+                    
                     # Handle old scheduled broadcasts that don't have network_id
                     # If network_id is missing, we can't process it, so skip it
                     if "network_id" not in broadcast_data:
@@ -223,7 +223,7 @@ class NotificationManager:
                         skipped_count += 1
                         continue
                     
-                self._scheduled_broadcasts[broadcast_id] = ScheduledBroadcast(**broadcast_data)
+                    self._scheduled_broadcasts[broadcast_id] = ScheduledBroadcast(**broadcast_data)
                     loaded_count += 1
                 except Exception as e:
                     logger.warning(f"Failed to load scheduled broadcast {broadcast_id}: {e}. Skipping.")
