@@ -46,7 +46,9 @@ export function useNetworks() {
 			networks.value = response.data;
 		} catch (e: any) {
 			error.value = e.response?.data?.detail || e.message || "Failed to fetch networks";
-			throw new Error(error.value!);
+			const err = new Error(error.value!) as Error & { status?: number };
+			err.status = e.response?.status;
+			throw err;
 		} finally {
 			loading.value = false;
 		}
@@ -70,7 +72,9 @@ export function useNetworks() {
 			return response.data;
 		} catch (e: any) {
 			const message = e.response?.data?.detail || e.message || "Failed to get network";
-			throw new Error(message);
+			const error = new Error(message) as Error & { status?: number };
+			error.status = e.response?.status;
+			throw error;
 		}
 	}
 

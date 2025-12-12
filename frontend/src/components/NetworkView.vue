@@ -45,11 +45,13 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNetworks, type Network } from "../composables/useNetworks";
+import { useAuth } from "../composables/useAuth";
 import MainApp from "./MainApp.vue";
 
 const route = useRoute();
 const router = useRouter();
 const { getNetwork, canWriteNetwork } = useNetworks();
+const { isAuthenticated, verifySession } = useAuth();
 
 const network = ref<Network | null>(null);
 const loading = ref(true);
@@ -59,6 +61,26 @@ const canWrite = computed(() => {
 	if (!network.value) return false;
 	return canWriteNetwork(network.value);
 });
+
+async function ensureAuthenticated(): Promise<boolean> {
+	// If we have a token stored, verify it's still valid on the server
+	// This handles the case where the backend restarted and sessions were lost
+	if (isAuthenticated.value) {
+		const isValid = await verifySession();
+		if (!isValid) {
+			// Session is no longer valid on server, redirect to home for re-login
+			console.log("[NetworkView] Session invalid, redirecting to home");
+			router.replace("/");
+			return false;
+		}
+		return true;
+	}
+	
+	// No auth token at all, redirect to home for login
+	console.log("[NetworkView] Not authenticated, redirecting to home");
+	router.replace("/");
+	return false;
+}
 
 async function loadNetwork() {
 	const id = Number(route.params.id);
@@ -71,9 +93,30 @@ async function loadNetwork() {
 	loading.value = true;
 	error.value = null;
 
+	// First ensure we're authenticated
+	const authenticated = await ensureAuthenticated();
+	if (!authenticated) {
+		loading.value = false;
+		return;
+	}
+
 	try {
 		network.value = await getNetwork(id);
 	} catch (e: any) {
+		// Check if this is an auth error - redirect to home instead of showing error
+		const status = e.status || e.response?.status;
+		const isAuthError = 
+			status === 401 ||
+			status === 403 ||
+			e.message?.toLowerCase().includes("not authenticated") || 
+			e.message?.toLowerCase().includes("unauthorized") ||
+			e.message?.toLowerCase().includes("authentication");
+		
+		if (isAuthError) {
+			console.log("[NetworkView] Auth error loading network, redirecting to home");
+			router.replace("/");
+			return;
+		}
 		error.value = e.message || "Network not found";
 		network.value = null;
 	} finally {

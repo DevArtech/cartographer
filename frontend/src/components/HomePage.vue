@@ -99,39 +99,39 @@
 							<router-link
 								:to="`/network/${network.id}`"
 								class="block"
-							>
-								<div class="flex items-start justify-between mb-4">
-									<div class="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
-										<svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-										</svg>
-									</div>
-									<div class="flex items-center gap-2">
-										<span
-											v-if="network.is_owner"
-											class="px-2 py-0.5 text-xs rounded-full bg-amber-500/20 text-amber-400"
-										>
-											Owner
-										</span>
-										<span
-											v-else-if="network.permission"
-											class="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-400"
-										>
-											{{ network.permission }}
-										</span>
-									</div>
-								</div>
-
-								<h3 class="text-lg font-semibold text-white mb-1 group-hover:text-cyan-400 transition-colors">{{ network.name }}</h3>
-								<p class="text-sm text-slate-400 mb-4 line-clamp-2">{{ network.description || 'No description' }}</p>
-
-								<div class="flex items-center justify-between text-xs text-slate-500">
-									<span>Updated {{ formatDate(network.updated_at) }}</span>
-									<svg class="w-4 h-4 text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+						>
+							<div class="flex items-start justify-between mb-4">
+								<div class="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
+									<svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
 									</svg>
 								</div>
-							</router-link>
+								<div class="flex items-center gap-2">
+									<span
+										v-if="network.is_owner"
+										class="px-2 py-0.5 text-xs rounded-full bg-amber-500/20 text-amber-400"
+									>
+										Owner
+									</span>
+									<span
+										v-else-if="network.permission"
+										class="px-2 py-0.5 text-xs rounded-full bg-slate-700 text-slate-400"
+									>
+										{{ network.permission }}
+									</span>
+								</div>
+							</div>
+
+							<h3 class="text-lg font-semibold text-white mb-1 group-hover:text-cyan-400 transition-colors">{{ network.name }}</h3>
+							<p class="text-sm text-slate-400 mb-4 line-clamp-2">{{ network.description || 'No description' }}</p>
+
+							<div class="flex items-center justify-between text-xs text-slate-500">
+								<span>Updated {{ formatDate(network.updated_at) }}</span>
+								<svg class="w-4 h-4 text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+								</svg>
+							</div>
+						</router-link>
 
 							<!-- Edit Button -->
 							<button
