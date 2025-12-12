@@ -46,6 +46,10 @@ async def get_cartographer_status_subscription(
             "cartographer_down_priority": "critical",
             "email_enabled": True,
             "discord_enabled": False,
+            "discord_delivery_method": "dm",
+            "discord_guild_id": None,
+            "discord_channel_id": None,
+            "discord_user_id": None,
             "minimum_priority": "medium",
             "quiet_hours_enabled": False,
             "quiet_hours_start": "22:00",
@@ -64,6 +68,10 @@ async def get_cartographer_status_subscription(
         "cartographer_down_priority": subscription.cartographer_down_priority,
         "email_enabled": subscription.email_enabled,
         "discord_enabled": subscription.discord_enabled,
+        "discord_delivery_method": subscription.discord_delivery_method,
+        "discord_guild_id": subscription.discord_guild_id,
+        "discord_channel_id": subscription.discord_channel_id,
+        "discord_user_id": subscription.discord_user_id,
         "minimum_priority": subscription.minimum_priority,
         "quiet_hours_enabled": subscription.quiet_hours_enabled,
         "quiet_hours_start": subscription.quiet_hours_start,
@@ -85,6 +93,10 @@ class CreateSubscriptionRequest(BaseModel):
     cartographer_down_priority: str = "critical"
     email_enabled: bool = True
     discord_enabled: bool = False
+    discord_delivery_method: str = "dm"
+    discord_guild_id: Optional[str] = None
+    discord_channel_id: Optional[str] = None
+    discord_user_id: Optional[str] = None
     minimum_priority: str = "medium"
     quiet_hours_enabled: bool = False
     quiet_hours_start: str = "22:00"
@@ -117,6 +129,10 @@ async def create_cartographer_status_subscription(
         cartographer_down_priority=request.cartographer_down_priority,
         email_enabled=request.email_enabled,
         discord_enabled=request.discord_enabled,
+        discord_delivery_method=request.discord_delivery_method,
+        discord_guild_id=request.discord_guild_id,
+        discord_channel_id=request.discord_channel_id,
+        discord_user_id=request.discord_user_id,
         minimum_priority=request.minimum_priority,
         quiet_hours_enabled=request.quiet_hours_enabled,
         quiet_hours_start=request.quiet_hours_start,
@@ -125,6 +141,9 @@ async def create_cartographer_status_subscription(
         timezone=request.timezone,
         _bypass_priority_provided=True,
         _timezone_provided=True,
+        _discord_guild_id_provided=True,
+        _discord_channel_id_provided=True,
+        _discord_user_id_provided=True,
     )
     
     return {
@@ -136,6 +155,10 @@ async def create_cartographer_status_subscription(
         "cartographer_down_priority": subscription.cartographer_down_priority,
         "email_enabled": subscription.email_enabled,
         "discord_enabled": subscription.discord_enabled,
+        "discord_delivery_method": subscription.discord_delivery_method,
+        "discord_guild_id": subscription.discord_guild_id,
+        "discord_channel_id": subscription.discord_channel_id,
+        "discord_user_id": subscription.discord_user_id,
         "minimum_priority": subscription.minimum_priority,
         "quiet_hours_enabled": subscription.quiet_hours_enabled,
         "quiet_hours_start": subscription.quiet_hours_start,
@@ -157,6 +180,10 @@ class UpdateSubscriptionRequest(BaseModel):
     cartographer_down_priority: Optional[str] = None
     email_enabled: Optional[bool] = None
     discord_enabled: Optional[bool] = None
+    discord_delivery_method: Optional[str] = None
+    discord_guild_id: Optional[str] = None
+    discord_channel_id: Optional[str] = None
+    discord_user_id: Optional[str] = None
     minimum_priority: Optional[str] = None
     quiet_hours_enabled: Optional[bool] = None
     quiet_hours_start: Optional[str] = None
@@ -180,10 +207,13 @@ async def update_cartographer_status_subscription(
     if request.email_address is not None and not request.email_address:
         raise HTTPException(status_code=400, detail="email_address cannot be empty")
     
-    # Check if bypass_priority or timezone were explicitly provided in the request
+    # Check if nullable fields were explicitly provided in the request
     request_dict = request.model_dump(exclude_unset=True)
     bypass_provided = "quiet_hours_bypass_priority" in request_dict
     timezone_provided = "timezone" in request_dict
+    discord_guild_id_provided = "discord_guild_id" in request_dict
+    discord_channel_id_provided = "discord_channel_id" in request_dict
+    discord_user_id_provided = "discord_user_id" in request_dict
     
     updated = cartographer_status_service.create_or_update_subscription(
         user_id=x_user_id,
@@ -194,6 +224,10 @@ async def update_cartographer_status_subscription(
         cartographer_down_priority=request.cartographer_down_priority,
         email_enabled=request.email_enabled,
         discord_enabled=request.discord_enabled,
+        discord_delivery_method=request.discord_delivery_method,
+        discord_guild_id=request.discord_guild_id,
+        discord_channel_id=request.discord_channel_id,
+        discord_user_id=request.discord_user_id,
         minimum_priority=request.minimum_priority,
         quiet_hours_enabled=request.quiet_hours_enabled,
         quiet_hours_start=request.quiet_hours_start,
@@ -202,6 +236,9 @@ async def update_cartographer_status_subscription(
         timezone=request.timezone,
         _bypass_priority_provided=bypass_provided,
         _timezone_provided=timezone_provided,
+        _discord_guild_id_provided=discord_guild_id_provided,
+        _discord_channel_id_provided=discord_channel_id_provided,
+        _discord_user_id_provided=discord_user_id_provided,
     )
     
     return {
@@ -213,6 +250,10 @@ async def update_cartographer_status_subscription(
         "cartographer_down_priority": updated.cartographer_down_priority,
         "email_enabled": updated.email_enabled,
         "discord_enabled": updated.discord_enabled,
+        "discord_delivery_method": updated.discord_delivery_method,
+        "discord_guild_id": updated.discord_guild_id,
+        "discord_channel_id": updated.discord_channel_id,
+        "discord_user_id": updated.discord_user_id,
         "minimum_priority": updated.minimum_priority,
         "quiet_hours_enabled": updated.quiet_hours_enabled,
         "quiet_hours_start": updated.quiet_hours_start,

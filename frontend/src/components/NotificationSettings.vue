@@ -108,25 +108,197 @@
 										</button>
 									</div>
 
-									<!-- Discord Toggle -->
-									<div class="flex items-center justify-between">
-										<div>
-											<p class="font-medium text-slate-900 dark:text-white">Discord</p>
-											<p class="text-sm text-slate-500 dark:text-slate-400">
-												{{ serviceStatus?.discord_configured ? 'Receive via Discord DM' : 'Discord not configured' }}
+									<!-- Discord Section -->
+									<div class="space-y-3">
+										<!-- Discord Status -->
+										<div v-if="!serviceStatus?.discord_configured" class="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700/30">
+											<p class="text-sm text-amber-700 dark:text-amber-400">
+												Discord bot is not configured. Contact your administrator to set up Discord notifications.
 											</p>
 										</div>
-										<button 
-											@click="toggleGlobalDiscord"
-											:disabled="!serviceStatus?.discord_configured"
-											class="relative w-12 h-7 rounded-full transition-colors disabled:opacity-50"
-											:class="globalPrefs.discord_enabled && serviceStatus?.discord_configured ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'"
-										>
-											<span 
-												class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
-												:class="globalPrefs.discord_enabled && serviceStatus?.discord_configured ? 'translate-x-5' : ''"
-											></span>
-										</button>
+
+										<template v-else>
+											<div class="flex items-center justify-between">
+												<div>
+													<p class="font-medium text-slate-900 dark:text-white">Discord</p>
+													<p class="text-sm text-slate-500 dark:text-slate-400">
+														{{ serviceStatus?.discord_bot_connected ? 'Bot connected' : 'Bot not connected' }}
+													</p>
+												</div>
+												<button 
+													@click="toggleGlobalDiscord"
+													class="relative w-12 h-7 rounded-full transition-colors"
+													:class="globalPrefs.discord_enabled ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'"
+												>
+													<span 
+														class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
+														:class="globalPrefs.discord_enabled ? 'translate-x-5' : ''"
+													></span>
+												</button>
+											</div>
+
+											<template v-if="globalPrefs.discord_enabled">
+												<!-- Add Bot to Server -->
+												<div v-if="!serviceStatus?.discord_bot_connected || discordGuilds.length === 0" class="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700/30">
+													<div class="flex items-start gap-3">
+														<div class="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+															<svg class="h-5 w-5 text-indigo-600 dark:text-indigo-400" viewBox="0 0 24 24" fill="currentColor">
+																<path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+															</svg>
+														</div>
+														<div class="flex-1">
+															<p class="font-medium text-indigo-900 dark:text-indigo-100">Add Cartographer Bot to your server</p>
+															<p class="text-sm text-indigo-700 dark:text-indigo-300 mt-1">
+																Click the button below to add the Cartographer Bot to your Discord server. Once added, you can select a channel to receive notifications.
+															</p>
+															<a
+																v-if="discordBotInfo?.invite_url"
+																:href="discordBotInfo.invite_url"
+																target="_blank"
+																rel="noopener noreferrer"
+																class="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+															>
+																<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+																	<path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+																</svg>
+																Add to Discord
+																<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+																	<path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+																</svg>
+															</a>
+															<button
+																@click="refreshDiscordGuilds"
+																class="inline-flex items-center gap-2 mt-3 ml-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm font-medium"
+															>
+																<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+																	<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+																</svg>
+																Refresh
+															</button>
+														</div>
+													</div>
+												</div>
+
+												<!-- Server & Channel Selection -->
+												<template v-else>
+													<!-- Delivery Method -->
+													<div>
+														<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+															Delivery Method
+														</label>
+														<div class="grid grid-cols-2 gap-2">
+															<button
+																@click="setGlobalDeliveryMethod('channel')"
+																:class="[
+																	'p-3 rounded-lg border-2 transition-colors text-left',
+																	globalPrefs.discord_delivery_method === 'channel'
+																		? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+																		: 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+																]"
+															>
+																<div class="flex items-center gap-2">
+																	<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+																		<path stroke-linecap="round" stroke-linejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+																	</svg>
+																	<span class="font-medium text-slate-900 dark:text-white">Channel</span>
+																</div>
+																<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Send to a server channel</p>
+															</button>
+															<button
+																@click="setGlobalDeliveryMethod('dm')"
+																:class="[
+																	'p-3 rounded-lg border-2 transition-colors text-left',
+																	globalPrefs.discord_delivery_method === 'dm'
+																		? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+																		: 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+																]"
+															>
+																<div class="flex items-center gap-2">
+																	<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+																		<path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+																	</svg>
+																	<span class="font-medium text-slate-900 dark:text-white">Direct Message</span>
+																</div>
+																<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Send DMs to you</p>
+															</button>
+														</div>
+													</div>
+
+													<!-- Channel Delivery Settings -->
+													<div v-if="globalPrefs.discord_delivery_method === 'channel'" class="space-y-3">
+														<div>
+															<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+																Server
+															</label>
+															<select
+																v-model="globalSelectedGuildId"
+																@change="onGlobalGuildChange"
+																class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+															>
+																<option value="">Select a server...</option>
+																<option v-for="guild in discordGuilds" :key="guild.id" :value="guild.id">
+																	{{ guild.name }}
+																</option>
+															</select>
+														</div>
+
+														<div v-if="globalSelectedGuildId">
+															<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+																Channel
+															</label>
+															<div class="flex gap-2">
+																<select
+																	v-model="globalSelectedChannelId"
+																	@change="onGlobalChannelChange"
+																	:disabled="loadingGlobalChannels"
+																	class="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
+																>
+																	<option value="">{{ loadingGlobalChannels ? 'Loading channels...' : 'Select a channel...' }}</option>
+																	<option v-for="channel in globalDiscordChannels" :key="channel.id" :value="channel.id">
+																		#{{ channel.name }}
+																	</option>
+																</select>
+																<button
+																	@click="testGlobalDiscord"
+																	:disabled="!globalSelectedChannelId || testingGlobalDiscord"
+																	class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
+																>
+																	{{ testingGlobalDiscord ? 'Sending...' : 'Test' }}
+																</button>
+															</div>
+														</div>
+													</div>
+
+													<!-- DM Delivery Settings -->
+													<div v-if="globalPrefs.discord_delivery_method === 'dm'" class="space-y-3">
+														<div>
+															<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+																Your Discord User ID
+															</label>
+															<div class="flex gap-2">
+																<input
+																	v-model="globalPrefs.discord_user_id"
+																	type="text"
+																	placeholder="e.g., 123456789012345678"
+																	class="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+																	@change="saveGlobalPrefs"
+																/>
+																<button
+																	@click="testGlobalDiscord"
+																	:disabled="!globalPrefs.discord_user_id || testingGlobalDiscord"
+																	class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
+																>
+																	{{ testingGlobalDiscord ? 'Sending...' : 'Test' }}
+																</button>
+															</div>
+															<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+																Enable Developer Mode in Discord, right-click your profile, and click "Copy User ID"
+															</p>
+														</div>
+													</div>
+												</template>
+											</template>
+										</template>
 									</div>
 								</div>
 							</div>
@@ -425,26 +597,25 @@
 										</button>
 									</div>
 
-									<div v-if="preferences.email.enabled">
-										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-											Email Address
-										</label>
-										<div class="flex gap-2">
-											<input
-												v-model="preferences.email.email_address"
-												type="email"
-												placeholder="your@email.com"
-												class="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-												@change="savePreferences"
-											/>
-											<button
-												@click="testEmail"
-												:disabled="!preferences.email.email_address || testingEmail"
-												class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
-											>
-												{{ testingEmail ? 'Sending...' : 'Test' }}
-											</button>
+									<div v-if="preferences.email.enabled" class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+										<div class="flex items-center gap-3">
+											<div class="w-8 h-8 rounded-full bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center">
+												<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-cyan-600 dark:text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+												</svg>
+											</div>
+											<div>
+												<p class="text-sm font-medium text-slate-900 dark:text-white">{{ userEmail || 'Loading...' }}</p>
+												<p class="text-xs text-slate-500 dark:text-slate-400">Using your account email</p>
+											</div>
 										</div>
+										<button
+											@click="testEmail"
+											:disabled="!userEmail || testingEmail"
+											class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
+										>
+											{{ testingEmail ? 'Sending...' : 'Test' }}
+										</button>
 									</div>
 								</div>
 							</div>
@@ -1265,6 +1436,10 @@ const savingCartographerStatus = ref(false);
 const globalPrefs = ref({
 	email_enabled: false,
 	discord_enabled: false,
+	discord_delivery_method: 'dm' as 'channel' | 'dm',
+	discord_guild_id: '' as string,
+	discord_channel_id: '' as string,
+	discord_user_id: '' as string,
 	cartographer_up_enabled: true,
 	cartographer_down_enabled: true,
 	cartographer_up_priority: 'medium' as NotificationPriority,
@@ -1276,6 +1451,16 @@ const globalPrefs = ref({
 	quiet_hours_bypass_priority: null as NotificationPriority | null,
 	timezone: null as string | null,
 });
+
+// Global Discord state
+const globalSelectedGuildId = ref('');
+const globalSelectedChannelId = ref('');
+const globalDiscordChannels = ref<Array<{ id: string; name: string }>>([]);
+const loadingGlobalChannels = ref(false);
+const testingGlobalDiscord = ref(false);
+
+// User email (from account)
+const userEmail = ref('');
 
 // State
 const preferences = ref<NotificationPreferences | null>(null);
@@ -1321,13 +1506,24 @@ const networkNotificationTypes = computed(() => {
 	) as typeof NOTIFICATION_TYPE_INFO;
 });
 
+// Load user email from account
+async function loadUserEmail() {
+	try {
+		const response = await axios.get('/api/user/profile');
+		userEmail.value = response.data.email || '';
+	} catch (e) {
+		console.error('Failed to load user email:', e);
+	}
+}
+
 // Load data
 onMounted(async () => {
 	try {
-		// Load preferences and service status in parallel
+		// Load preferences, service status, and user email in parallel
 		const [prefs, status] = await Promise.all([
 			getPreferences(),
 			getServiceStatus(),
+			loadUserEmail(),
 		]);
 		
 		// Ensure email and discord configs have defaults
@@ -1336,6 +1532,11 @@ onMounted(async () => {
 		}
 		if (!prefs.discord) {
 			prefs.discord = { enabled: false, delivery_method: 'channel' };
+		}
+		
+		// Auto-set the email address to user's account email
+		if (userEmail.value && !prefs.email.email_address) {
+			prefs.email.email_address = userEmail.value;
 		}
 		
 		preferences.value = prefs;
@@ -1403,6 +1604,10 @@ async function toggleMaster() {
 async function toggleEmail() {
 	if (!preferences.value || !serviceStatus.value?.email_configured) return;
 	preferences.value.email.enabled = !preferences.value.email.enabled;
+	// Auto-set email address to user's account email when enabling
+	if (preferences.value.email.enabled && userEmail.value) {
+		preferences.value.email.email_address = userEmail.value;
+	}
 	await savePreferences();
 }
 
@@ -1498,11 +1703,66 @@ async function autoDetectGlobalTimezone() {
 	await saveGlobalPrefs();
 }
 
+async function setGlobalDeliveryMethod(method: 'channel' | 'dm') {
+	globalPrefs.value.discord_delivery_method = method;
+	await saveGlobalPrefs();
+}
+
+async function onGlobalGuildChange() {
+	globalSelectedChannelId.value = '';
+	globalPrefs.value.discord_guild_id = globalSelectedGuildId.value;
+	globalPrefs.value.discord_channel_id = '';
+	
+	if (globalSelectedGuildId.value) {
+		loadingGlobalChannels.value = true;
+		try {
+			const response = await axios.get(`/api/notifications/discord/guilds/${globalSelectedGuildId.value}/channels`);
+			globalDiscordChannels.value = response.data.channels || [];
+		} catch (e) {
+			console.error('Failed to load channels:', e);
+			globalDiscordChannels.value = [];
+		} finally {
+			loadingGlobalChannels.value = false;
+		}
+	} else {
+		globalDiscordChannels.value = [];
+	}
+	await saveGlobalPrefs();
+}
+
+async function onGlobalChannelChange() {
+	globalPrefs.value.discord_channel_id = globalSelectedChannelId.value;
+	await saveGlobalPrefs();
+}
+
+async function testGlobalDiscord() {
+	testingGlobalDiscord.value = true;
+	try {
+		if (globalPrefs.value.discord_delivery_method === 'channel' && globalSelectedChannelId.value) {
+			await axios.post('/api/notifications/test/discord', {
+				channel_id: globalSelectedChannelId.value,
+			});
+		} else if (globalPrefs.value.discord_delivery_method === 'dm' && globalPrefs.value.discord_user_id) {
+			await axios.post('/api/notifications/test/discord', {
+				user_id: globalPrefs.value.discord_user_id,
+			});
+		}
+	} catch (e: any) {
+		console.error('Failed to send test Discord:', e);
+	} finally {
+		testingGlobalDiscord.value = false;
+	}
+}
+
 async function saveGlobalPrefs() {
 	try {
 		await axios.put("/api/notifications/cartographer-status/subscription", {
 			email_enabled: globalPrefs.value.email_enabled,
 			discord_enabled: globalPrefs.value.discord_enabled,
+			discord_delivery_method: globalPrefs.value.discord_delivery_method,
+			discord_guild_id: globalPrefs.value.discord_guild_id,
+			discord_channel_id: globalPrefs.value.discord_channel_id,
+			discord_user_id: globalPrefs.value.discord_user_id,
 			cartographer_up_enabled: globalPrefs.value.cartographer_up_enabled,
 			cartographer_down_enabled: globalPrefs.value.cartographer_down_enabled,
 			cartographer_up_priority: globalPrefs.value.cartographer_up_priority,
@@ -1841,6 +2101,10 @@ async function loadCartographerStatus() {
 		// Load global prefs from subscription
 		globalPrefs.value.email_enabled = response.data.email_enabled ?? true;
 		globalPrefs.value.discord_enabled = response.data.discord_enabled ?? false;
+		globalPrefs.value.discord_delivery_method = response.data.discord_delivery_method ?? 'dm';
+		globalPrefs.value.discord_guild_id = response.data.discord_guild_id ?? '';
+		globalPrefs.value.discord_channel_id = response.data.discord_channel_id ?? '';
+		globalPrefs.value.discord_user_id = response.data.discord_user_id ?? '';
 		globalPrefs.value.cartographer_up_enabled = response.data.cartographer_up_enabled ?? true;
 		globalPrefs.value.cartographer_down_enabled = response.data.cartographer_down_enabled ?? true;
 		globalPrefs.value.cartographer_up_priority = response.data.cartographer_up_priority ?? 'medium';
@@ -1851,6 +2115,21 @@ async function loadCartographerStatus() {
 		globalPrefs.value.quiet_hours_end = response.data.quiet_hours_end ?? '08:00';
 		globalPrefs.value.quiet_hours_bypass_priority = response.data.quiet_hours_bypass_priority ?? null;
 		globalPrefs.value.timezone = response.data.timezone ?? null;
+		
+		// Set up global Discord channel selection if previously configured
+		if (globalPrefs.value.discord_guild_id) {
+			globalSelectedGuildId.value = globalPrefs.value.discord_guild_id;
+			// Load channels for this guild
+			try {
+				const channelsResponse = await axios.get(`/api/notifications/discord/guilds/${globalPrefs.value.discord_guild_id}/channels`);
+				globalDiscordChannels.value = channelsResponse.data.channels || [];
+				if (globalPrefs.value.discord_channel_id) {
+					globalSelectedChannelId.value = globalPrefs.value.discord_channel_id;
+				}
+			} catch (e) {
+				console.error('Failed to load global Discord channels:', e);
+			}
+		}
 	} catch (e: any) {
 		if (e.response?.status === 404) {
 			cartographerStatus.value = { subscribed: false };

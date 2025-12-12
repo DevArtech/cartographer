@@ -41,6 +41,10 @@ class CartographerStatusSubscription:
         cartographer_down_priority: str = "critical",
         email_enabled: bool = True,
         discord_enabled: bool = False,
+        discord_delivery_method: str = "dm",
+        discord_guild_id: Optional[str] = None,
+        discord_channel_id: Optional[str] = None,
+        discord_user_id: Optional[str] = None,
         minimum_priority: str = "medium",
         quiet_hours_enabled: bool = False,
         quiet_hours_start: str = "22:00",
@@ -56,6 +60,10 @@ class CartographerStatusSubscription:
         self.cartographer_down_priority = cartographer_down_priority
         self.email_enabled = email_enabled
         self.discord_enabled = discord_enabled
+        self.discord_delivery_method = discord_delivery_method
+        self.discord_guild_id = discord_guild_id
+        self.discord_channel_id = discord_channel_id
+        self.discord_user_id = discord_user_id
         self.minimum_priority = minimum_priority
         self.quiet_hours_enabled = quiet_hours_enabled
         self.quiet_hours_start = quiet_hours_start
@@ -76,6 +84,10 @@ class CartographerStatusSubscription:
             "cartographer_down_priority": self.cartographer_down_priority,
             "email_enabled": self.email_enabled,
             "discord_enabled": self.discord_enabled,
+            "discord_delivery_method": self.discord_delivery_method,
+            "discord_guild_id": self.discord_guild_id,
+            "discord_channel_id": self.discord_channel_id,
+            "discord_user_id": self.discord_user_id,
             "minimum_priority": self.minimum_priority,
             "quiet_hours_enabled": self.quiet_hours_enabled,
             "quiet_hours_start": self.quiet_hours_start,
@@ -98,6 +110,10 @@ class CartographerStatusSubscription:
             cartographer_down_priority=data.get("cartographer_down_priority", "critical"),
             email_enabled=data.get("email_enabled", True),
             discord_enabled=data.get("discord_enabled", False),
+            discord_delivery_method=data.get("discord_delivery_method", "dm"),
+            discord_guild_id=data.get("discord_guild_id"),
+            discord_channel_id=data.get("discord_channel_id"),
+            discord_user_id=data.get("discord_user_id"),
             minimum_priority=data.get("minimum_priority", "medium"),
             quiet_hours_enabled=data.get("quiet_hours_enabled", False),
             quiet_hours_start=data.get("quiet_hours_start", "22:00"),
@@ -175,6 +191,10 @@ class CartographerStatusService:
         cartographer_down_priority: Optional[str] = None,
         email_enabled: Optional[bool] = None,
         discord_enabled: Optional[bool] = None,
+        discord_delivery_method: Optional[str] = None,
+        discord_guild_id: Optional[str] = None,
+        discord_channel_id: Optional[str] = None,
+        discord_user_id: Optional[str] = None,
         minimum_priority: Optional[str] = None,
         quiet_hours_enabled: Optional[bool] = None,
         quiet_hours_start: Optional[str] = None,
@@ -184,6 +204,9 @@ class CartographerStatusService:
         # Use sentinel value to distinguish between "not provided" and "set to None"
         _bypass_priority_provided: bool = False,
         _timezone_provided: bool = False,
+        _discord_guild_id_provided: bool = False,
+        _discord_channel_id_provided: bool = False,
+        _discord_user_id_provided: bool = False,
     ) -> CartographerStatusSubscription:
         """Create or update a subscription"""
         if user_id in self._subscriptions:
@@ -203,6 +226,14 @@ class CartographerStatusService:
                 sub.email_enabled = email_enabled
             if discord_enabled is not None:
                 sub.discord_enabled = discord_enabled
+            if discord_delivery_method is not None:
+                sub.discord_delivery_method = discord_delivery_method
+            if _discord_guild_id_provided:
+                sub.discord_guild_id = discord_guild_id
+            if _discord_channel_id_provided:
+                sub.discord_channel_id = discord_channel_id
+            if _discord_user_id_provided:
+                sub.discord_user_id = discord_user_id
             if minimum_priority is not None:
                 sub.minimum_priority = minimum_priority
             if quiet_hours_enabled is not None:
@@ -229,6 +260,10 @@ class CartographerStatusService:
                 cartographer_down_priority=cartographer_down_priority if cartographer_down_priority is not None else "critical",
                 email_enabled=email_enabled if email_enabled is not None else True,
                 discord_enabled=discord_enabled if discord_enabled is not None else False,
+                discord_delivery_method=discord_delivery_method if discord_delivery_method is not None else "dm",
+                discord_guild_id=discord_guild_id,
+                discord_channel_id=discord_channel_id,
+                discord_user_id=discord_user_id,
                 minimum_priority=minimum_priority if minimum_priority is not None else "medium",
                 quiet_hours_enabled=quiet_hours_enabled if quiet_hours_enabled is not None else False,
                 quiet_hours_start=quiet_hours_start if quiet_hours_start is not None else "22:00",
