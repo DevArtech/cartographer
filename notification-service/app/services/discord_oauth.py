@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import urlencode, quote
 import httpx
 
 from ..models.database import DiscordUserLink
@@ -47,13 +48,14 @@ class DiscordOAuthService:
         scopes = ["identify", "email"]
         params = {
             "client_id": DISCORD_CLIENT_ID,
-            "redirect_uri": DISCORD_REDIRECT_URI,
+            "redirect_uri": DISCORD_REDIRECT_URI,  # Will be URL-encoded by urlencode
             "response_type": "code",
             "scope": " ".join(scopes),
             "state": state_token,
         }
         
-        query_string = "&".join([f"{k}={v}" for k, v in params.items()])
+        # Properly URL-encode all parameters
+        query_string = urlencode(params)
         return f"https://discord.com/api/oauth2/authorize?{query_string}"
     
     def validate_state(self, state_token: str) -> Optional[str]:
