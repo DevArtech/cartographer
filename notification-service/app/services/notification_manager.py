@@ -207,11 +207,11 @@ class NotificationManager:
             
             for broadcast_id, broadcast_data in data.items():
                 try:
-                    # Parse datetime strings
-                    for field in ["scheduled_at", "created_at", "sent_at"]:
-                        if field in broadcast_data and broadcast_data[field] and isinstance(broadcast_data[field], str):
-                            broadcast_data[field] = datetime.fromisoformat(broadcast_data[field].replace("Z", "+00:00"))
-                    
+                # Parse datetime strings
+                for field in ["scheduled_at", "created_at", "sent_at"]:
+                    if field in broadcast_data and broadcast_data[field] and isinstance(broadcast_data[field], str):
+                        broadcast_data[field] = datetime.fromisoformat(broadcast_data[field].replace("Z", "+00:00"))
+                
                     # Handle old scheduled broadcasts that don't have network_id
                     # If network_id is missing, we can't process it, so skip it
                     if "network_id" not in broadcast_data:
@@ -223,7 +223,7 @@ class NotificationManager:
                         skipped_count += 1
                         continue
                     
-                    self._scheduled_broadcasts[broadcast_id] = ScheduledBroadcast(**broadcast_data)
+                self._scheduled_broadcasts[broadcast_id] = ScheduledBroadcast(**broadcast_data)
                     loaded_count += 1
                 except Exception as e:
                     logger.warning(f"Failed to load scheduled broadcast {broadcast_id}: {e}. Skipping.")
@@ -923,18 +923,18 @@ class NotificationManager:
                 self._history.append(record)
             else:
                 logger.info(f"Attempting to send email notification to {prefs.email.email_address} for network {network_id}")
-                record = await send_notification_email(
-                    to_email=prefs.email.email_address,
-                    event=event,
-                    notification_id=notification_id,
-                )
+            record = await send_notification_email(
+                to_email=prefs.email.email_address,
+                event=event,
+                notification_id=notification_id,
+            )
                 record.network_id = network_id
                 if record.success:
                     logger.info(f"✓ Email notification sent successfully to {prefs.email.email_address} for network {network_id}")
                 else:
                     logger.error(f"✗ Email notification failed for network {network_id}: {record.error_message}")
-                records.append(record)
-                self._history.append(record)
+            records.append(record)
+            self._history.append(record)
         else:
             logger.debug(f"Email notifications not enabled for network {network_id} (enabled={prefs.email.enabled}, address={'SET' if prefs.email.email_address else 'NOT SET'})")
         

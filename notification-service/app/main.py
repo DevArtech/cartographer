@@ -88,7 +88,8 @@ async def _send_cartographer_up_notification(previous_state: dict):
                 json={
                     "event_type": "up",
                     "downtime_minutes": downtime_minutes,
-                }
+                },
+                timeout=10.0
             )
             if response.status_code == 200:
                 result = response.json()

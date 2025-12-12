@@ -6,15 +6,24 @@ This is a separate system from network-scoped notifications.
 
 import uuid
 import logging
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 
 from ..services.cartographer_status import cartographer_status_service, CartographerStatusSubscription
 from ..services.email_service import send_notification_email, is_email_configured
 from ..models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
 
 logger = logging.getLogger(__name__)
+
+
+class CartographerStatusNotifyRequest(BaseModel):
+    """Request model for Cartographer status notification"""
+    event_type: str  # "up" or "down"
+    message: Optional[str] = None
+    downtime_minutes: Optional[int] = None
+    affected_services: Optional[List[str]] = None
 
 router = APIRouter()
 
@@ -136,10 +145,7 @@ async def delete_cartographer_status_subscription(
 
 @router.post("/notify")
 async def notify_cartographer_status(
-    event_type: str,  # "up" or "down"
-    message: Optional[str] = None,
-    downtime_minutes: Optional[int] = None,
-    affected_services: Optional[list] = None,
+    request: CartographerStatusNotifyRequest,
 ):
     """
     Send Cartographer status notification to all subscribers.
@@ -147,9 +153,10 @@ async def notify_cartographer_status(
     This endpoint is called by the service itself or external monitoring.
     """
     # Map event type string to NotificationType
-    if event_type.lower() == "up":
+    event_type_lower = request.event_type.lower()
+    if event_type_lower == "up":
         notification_type = NotificationType.CARTOGRAPHER_UP
-    elif event_type.lower() == "down":
+    elif event_type_lower == "down":
         notification_type = NotificationType.CARTOGRAPHER_DOWN
     else:
         raise HTTPException(status_code=400, detail="event_type must be 'up' or 'down'")
@@ -157,14 +164,14 @@ async def notify_cartographer_status(
     # Build message
     if notification_type == NotificationType.CARTOGRAPHER_UP:
         downtime_str = ""
-        if downtime_minutes:
-            downtime_str = f"Service was down for approximately {downtime_minutes} minutes. "
+        if request.downtime_minutes:
+            downtime_str = f"Service was down for approximately {request.downtime_minutes} minutes. "
         title = "Cartographer is Back Online"
         default_message = f"{downtime_str}The Cartographer monitoring service is now operational."
     else:
         services_str = ""
-        if affected_services:
-            services_str = f"Affected services: {', '.join(affected_services)}. "
+        if request.affected_services:
+            services_str = f"Affected services: {', '.join(request.affected_services)}. "
         title = "Cartographer Service Alert"
         default_message = f"{services_str}The Cartographer monitoring service may be unavailable."
     
@@ -172,12 +179,12 @@ async def notify_cartographer_status(
         event_type=notification_type,
         priority=get_default_priority_for_type(notification_type),
         title=title,
-        message=message or default_message,
+        message=request.message or default_message,
         network_id=None,  # Not network-specific
         details={
             "service": "cartographer",
-            "downtime_minutes": downtime_minutes,
-            "affected_services": affected_services or [],
+            "downtime_minutes": request.downtime_minutes,
+            "affected_services": request.affected_services or [],
             "reported_at": datetime.utcnow().isoformat(),
         },
     )
@@ -186,7 +193,7 @@ async def notify_cartographer_status(
     subscribers = cartographer_status_service.get_subscribers_for_event(notification_type)
     
     if not subscribers:
-        logger.info(f"No subscribers found for {event_type} notification")
+        logger.info(f"No subscribers found for {event_type_lower} notification")
         return {
             "success": True,
             "subscribers_notified": 0,
@@ -209,7 +216,7 @@ async def notify_cartographer_status(
     
     for subscriber in subscribers:
         try:
-            logger.info(f"Sending {event_type} notification to {subscriber.email_address} (user {subscriber.user_id})")
+            logger.info(f"Sending {event_type_lower} notification to {subscriber.email_address} (user {subscriber.user_id})")
             record = await send_notification_email(
                 to_email=subscriber.email_address,
                 event=event,
@@ -217,7 +224,7 @@ async def notify_cartographer_status(
             )
             
             if record.success:
-                logger.info(f"✓ Cartographer {event_type} notification sent to {subscriber.email_address}")
+                logger.info(f"✓ Cartographer {event_type_lower} notification sent to {subscriber.email_address}")
                 successful += 1
             else:
                 logger.error(f"✗ Failed to send to {subscriber.email_address}: {record.error_message}")
@@ -227,7 +234,7 @@ async def notify_cartographer_status(
             failed += 1
     
     logger.info(
-        f"Cartographer {event_type} notification complete: "
+        f"Cartographer {event_type_lower} notification complete: "
         f"{successful} successful, {failed} failed out of {len(subscribers)} subscribers"
     )
     
