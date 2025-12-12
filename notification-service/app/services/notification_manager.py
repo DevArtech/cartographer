@@ -72,6 +72,7 @@ class NotificationManager:
         # Load persisted data
         self._load_preferences()
         self._load_global_preferences()
+        self._migrate_users_to_global_preferences()  # Auto-migrate existing users
         self._load_history()
         self._load_scheduled_broadcasts()
         self._load_silenced_devices()
@@ -201,17 +202,44 @@ class NotificationManager:
             with open(SCHEDULED_FILE, 'r') as f:
                 data = json.load(f)
             
-            for broadcast_id, broadcast_data in data.items():
-                # Parse datetime strings
-                for field in ["scheduled_at", "created_at", "sent_at"]:
-                    if field in broadcast_data and broadcast_data[field] and isinstance(broadcast_data[field], str):
-                        broadcast_data[field] = datetime.fromisoformat(broadcast_data[field].replace("Z", "+00:00"))
-                
-                self._scheduled_broadcasts[broadcast_id] = ScheduledBroadcast(**broadcast_data)
+            loaded_count = 0
+            skipped_count = 0
             
-            logger.info(f"Loaded {len(self._scheduled_broadcasts)} scheduled broadcasts")
+            for broadcast_id, broadcast_data in data.items():
+                try:
+                    # Parse datetime strings
+                    for field in ["scheduled_at", "created_at", "sent_at"]:
+                        if field in broadcast_data and broadcast_data[field] and isinstance(broadcast_data[field], str):
+                            broadcast_data[field] = datetime.fromisoformat(broadcast_data[field].replace("Z", "+00:00"))
+                    
+                    # Handle old scheduled broadcasts that don't have network_id
+                    # If network_id is missing, we can't process it, so skip it
+                    if "network_id" not in broadcast_data:
+                        logger.warning(
+                            f"Skipping scheduled broadcast {broadcast_id}: missing network_id. "
+                            f"This is likely an old broadcast from before multi-tenant support. "
+                            f"Please recreate it if needed."
+                        )
+                        skipped_count += 1
+                        continue
+                    
+                    self._scheduled_broadcasts[broadcast_id] = ScheduledBroadcast(**broadcast_data)
+                    loaded_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to load scheduled broadcast {broadcast_id}: {e}. Skipping.")
+                    skipped_count += 1
+                    continue
+            
+            if loaded_count > 0:
+                logger.info(f"Loaded {loaded_count} scheduled broadcasts")
+            if skipped_count > 0:
+                logger.warning(f"Skipped {skipped_count} invalid or outdated scheduled broadcasts")
+                
+            # If we skipped any, save the cleaned-up list
+            if skipped_count > 0:
+                self._save_scheduled_broadcasts()
         except Exception as e:
-            logger.error(f"Failed to load scheduled broadcasts: {e}")
+            logger.error(f"Failed to load scheduled broadcasts: {e}", exc_info=True)
     
     def _save_silenced_devices(self):
         """Save silenced devices list to disk"""
@@ -582,6 +610,65 @@ class NotificationManager:
             logger.info(f"Loaded {len(self._global_preferences)} global user preferences")
         except Exception as e:
             logger.error(f"Failed to load global preferences: {e}")
+    
+    def _migrate_users_to_global_preferences(self):
+        """
+        Automatically migrate existing network owners to have global preferences enabled.
+        
+        This migration:
+        - Finds all network preferences with owner_user_id and email configured
+        - Creates global preferences for those users with Cartographer Up/Down enabled
+        - Uses the email address from their network preferences
+        - Only creates if they don't already have global preferences
+        """
+        migrated_count = 0
+        skipped_count = 0
+        
+        for network_id_str, network_prefs in self._preferences.items():
+            # Skip if no owner or no email configured
+            if not network_prefs.owner_user_id:
+                continue
+            
+            if not network_prefs.email.email_address:
+                continue
+            
+            # Skip if user already has global preferences
+            if network_prefs.owner_user_id in self._global_preferences:
+                skipped_count += 1
+                continue
+            
+            # Create global preferences for this user
+            # Enable both Cartographer Up and Down by default
+            # Use the email address from their network preferences
+            try:
+                global_prefs = GlobalUserPreferences(
+                    user_id=network_prefs.owner_user_id,
+                    email_address=network_prefs.email.email_address,
+                    cartographer_up_enabled=True,
+                    cartographer_down_enabled=True,
+                )
+                
+                self._global_preferences[network_prefs.owner_user_id] = global_prefs
+                migrated_count += 1
+                
+                logger.info(
+                    f"Auto-migrated user {network_prefs.owner_user_id} to global preferences "
+                    f"(from network {network_id_str}, email: {network_prefs.email.email_address})"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to migrate user {network_prefs.owner_user_id} to global preferences: {e}"
+                )
+                continue
+        
+        if migrated_count > 0:
+            self._save_global_preferences()
+            logger.info(
+                f"Migration complete: {migrated_count} users migrated to global preferences, "
+                f"{skipped_count} already had global preferences"
+            )
+        elif skipped_count > 0:
+            logger.debug(f"Migration check: {skipped_count} users already have global preferences")
     
     def get_global_preferences(self, user_id: str) -> GlobalUserPreferences:
         """Get global notification preferences for a user (creates default if not exists)"""
