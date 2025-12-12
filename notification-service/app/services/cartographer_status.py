@@ -292,16 +292,22 @@ class CartographerStatusService:
         return list(self._subscriptions.values())
     
     def get_subscribers_for_event(self, event_type: NotificationType) -> List[CartographerStatusSubscription]:
-        """Get all subscribers for a specific event type"""
+        """Get all subscribers for a specific event type who have at least one notification channel enabled"""
         if event_type == NotificationType.CARTOGRAPHER_UP:
             return [
                 sub for sub in self._subscriptions.values()
-                if sub.cartographer_up_enabled and sub.email_address
+                if sub.cartographer_up_enabled and (
+                    (sub.email_enabled and sub.email_address) or 
+                    (sub.discord_enabled and (sub.discord_channel_id or sub.discord_user_id))
+                )
             ]
         elif event_type == NotificationType.CARTOGRAPHER_DOWN:
             return [
                 sub for sub in self._subscriptions.values()
-                if sub.cartographer_down_enabled and sub.email_address
+                if sub.cartographer_down_enabled and (
+                    (sub.email_enabled and sub.email_address) or 
+                    (sub.discord_enabled and (sub.discord_channel_id or sub.discord_user_id))
+                )
             ]
         return []
     

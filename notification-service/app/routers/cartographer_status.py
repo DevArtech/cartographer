@@ -342,37 +342,83 @@ async def notify_cartographer_status(
             "message": "No active subscriptions",
         }
     
-    # Check email service
-    if not is_email_configured():
-        logger.error("Cannot send Cartographer status notifications: Email service not configured")
+    # Check available notification services
+    email_available = is_email_configured()
+    discord_available = is_discord_configured()
+    
+    if not email_available and not discord_available:
+        logger.error("Cannot send Cartographer status notifications: Neither email nor Discord is configured")
         return {
             "success": False,
             "subscribers_notified": 0,
-            "error": "Email service not configured",
+            "error": "No notification services configured",
         }
     
-    # Send to each subscriber
+    # Send to each subscriber via their preferred channels
     notification_id = str(uuid.uuid4())
     successful = 0
     failed = 0
     
     for subscriber in subscribers:
-        try:
-            logger.info(f"Sending {event_type_lower} notification to {subscriber.email_address} (user {subscriber.user_id})")
-            record = await send_notification_email(
-                to_email=subscriber.email_address,
-                event=event,
-                notification_id=notification_id,
-            )
-            
-            if record.success:
-                logger.info(f"✓ Cartographer {event_type_lower} notification sent to {subscriber.email_address}")
-                successful += 1
-            else:
-                logger.error(f"✗ Failed to send to {subscriber.email_address}: {record.error_message}")
-                failed += 1
-        except Exception as e:
-            logger.error(f"✗ Exception sending to {subscriber.email_address}: {e}", exc_info=True)
+        subscriber_notified = False
+        
+        # Send via email if enabled
+        if subscriber.email_enabled and subscriber.email_address and email_available:
+            try:
+                logger.info(f"Sending {event_type_lower} email to {subscriber.email_address} (user {subscriber.user_id})")
+                record = await send_notification_email(
+                    to_email=subscriber.email_address,
+                    event=event,
+                    notification_id=notification_id,
+                )
+                
+                if record.success:
+                    logger.info(f"✓ Cartographer {event_type_lower} email sent to {subscriber.email_address}")
+                    subscriber_notified = True
+                else:
+                    logger.error(f"✗ Failed to send email to {subscriber.email_address}: {record.error_message}")
+            except Exception as e:
+                logger.error(f"✗ Exception sending email to {subscriber.email_address}: {e}", exc_info=True)
+        
+        # Send via Discord if enabled
+        if subscriber.discord_enabled and discord_available:
+            try:
+                # Build Discord config based on subscriber preferences
+                if subscriber.discord_delivery_method == "channel" and subscriber.discord_channel_id:
+                    discord_config = DiscordConfig(
+                        enabled=True,
+                        delivery_method=DiscordDeliveryMethod.CHANNEL,
+                        channel_config=DiscordChannelConfig(
+                            guild_id=subscriber.discord_guild_id or "",
+                            channel_id=subscriber.discord_channel_id,
+                        ),
+                    )
+                elif subscriber.discord_delivery_method == "dm" and subscriber.discord_user_id:
+                    discord_config = DiscordConfig(
+                        enabled=True,
+                        delivery_method=DiscordDeliveryMethod.DM,
+                        discord_user_id=subscriber.discord_user_id,
+                    )
+                else:
+                    logger.warning(f"Discord enabled but no channel/user configured for user {subscriber.user_id}")
+                    discord_config = None
+                
+                if discord_config:
+                    logger.info(f"Sending {event_type_lower} Discord notification to user {subscriber.user_id}")
+                    from ..services.discord_service import send_discord_notification
+                    record = await send_discord_notification(discord_config, event, notification_id)
+                    
+                    if record.success:
+                        logger.info(f"✓ Cartographer {event_type_lower} Discord sent to user {subscriber.user_id}")
+                        subscriber_notified = True
+                    else:
+                        logger.error(f"✗ Failed to send Discord to user {subscriber.user_id}: {record.error_message}")
+            except Exception as e:
+                logger.error(f"✗ Exception sending Discord to user {subscriber.user_id}: {e}", exc_info=True)
+        
+        if subscriber_notified:
+            successful += 1
+        else:
             failed += 1
     
     logger.info(
