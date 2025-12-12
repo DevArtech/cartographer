@@ -609,13 +609,13 @@
 												<p class="text-xs text-slate-500 dark:text-slate-400">Using your account email</p>
 											</div>
 										</div>
-										<button
-											@click="testEmail"
+											<button
+												@click="testEmail"
 											:disabled="!userEmail || testingEmail"
-											class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
-										>
-											{{ testingEmail ? 'Sending...' : 'Test' }}
-										</button>
+												class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
+											>
+												{{ testingEmail ? 'Sending...' : 'Test' }}
+											</button>
 									</div>
 								</div>
 							</div>
@@ -1737,6 +1737,7 @@ async function onGlobalChannelChange() {
 
 async function testGlobalDiscord() {
 	testingGlobalDiscord.value = true;
+	testResult.value = null;
 	try {
 		if (globalPrefs.value.discord_delivery_method === 'channel' && globalSelectedChannelId.value) {
 			await axios.post('/api/notifications/cartographer-status/test/discord', {
@@ -1747,8 +1748,12 @@ async function testGlobalDiscord() {
 				user_id: globalPrefs.value.discord_user_id,
 			});
 		}
+		testResult.value = { success: true, channel: 'discord', message: 'Test Discord notification sent!' };
+		setTimeout(() => { testResult.value = null; }, 5000);
 	} catch (e: any) {
 		console.error('Failed to send test Discord:', e);
+		testResult.value = { success: false, channel: 'discord', message: '', error: e.message };
+		setTimeout(() => { testResult.value = null; }, 5000);
 	} finally {
 		testingGlobalDiscord.value = false;
 	}
