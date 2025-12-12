@@ -198,10 +198,10 @@
 											</svg>
 										</button>
 										
-										<!-- Dropdown menu -->
+										<!-- Dropdown menu (opens upward to avoid overflow clipping) -->
 										<div
 											v-if="openDropdown === user.id"
-											class="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-10"
+											class="absolute right-0 bottom-full mb-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-10"
 										>
 											<button
 												@click="onAddUser(user, 'viewer')"
