@@ -136,22 +136,48 @@ async def lifespan(app: FastAPI):
     # Run database migrations
     logger.info("Running database migrations...")
     try:
-        import os
+        from alembic.config import Config
+        from alembic import command
+        from alembic.script import ScriptDirectory
+        from sqlalchemy import text
+        import subprocess
+        import sys
         from pathlib import Path
         
-        # Ensure we're in the right directory for alembic.ini
+        # Get the app directory (parent of app/)
         app_dir = Path(__file__).parent.parent
-        original_cwd = os.getcwd()
-        try:
-            os.chdir(app_dir)
-            from migrations.env import run_async_migrations
-            await run_async_migrations()
-            logger.info("Database migrations completed successfully")
-        finally:
-            os.chdir(original_cwd)
-    except ImportError as e:
-        logger.error(f"Failed to import migrations module: {e}", exc_info=True)
-        logger.warning("Migrations directory may not be available. Service will continue but some features may not work.")
+        
+        # Check if alembic.ini exists
+        alembic_ini = app_dir / "alembic.ini"
+        if not alembic_ini.exists():
+            logger.warning(f"alembic.ini not found at {alembic_ini}, skipping migrations")
+        else:
+            # Use alembic command line to run migrations
+            # This is the most reliable way to run migrations programmatically
+            logger.info("Running Alembic migrations...")
+            result = subprocess.run(
+                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                cwd=str(app_dir),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=os.environ.copy()  # Pass environment variables (including DATABASE_URL)
+            )
+            
+            if result.returncode == 0:
+                logger.info("Database migrations completed successfully")
+                if result.stdout:
+                    logger.debug(f"Migration output: {result.stdout}")
+            else:
+                logger.error(f"Migration failed with return code {result.returncode}")
+                logger.error(f"Migration stderr: {result.stderr}")
+                logger.error(f"Migration stdout: {result.stdout}")
+                raise RuntimeError(f"Migration failed: {result.stderr}")
+                
+    except FileNotFoundError:
+        logger.warning("Alembic not found, skipping migrations. Install alembic to enable automatic migrations.")
+    except subprocess.TimeoutExpired:
+        logger.error("Migration timed out after 60 seconds")
     except Exception as e:
         logger.error(f"Failed to run database migrations: {e}", exc_info=True)
         logger.warning("Service will continue, but some features may not work. Please check database connection and migration files.")
