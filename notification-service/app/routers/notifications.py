@@ -2,6 +2,7 @@
 API router for notification service endpoints.
 """
 
+import uuid
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query, Header, Request
@@ -510,7 +511,20 @@ async def notify_cartographer_up(
     
     This can be called by external monitoring systems when they detect
     the service has recovered from downtime.
+    
+    NOTE: This endpoint now uses the new Cartographer Status service.
     """
+    from ..services.cartographer_status import cartographer_status_service
+    from ..services.email_service import send_notification_email, is_email_configured
+    from ..models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
+    
+    if not is_email_configured():
+        return {
+            "success": False,
+            "subscribers_notified": 0,
+            "error": "Email service not configured",
+        }
+    
     downtime_str = ""
     if downtime_minutes:
         downtime_str = f"Service was down for approximately {downtime_minutes} minutes. "
@@ -520,7 +534,7 @@ async def notify_cartographer_up(
         priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_UP),
         title="Cartographer is Back Online",
         message=message or f"{downtime_str}The Cartographer monitoring service is now operational.",
-        network_id=None,  # Global notification, not network-specific
+        network_id=None,
         details={
             "service": "cartographer",
             "downtime_minutes": downtime_minutes,
@@ -528,10 +542,26 @@ async def notify_cartographer_up(
         },
     )
     
-    results = await notification_manager.broadcast_global_notification(event)
+    subscribers = cartographer_status_service.get_subscribers_for_event(NotificationType.CARTOGRAPHER_UP)
+    notification_id = str(uuid.uuid4())
+    successful = 0
+    
+    for subscriber in subscribers:
+        try:
+            record = await send_notification_email(
+                to_email=subscriber.email_address,
+                event=event,
+                notification_id=notification_id,
+            )
+            if record.success:
+                successful += 1
+        except Exception as e:
+            logger.error(f"Failed to send to {subscriber.email_address}: {e}")
+    
     return {
-        "success": True,
-        "users_notified": len(results),
+        "success": successful > 0,
+        "subscribers_notified": successful,
+        "total_subscribers": len(subscribers),
     }
 
 
@@ -547,7 +577,20 @@ async def notify_cartographer_down(
     - External monitoring systems when they detect the service is unreachable
     - Administrators before planned maintenance
     - The service itself before a graceful shutdown
+    
+    NOTE: This endpoint now uses the new Cartographer Status service.
     """
+    from ..services.cartographer_status import cartographer_status_service
+    from ..services.email_service import send_notification_email, is_email_configured
+    from ..models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
+    
+    if not is_email_configured():
+        return {
+            "success": False,
+            "subscribers_notified": 0,
+            "error": "Email service not configured",
+        }
+    
     services_str = ""
     if affected_services:
         services_str = f"Affected services: {', '.join(affected_services)}. "
@@ -557,7 +600,7 @@ async def notify_cartographer_down(
         priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_DOWN),
         title="Cartographer Service Alert",
         message=message or f"{services_str}The Cartographer monitoring service may be unavailable.",
-        network_id=None,  # Global notification, not network-specific
+        network_id=None,
         details={
             "service": "cartographer",
             "affected_services": affected_services or [],
@@ -565,10 +608,26 @@ async def notify_cartographer_down(
         },
     )
     
-    results = await notification_manager.broadcast_global_notification(event)
+    subscribers = cartographer_status_service.get_subscribers_for_event(NotificationType.CARTOGRAPHER_DOWN)
+    notification_id = str(uuid.uuid4())
+    successful = 0
+    
+    for subscriber in subscribers:
+        try:
+            record = await send_notification_email(
+                to_email=subscriber.email_address,
+                event=event,
+                notification_id=notification_id,
+            )
+            if record.success:
+                successful += 1
+        except Exception as e:
+            logger.error(f"Failed to send to {subscriber.email_address}: {e}")
+    
     return {
-        "success": True,
-        "users_notified": len(results),
+        "success": successful > 0,
+        "subscribers_notified": successful,
+        "total_subscribers": len(subscribers),
     }
 
 

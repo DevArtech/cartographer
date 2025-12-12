@@ -36,6 +36,118 @@
 					</div>
 
 					<template v-else-if="preferences">
+						<!-- Cartographer Status Notifications (Separate Section) -->
+						<div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-200 dark:border-blue-700/30 mb-6">
+							<div class="flex items-center gap-3 mb-4">
+								<div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+									</svg>
+								</div>
+								<div>
+									<h3 class="font-semibold text-slate-900 dark:text-white">Cartographer Status Notifications</h3>
+									<p class="text-sm text-slate-500 dark:text-slate-400">Get notified when Cartographer itself goes up or down</p>
+								</div>
+							</div>
+							
+							<div v-if="cartographerStatusLoading" class="flex items-center justify-center py-4">
+								<svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+							</div>
+							
+							<template v-else-if="cartographerStatus">
+								<div v-if="!cartographerStatus.subscribed" class="space-y-3">
+									<p class="text-sm text-slate-600 dark:text-slate-400">
+										Subscribe to receive notifications when Cartographer service goes up or down. This is separate from network notifications.
+									</p>
+									<div>
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+											Email Address
+										</label>
+										<input
+											v-model="cartographerStatusEmail"
+											type="email"
+											placeholder="your@email.com"
+											class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+										/>
+									</div>
+									<button
+										@click="subscribeCartographerStatus"
+										:disabled="!cartographerStatusEmail || savingCartographerStatus"
+										class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+									>
+										{{ savingCartographerStatus ? 'Subscribing...' : 'Subscribe' }}
+									</button>
+								</div>
+								
+								<div v-else class="space-y-4">
+									<div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+										<div>
+											<p class="font-medium text-slate-900 dark:text-white">Email</p>
+											<p class="text-sm text-slate-500 dark:text-slate-400">{{ cartographerStatus.email_address }}</p>
+										</div>
+										<button
+											@click="updateCartographerStatusEmail"
+											class="px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+										>
+											Change
+										</button>
+									</div>
+									
+									<div class="space-y-3">
+										<div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+											<div class="flex items-center gap-2">
+												<span class="text-lg">✅</span>
+												<div>
+													<p class="font-medium text-slate-900 dark:text-white">Cartographer Up</p>
+													<p class="text-xs text-slate-500 dark:text-slate-400">When Cartographer comes back online</p>
+												</div>
+											</div>
+											<button 
+												@click="toggleCartographerUp"
+												class="relative w-12 h-7 rounded-full transition-colors"
+												:class="cartographerStatus.cartographer_up_enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'"
+											>
+												<span 
+													class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
+													:class="cartographerStatus.cartographer_up_enabled ? 'translate-x-5' : ''"
+												></span>
+											</button>
+										</div>
+										
+										<div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+											<div class="flex items-center gap-2">
+												<span class="text-lg">🚨</span>
+												<div>
+													<p class="font-medium text-slate-900 dark:text-white">Cartographer Down</p>
+													<p class="text-xs text-slate-500 dark:text-slate-400">When Cartographer goes offline</p>
+												</div>
+											</div>
+											<button 
+												@click="toggleCartographerDown"
+												class="relative w-12 h-7 rounded-full transition-colors"
+												:class="cartographerStatus.cartographer_down_enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'"
+											>
+												<span 
+													class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
+													:class="cartographerStatus.cartographer_down_enabled ? 'translate-x-5' : ''"
+												></span>
+											</button>
+										</div>
+									</div>
+									
+									<button
+										@click="unsubscribeCartographerStatus"
+										class="w-full px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors font-medium"
+									>
+										Unsubscribe
+									</button>
+								</div>
+							</template>
+						</div>
+
 						<!-- Master Toggle -->
 						<div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
 							<div class="flex items-center justify-between">
@@ -830,6 +942,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted, watch } from "vue";
+import axios from "axios";
 import { 
 	useNotifications, 
 	NOTIFICATION_TYPE_INFO, 
@@ -919,6 +1032,12 @@ const {
 	cancelScheduledBroadcast,
 } = useNotifications(props.networkId);
 
+// Cartographer Status subscription state
+const cartographerStatus = ref<any>(null);
+const cartographerStatusLoading = ref(false);
+const cartographerStatusEmail = ref("");
+const savingCartographerStatus = ref(false);
+
 // State
 const preferences = ref<NotificationPreferences | null>(null);
 const serviceStatus = ref<NotificationServiceStatus | null>(null);
@@ -1006,6 +1125,9 @@ onMounted(async () => {
 		if (isOwner.value) {
 			await loadScheduledBroadcasts();
 		}
+		
+		// Load Cartographer status subscription
+		await loadCartographerStatus();
 	} catch (e) {
 		console.error("Failed to load notification settings:", e);
 	}
@@ -1369,6 +1491,116 @@ async function cancelScheduledBroadcastHandler(broadcastId: string) {
 function formatScheduledTime(isoString: string): string {
 	const date = new Date(isoString);
 	return date.toLocaleString();
+}
+
+// Cartographer Status subscription functions
+async function loadCartographerStatus() {
+	cartographerStatusLoading.value = true;
+	try {
+		const response = await axios.get("/api/notifications/cartographer-status/subscription");
+		cartographerStatus.value = response.data;
+		if (response.data.email_address) {
+			cartographerStatusEmail.value = response.data.email_address;
+		}
+	} catch (e: any) {
+		if (e.response?.status === 404) {
+			cartographerStatus.value = { subscribed: false };
+		} else {
+			console.error("Failed to load Cartographer status subscription:", e);
+		}
+	} finally {
+		cartographerStatusLoading.value = false;
+	}
+}
+
+async function subscribeCartographerStatus() {
+	if (!cartographerStatusEmail.value) return;
+	
+	savingCartographerStatus.value = true;
+	try {
+		const response = await axios.post("/api/notifications/cartographer-status/subscription", {
+			email_address: cartographerStatusEmail.value,
+			cartographer_up_enabled: true,
+			cartographer_down_enabled: true,
+		});
+		cartographerStatus.value = response.data;
+	} catch (e: any) {
+		console.error("Failed to subscribe:", e);
+		alert(e.response?.data?.detail || "Failed to subscribe");
+	} finally {
+		savingCartographerStatus.value = false;
+	}
+}
+
+async function updateCartographerStatusEmail() {
+	const newEmail = prompt("Enter new email address:", cartographerStatus.value?.email_address || "");
+	if (!newEmail) return;
+	
+	savingCartographerStatus.value = true;
+	try {
+		const response = await axios.put("/api/notifications/cartographer-status/subscription", {
+			email_address: newEmail,
+		});
+		cartographerStatus.value = response.data;
+		cartographerStatusEmail.value = newEmail;
+	} catch (e: any) {
+		console.error("Failed to update email:", e);
+		alert(e.response?.data?.detail || "Failed to update email");
+	} finally {
+		savingCartographerStatus.value = false;
+	}
+}
+
+async function toggleCartographerUp() {
+	if (!cartographerStatus.value) return;
+	
+	savingCartographerStatus.value = true;
+	try {
+		const response = await axios.put("/api/notifications/cartographer-status/subscription", {
+			cartographer_up_enabled: !cartographerStatus.value.cartographer_up_enabled,
+		});
+		cartographerStatus.value = response.data;
+	} catch (e: any) {
+		console.error("Failed to update:", e);
+		alert(e.response?.data?.detail || "Failed to update");
+	} finally {
+		savingCartographerStatus.value = false;
+	}
+}
+
+async function toggleCartographerDown() {
+	if (!cartographerStatus.value) return;
+	
+	savingCartographerStatus.value = true;
+	try {
+		const response = await axios.put("/api/notifications/cartographer-status/subscription", {
+			cartographer_down_enabled: !cartographerStatus.value.cartographer_down_enabled,
+		});
+		cartographerStatus.value = response.data;
+	} catch (e: any) {
+		console.error("Failed to update:", e);
+		alert(e.response?.data?.detail || "Failed to update");
+	} finally {
+		savingCartographerStatus.value = false;
+	}
+}
+
+async function unsubscribeCartographerStatus() {
+	if (!confirm("Are you sure you want to unsubscribe from Cartographer status notifications?")) {
+		return;
+	}
+	
+	savingCartographerStatus.value = true;
+	try {
+		await axios.delete("/api/notifications/cartographer-status/subscription");
+		cartographerStatus.value = { subscribed: false };
+		cartographerStatusEmail.value = "";
+	} catch (e: any) {
+		console.error("Failed to unsubscribe:", e);
+		alert(e.response?.data?.detail || "Failed to unsubscribe");
+	} finally {
+		savingCartographerStatus.value = false;
+	}
 }
 </script>
 

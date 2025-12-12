@@ -15,8 +15,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.notifications import router as notifications_router
+from .routers.cartographer_status import router as cartographer_status_router
 from .services.discord_service import discord_service, is_discord_configured
 from .services.notification_manager import notification_manager
+from .services.cartographer_status import cartographer_status_service
 from .services.anomaly_detector import anomaly_detector
 from .services.version_checker import version_checker
 from .services.usage_middleware import UsageTrackingMiddleware
@@ -69,59 +71,56 @@ async def _send_cartographer_up_notification(previous_state: dict):
         last_shutdown = previous_state.get("last_shutdown")
         clean_shutdown = previous_state.get("clean_shutdown", False)
         
+        downtime_minutes = None
         if clean_shutdown and last_shutdown:
             try:
                 shutdown_time = datetime.fromisoformat(last_shutdown)
                 downtime = datetime.utcnow() - shutdown_time
-                downtime_str = f"Service was down for approximately {int(downtime.total_seconds() / 60)} minutes"
+                downtime_minutes = int(downtime.total_seconds() / 60)
             except:
-                downtime_str = "Service was restarted"
-        elif not clean_shutdown:
-            downtime_str = "Service recovered from unexpected shutdown"
-        else:
-            downtime_str = "Service is now online"
+                pass
         
-        event = NetworkEvent(
-            event_type=NotificationType.CARTOGRAPHER_UP,
-            priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_UP),
-            title="Cartographer is Back Online",
-            message=f"The Cartographer monitoring service has started successfully. {downtime_str}",
-            details={
-                "service": "cartographer",
-                "previous_clean_shutdown": clean_shutdown,
-                "startup_time": datetime.utcnow().isoformat(),
-            },
-        )
-        
-        # Broadcast to all users who have global Cartographer Up notifications enabled
-        results = await notification_manager.broadcast_global_notification(event)
-        logger.info(f"Sent cartographer_up notification to {len(results)} users")
+        # Use the new Cartographer status service
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://localhost:8005/api/cartographer-status/notify",
+                json={
+                    "event_type": "up",
+                    "downtime_minutes": downtime_minutes,
+                }
+            )
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Sent cartographer_up notification to {result.get('subscribers_notified', 0)} subscribers")
+            else:
+                logger.error(f"Failed to send cartographer_up notification: {response.text}")
         
     except Exception as e:
-        logger.error(f"Failed to send cartographer_up notification: {e}")
+        logger.error(f"Failed to send cartographer_up notification: {e}", exc_info=True)
 
 
 async def _send_cartographer_down_notification():
     """Send notification that Cartographer is shutting down"""
     try:
-        event = NetworkEvent(
-            event_type=NotificationType.CARTOGRAPHER_DOWN,
-            priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_DOWN),
-            title="Cartographer is Shutting Down",
-            message="The Cartographer monitoring service is shutting down for maintenance or restart. You will receive a notification when it comes back online.",
-            details={
-                "service": "cartographer",
-                "shutdown_type": "clean",
-                "shutdown_time": datetime.utcnow().isoformat(),
-            },
-        )
-        
-        # Broadcast to all users who have global Cartographer Down notifications enabled
-        results = await notification_manager.broadcast_global_notification(event)
-        logger.info(f"Sent cartographer_down notification to {len(results)} users")
+        # Use the new Cartographer status service
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "http://localhost:8005/api/cartographer-status/notify",
+                json={
+                    "event_type": "down",
+                    "message": "The Cartographer monitoring service is shutting down for maintenance or restart. You will receive a notification when it comes back online.",
+                }
+            )
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Sent cartographer_down notification to {result.get('subscribers_notified', 0)} subscribers")
+            else:
+                logger.error(f"Failed to send cartographer_down notification: {response.text}")
         
     except Exception as e:
-        logger.error(f"Failed to send cartographer_down notification: {e}")
+        logger.error(f"Failed to send cartographer_down notification: {e}", exc_info=True)
 
 
 @asynccontextmanager
@@ -226,6 +225,7 @@ def create_app() -> FastAPI:
     
     # Include routers
     app.include_router(notifications_router, prefix="/api/notifications")
+    app.include_router(cartographer_status_router, prefix="/api/cartographer-status")
     
     @app.get("/")
     def root():

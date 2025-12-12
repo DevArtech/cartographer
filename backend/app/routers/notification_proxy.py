@@ -548,3 +548,60 @@ async def send_version_notification(user: AuthenticatedUser = Depends(require_au
     """
     return await proxy_request("POST", "/version/notify")
 
+
+# ==================== Cartographer Status Notifications ====================
+
+async def proxy_cartographer_status_request(
+    method: str,
+    path: str,
+    json_body: dict = None,
+    user: AuthenticatedUser = None,
+):
+    """Forward a request to the Cartographer status service"""
+    headers = {}
+    if user:
+        headers["X-User-Id"] = user.user_id
+    
+    return await http_pool.request(
+        service_name="notification",
+        method=method,
+        path=f"/api/cartographer-status{path}",
+        json_body=json_body,
+        headers=headers,
+        timeout=30.0
+    )
+
+
+@router.get("/cartographer-status/subscription")
+async def get_cartographer_status_subscription(
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Get user's Cartographer status subscription"""
+    return await proxy_cartographer_status_request("GET", "/subscription", user=user)
+
+
+@router.post("/cartographer-status/subscription")
+async def create_cartographer_status_subscription(
+    body: dict,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Create or update Cartographer status subscription"""
+    return await proxy_cartographer_status_request("POST", "/subscription", json_body=body, user=user)
+
+
+@router.put("/cartographer-status/subscription")
+async def update_cartographer_status_subscription(
+    body: dict,
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Update Cartographer status subscription"""
+    return await proxy_cartographer_status_request("PUT", "/subscription", json_body=body, user=user)
+
+
+@router.delete("/cartographer-status/subscription")
+async def delete_cartographer_status_subscription(
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Delete Cartographer status subscription"""
+    return await proxy_cartographer_status_request("DELETE", "/subscription", user=user)
+
