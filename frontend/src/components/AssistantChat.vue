@@ -1,5 +1,5 @@
 <template>
-	<div class="flex flex-col h-full bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 overflow-hidden relative">
+	<div class="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-l border-slate-200/80 dark:border-slate-800/80 overflow-hidden relative">
 		<!-- Default provider notification -->
 		<transition
 			enter-active-class="transition ease-out duration-200"
@@ -21,23 +21,19 @@
 		</transition>
 		
 		<!-- Header -->
-		<div class="flex flex-col border-b border-slate-200 dark:border-slate-700">
+		<div class="flex flex-col border-b border-slate-200 dark:border-slate-800/80">
 			<!-- Title row -->
-			<div class="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-900">
-				<div class="flex items-center gap-3">
-					<div class="p-1.5 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-lg shadow-sm">
-						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-						</svg>
-					</div>
-					<div>
-						<h2 class="font-semibold text-slate-800 dark:text-slate-100">Network Assistant</h2>
-					</div>
+			<div class="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-950/50">
+				<div class="flex items-center gap-2">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+					</svg>
+					<h2 class="font-semibold text-slate-800 dark:text-slate-100">Network Assistant</h2>
 				</div>
 				<!-- Close button -->
 				<button 
 					@click="$emit('close')"
-					class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+					class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
 					title="Close assistant"
 				>
 					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -46,7 +42,7 @@
 				</button>
 			</div>
 			<!-- Model selection row -->
-			<div class="flex items-center gap-2 px-4 py-2 bg-slate-100/50 dark:bg-slate-800/50">
+			<div class="flex items-center gap-2 px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-t border-slate-200/50 dark:border-slate-800/50">
 			<!-- Provider icon buttons -->
 			<div class="flex items-center gap-1">
 				<button
@@ -58,8 +54,8 @@
 					class="p-1.5 rounded-md transition-all relative"
 					:class="[
 						selectedProvider === p.provider 
-							? 'bg-slate-200 dark:bg-slate-700 ring-2 ring-violet-500' 
-							: p.available ? 'hover:bg-slate-200 dark:hover:bg-slate-700' : '',
+							? 'bg-slate-200 dark:bg-slate-800 ring-2 ring-violet-500' 
+							: p.available ? 'hover:bg-slate-200 dark:hover:bg-slate-800' : '',
 						isStreaming || !p.available ? 'opacity-30 cursor-not-allowed' : ''
 					]"
 					:title="getProviderTitle(p)"
@@ -67,7 +63,7 @@
 					<!-- Default provider indicator -->
 					<span 
 						v-if="p.provider === userDefaultProvider && p.available"
-						class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 dark:bg-amber-500 rounded-full border border-white dark:border-slate-800"
+						class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 dark:bg-amber-500 rounded-full border border-white dark:border-slate-900"
 						title="Your default provider"
 					></span>
 						<!-- OpenAI icon (monochrome/black) -->
@@ -100,12 +96,12 @@
 					</button>
 				</div>
 				
-				<div class="w-px h-5 bg-slate-300 dark:bg-slate-600"></div>
+				<div class="w-px h-5 bg-slate-300 dark:bg-slate-700"></div>
 				
 				<!-- Model selector -->
 				<select 
 					v-model="selectedModel" 
-					class="text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none flex-1 min-w-0"
+					class="text-xs bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none flex-1 min-w-0 transition-shadow"
 					:disabled="isStreaming || !currentProviderModels.length"
 					:title="selectedModel"
 				>
@@ -119,17 +115,17 @@
 		<!-- Messages Area -->
 		<div 
 			ref="messagesContainer"
-			class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-900"
+			class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-slate-950/50"
 		>
 			<!-- Welcome message -->
 			<div v-if="messages.length === 0" class="text-center py-8">
-				<div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg mb-4">
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+				<div class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/20 mb-4">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
 					</svg>
 				</div>
-				<h3 class="text-lg font-medium text-slate-800 dark:text-slate-100 mb-2">Hi! I'm your Network Assistant</h3>
-				<p class="text-slate-500 dark:text-slate-400 text-sm max-w-md mx-auto mb-6">
+				<h3 class="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Hi! I'm your Network Assistant</h3>
+				<p class="text-slate-500 dark:text-slate-400 text-sm max-w-md mx-auto mb-5">
 					I can help you understand your network topology, troubleshoot issues, and answer questions about device health and connectivity.
 				</p>
 				<div class="flex flex-wrap justify-center gap-2">
@@ -137,7 +133,7 @@
 						v-for="suggestion in suggestions" 
 						:key="suggestion"
 						@click="sendMessage(suggestion)"
-						class="px-3 py-1.5 text-xs bg-white dark:bg-slate-800 hover:bg-violet-50 dark:hover:bg-violet-900/30 border border-slate-200 dark:border-slate-600 hover:border-violet-400 dark:hover:border-violet-500 rounded-full text-slate-600 dark:text-slate-300 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+						class="px-3 py-1.5 text-xs bg-white dark:bg-slate-800/60 hover:bg-violet-50 dark:hover:bg-violet-900/30 border border-slate-200/80 dark:border-slate-700/50 hover:border-violet-400 dark:hover:border-violet-500 rounded-full text-slate-600 dark:text-slate-300 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
 					>
 						{{ suggestion }}
 					</button>
@@ -155,12 +151,12 @@
 
 				<!-- Assistant message -->
 				<div v-else class="flex gap-3">
-					<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm">
-						<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<div class="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm shadow-violet-500/20">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
 						</svg>
 					</div>
-					<div class="max-w-[85%] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-2.5 text-slate-700 dark:text-slate-200 text-sm shadow-sm">
+					<div class="max-w-[85%] bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/50 rounded-2xl rounded-tl-sm px-4 py-2.5 text-slate-700 dark:text-slate-200 text-sm shadow-sm">
 						<div class="prose prose-sm dark:prose-invert max-w-none" v-html="formatMessage(msg.content)"></div>
 					</div>
 				</div>
@@ -168,12 +164,12 @@
 
 			<!-- Streaming indicator -->
 			<div v-if="isStreaming && !currentStreamContent" class="flex gap-3">
-				<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm">
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<div class="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm shadow-violet-500/20">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-white animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
 					</svg>
 				</div>
-				<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+				<div class="bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/50 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
 					<div class="flex gap-1">
 						<span class="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
 						<span class="w-2 h-2 bg-violet-500 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
@@ -184,12 +180,12 @@
 
 			<!-- Streaming content -->
 			<div v-if="isStreaming && currentStreamContent" class="flex gap-3">
-				<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm">
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<div class="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-sm shadow-violet-500/20">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
 					</svg>
 				</div>
-				<div class="max-w-[85%] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-2.5 text-slate-700 dark:text-slate-200 text-sm shadow-sm">
+				<div class="max-w-[85%] bg-white dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/50 rounded-2xl rounded-tl-sm px-4 py-2.5 text-slate-700 dark:text-slate-200 text-sm shadow-sm">
 					<div class="prose prose-sm dark:prose-invert max-w-none" v-html="formatMessage(currentStreamContent)"></div>
 					<span class="inline-block w-2 h-4 bg-violet-500 animate-pulse ml-0.5"></span>
 				</div>
@@ -197,19 +193,19 @@
 
 			<!-- Error message -->
 			<div v-if="error" class="flex gap-3">
-				<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<div class="flex-shrink-0 w-7 h-7 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
 					</svg>
 				</div>
-				<div class="max-w-[85%] bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl rounded-tl-sm px-4 py-2.5 text-red-700 dark:text-red-300 text-sm">
+				<div class="max-w-[85%] bg-red-50 dark:bg-red-900/20 border border-red-200/80 dark:border-red-800/50 rounded-2xl rounded-tl-sm px-4 py-2.5 text-red-700 dark:text-red-300 text-sm">
 					{{ error }}
 				</div>
 			</div>
 		</div>
 
 		<!-- Context indicator -->
-		<div class="px-4 py-2 bg-slate-100 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+		<div class="px-4 py-2 bg-slate-100/80 dark:bg-slate-900/60 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
 			<!-- Loading state -->
 			<template v-if="contextLoading">
 				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-500 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -234,7 +230,7 @@
 			<!-- Refresh button -->
 			<button 
 				@click="refreshContext"
-				class="ml-auto p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+				class="ml-auto p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
 				:class="contextRefreshing ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-white'"
 				:disabled="contextLoading || contextRefreshing"
 				title="Refresh network context"
@@ -248,8 +244,8 @@
 				@click="includeContext = !includeContext"
 				class="text-xs px-2 py-0.5 rounded-md font-medium transition-colors"
 				:class="includeContext 
-					? 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-400/10' 
-					: 'text-slate-500 bg-slate-200 dark:bg-slate-700'"
+					? 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10' 
+					: 'text-slate-500 bg-slate-200 dark:bg-slate-800'"
 				:disabled="contextLoading"
 			>
 				{{ includeContext ? 'Context ON' : 'Context OFF' }}
@@ -257,20 +253,20 @@
 		</div>
 
 		<!-- Input Area -->
-		<div class="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+		<div class="p-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50">
 			<form @submit.prevent="handleSubmit" class="flex gap-2">
 				<input
 					v-model="inputMessage"
 					type="text"
 					placeholder="Ask about your network..."
-					class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg px-4 py-2 text-slate-800 dark:text-white placeholder-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none text-sm"
+					class="flex-1 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-800 dark:text-white placeholder-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none text-sm transition-shadow"
 					:disabled="isStreaming"
 					@keydown.enter.exact.prevent="handleSubmit"
 				/>
 				<button
 					type="submit"
 					:disabled="!inputMessage.trim() || isStreaming"
-					class="px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:from-slate-400 disabled:to-slate-400 dark:disabled:from-slate-600 dark:disabled:to-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all shadow-sm"
+					class="px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:from-slate-400 disabled:to-slate-400 dark:disabled:from-slate-700 dark:disabled:to-slate-700 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all shadow-sm shadow-violet-500/20"
 				>
 					<svg v-if="!isStreaming" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
