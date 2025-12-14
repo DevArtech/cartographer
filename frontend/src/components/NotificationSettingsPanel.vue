@@ -105,6 +105,25 @@
 				</div>
 			</div>
 		</div>
+		
+		<!-- Toast Notification -->
+		<Transition
+			enter-active-class="transition ease-out duration-200"
+			enter-from-class="opacity-0 translate-y-2"
+			enter-to-class="opacity-100 translate-y-0"
+			leave-active-class="transition ease-in duration-150"
+			leave-from-class="opacity-100 translate-y-0"
+			leave-to-class="opacity-0 translate-y-2"
+		>
+			<div 
+				v-if="toast" 
+				class="fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-[60]"
+				:class="toast.success ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'"
+			>
+				<p class="font-medium">{{ toast.success ? '✓' : '✗' }} {{ toast.message }}</p>
+				<p v-if="toast.error" class="text-sm opacity-90 mt-1">{{ toast.error }}</p>
+			</div>
+		</Transition>
 	</Teleport>
 </template>
 
@@ -145,6 +164,13 @@ const discordLink = ref<any>(null);
 const anomalyStats = ref<any>(null);
 // Use our own loading state for initial load only
 const initialLoading = ref(true);
+// Toast notification state
+const toast = ref<{ success: boolean; message: string; error?: string } | null>(null);
+
+function showToast(success: boolean, message: string, error?: string) {
+	toast.value = { success, message, error };
+	setTimeout(() => { toast.value = null; }, 5000);
+}
 
 async function loadData(showLoading = false) {
 	if (showLoading) {
@@ -200,9 +226,9 @@ async function handleTestEmail() {
 	if (props.networkId === null) return;
 	try {
 		const result = await testNetworkNotification(props.networkId, 'email');
-		alert(result.success ? result.message : result.error || 'Test failed');
+		showToast(result.success, result.success ? 'Test email sent!' : 'Failed to send test email', result.error);
 	} catch (e: any) {
-		alert('Failed to send test email: ' + (e.message || 'Unknown error'));
+		showToast(false, 'Failed to send test email', e.message || 'Unknown error');
 	}
 }
 
@@ -210,27 +236,27 @@ async function handleTestDiscord() {
 	if (props.networkId === null) return;
 	try {
 		const result = await testNetworkNotification(props.networkId, 'discord');
-		alert(result.success ? result.message : result.error || 'Test failed');
+		showToast(result.success, result.success ? 'Test Discord notification sent!' : 'Failed to send test', result.error);
 	} catch (e: any) {
-		alert('Failed to send test Discord notification: ' + (e.message || 'Unknown error'));
+		showToast(false, 'Failed to send test Discord notification', e.message || 'Unknown error');
 	}
 }
 
 async function handleTestGlobalEmail() {
 	try {
 		const result = await testGlobalNotification('email');
-		alert(result.success ? result.message : result.error || 'Test failed');
+		showToast(result.success, result.success ? 'Test email sent!' : 'Failed to send test email', result.error);
 	} catch (e: any) {
-		alert('Failed to send test email: ' + (e.message || 'Unknown error'));
+		showToast(false, 'Failed to send test email', e.message || 'Unknown error');
 	}
 }
 
 async function handleTestGlobalDiscord() {
 	try {
 		const result = await testGlobalNotification('discord');
-		alert(result.success ? result.message : result.error || 'Test failed');
+		showToast(result.success, result.success ? 'Test Discord notification sent!' : 'Failed to send test', result.error);
 	} catch (e: any) {
-		alert('Failed to send test Discord notification: ' + (e.message || 'Unknown error'));
+		showToast(false, 'Failed to send test Discord notification', e.message || 'Unknown error');
 	}
 }
 
@@ -240,7 +266,7 @@ async function handleLinkDiscord() {
 		const popup = window.open(authorization_url, 'discord_oauth', 'width=600,height=700');
 		
 		if (!popup) {
-			alert('Popup blocked. Please allow popups for this site and try again.');
+			showToast(false, 'Popup blocked', 'Please allow popups for this site and try again.');
 			return;
 		}
 		
@@ -259,8 +285,9 @@ async function handleLinkDiscord() {
 				if (event.data.status === 'success') {
 					// Reload all data once
 					await loadData();
+					showToast(true, 'Discord account linked successfully!');
 				} else {
-					alert('Discord linking failed: ' + (event.data.message || 'Unknown error'));
+					showToast(false, 'Discord linking failed', event.data.message || 'Unknown error');
 				}
 			}
 		};
@@ -286,7 +313,7 @@ async function handleLinkDiscord() {
 			window.removeEventListener('message', messageHandler);
 		}, 300000);
 	} catch (e: any) {
-		alert('Failed to initiate Discord OAuth: ' + (e.message || 'Unknown error'));
+		showToast(false, 'Failed to initiate Discord OAuth', e.message || 'Unknown error');
 	}
 }
 
@@ -299,8 +326,9 @@ async function handleUnlinkDiscord() {
 		await unlinkDiscord();
 		// Reload all data to get updated preferences and discord link status
 		await loadData();
+		showToast(true, 'Discord account unlinked successfully');
 	} catch (e: any) {
-		alert('Failed to unlink Discord: ' + (e.message || 'Unknown error'));
+		showToast(false, 'Failed to unlink Discord', e.message || 'Unknown error');
 	}
 }
 
