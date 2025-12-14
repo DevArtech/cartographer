@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-        sa.Comment('Per-user notification preferences for networks')
+        comment='Per-user notification preferences for networks'
     )
     op.create_index(op.f('ix_user_network_notification_prefs_user_id'), 'user_network_notification_prefs', ['user_id'], unique=False)
     op.create_index(op.f('ix_user_network_notification_prefs_network_id'), 'user_network_notification_prefs', ['network_id'], unique=False)
@@ -74,7 +74,7 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('user_id'),
-        sa.Comment('Per-user global notification preferences')
+        comment='Per-user global notification preferences'
     )
     op.create_index(op.f('ix_user_global_notification_prefs_user_id'), 'user_global_notification_prefs', ['user_id'], unique=True)
     
@@ -94,7 +94,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('user_id'),
         sa.UniqueConstraint('discord_id'),
-        sa.Comment('Discord OAuth links for users')
+        comment='Discord OAuth links for users'
     )
     op.create_index(op.f('ix_discord_user_links_user_id'), 'discord_user_links', ['user_id'], unique=True)
     op.create_index(op.f('ix_discord_user_links_discord_id'), 'discord_user_links', ['discord_id'], unique=True)
