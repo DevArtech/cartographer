@@ -1,11 +1,13 @@
 <template>
 	<div class="w-full h-full relative">
-		<!-- Base background gradient -->
+		<!-- Base background - solid color to avoid gradient banding -->
 		<div class="absolute inset-0 rounded-lg overflow-hidden pointer-events-none">
-			<div class="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"></div>
-			<!-- Subtle glow accents -->
-			<div class="absolute -top-32 -right-32 w-96 h-96 bg-cyan-400/5 dark:bg-cyan-500/5 rounded-full blur-3xl"></div>
-			<div class="absolute -bottom-32 -left-32 w-96 h-96 bg-blue-400/5 dark:bg-blue-500/5 rounded-full blur-3xl"></div>
+			<!-- Solid base -->
+			<div class="absolute inset-0 bg-slate-50 dark:bg-[#0c1222]"></div>
+			<!-- Noise texture overlay to prevent banding -->
+			<div class="absolute inset-0 opacity-[0.4] dark:opacity-[0.5] mix-blend-soft-light" style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noise%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noise)%22/%3E%3C/svg%3E');"></div>
+			<!-- Subtle radial glow from center -->
+			<div class="absolute inset-0 bg-radial-glow opacity-30 dark:opacity-20"></div>
 		</div>
 		<!-- SVG with grid pattern that pans with content -->
 		<svg ref="svgRef" class="relative w-full h-full rounded-lg border border-slate-200/60 dark:border-slate-800/60"></svg>
@@ -668,6 +670,15 @@ watch(() => [props.data, props.selectedId, props.mode, props.healthMetrics], () 
 </script>
 
 <style>
+/* Radial glow background effect */
+.bg-radial-glow {
+	background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(56, 189, 248, 0.08) 0%, transparent 60%);
+}
+
+:root.dark .bg-radial-glow {
+	background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(56, 189, 248, 0.04) 0%, transparent 60%);
+}
+
 /* Animation for network links - flow from parent to child */
 @keyframes link-flow {
 	from {
