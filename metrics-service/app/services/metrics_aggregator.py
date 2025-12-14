@@ -157,13 +157,19 @@ class MetricsAggregator:
                     )
                     if response.status_code == 200:
                         data = response.json()
-                        if data.get("exists"):
+                        # Multi-tenant endpoint returns layout_data directly (not wrapped in exists/layout)
+                        layout_data = data.get("layout_data")
+                        if layout_data:
                             logger.debug(f"Fetched layout for network {network_id}")
-                            return data.get("layout")
+                            return layout_data
+                        else:
+                            logger.debug(f"Network {network_id} has no layout data yet")
                     elif response.status_code == 401:
                         logger.error("Authentication failed fetching layout - check JWT_SECRET")
                     elif response.status_code == 404:
                         logger.warning(f"Network {network_id} not found or no layout exists")
+                    elif response.status_code == 500:
+                        logger.error(f"Backend error fetching layout for network {network_id}")
                     return None
                 else:
                     # Legacy single-file endpoint for backwards compatibility only

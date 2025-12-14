@@ -41,7 +41,13 @@ async def get_network_with_access(
     Get a network and verify user has access.
     Returns (network, is_owner, permission_role).
     Raises 404 if not found or user has no access.
+    
+    Service tokens (user_id in ["service", "metrics-service"]) have full access
+    to all networks for internal service-to-service operations.
     """
+    # Check if this is a service token - services have access to all networks
+    is_service = user.user_id in ("service", "metrics-service")
+    
     # Fetch the network
     result = await db.execute(select(Network).where(Network.id == network_id))
     network = result.scalar_one_or_none()
@@ -51,6 +57,10 @@ async def get_network_with_access(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Network not found",
         )
+
+    # Service tokens have full access to all networks
+    if is_service:
+        return network, False, PermissionRole.EDITOR
 
     # Check if user is the owner
     is_owner = network.user_id == user.user_id
