@@ -1,23 +1,21 @@
 <template>
 	<Teleport to="body">
 		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" @click.self="$emit('close')">
-			<div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Header -->
-				<div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 rounded-t-xl">
-					<div class="flex items-center gap-3">
-						<div class="w-9 h-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-							</svg>
-						</div>
+				<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
+					<div class="flex items-center gap-2">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+						</svg>
 						<div>
-							<h2 class="text-lg font-semibold text-slate-900 dark:text-white">Send Network Notification</h2>
+							<h2 class="font-semibold text-slate-800 dark:text-slate-100">Send Network Notification</h2>
 							<p class="text-xs text-slate-500 dark:text-slate-400">Send a notification to all users in this network</p>
 						</div>
 					</div>
 					<button
 						@click="$emit('close')"
-						class="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+						class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
 					>
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -26,13 +24,13 @@
 				</div>
 
 				<!-- Tabs -->
-				<div class="flex border-b border-slate-200 dark:border-slate-700 px-6">
+				<div class="flex border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50">
 					<button
 						@click="activeTab = 'compose'"
 						:class="[
-							'px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
+							'px-6 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
 							activeTab === 'compose'
-								? 'border-violet-600 text-violet-600 dark:text-violet-400'
+								? 'border-violet-500 text-violet-600 dark:text-violet-400 bg-white dark:bg-slate-900'
 								: 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
 						]"
 					>
@@ -41,9 +39,9 @@
 					<button
 						@click="activeTab = 'scheduled'; loadScheduledBroadcasts()"
 						:class="[
-							'px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2',
+							'px-6 py-3 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2',
 							activeTab === 'scheduled'
-								? 'border-violet-600 text-violet-600 dark:text-violet-400'
+								? 'border-violet-500 text-violet-600 dark:text-violet-400 bg-white dark:bg-slate-900'
 								: 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
 						]"
 					>
@@ -55,75 +53,75 @@
 				</div>
 
 				<!-- Content -->
-				<div class="flex-1 overflow-auto p-6">
+				<div class="flex-1 overflow-auto p-4">
 					<!-- Compose Tab -->
-					<div v-if="activeTab === 'compose'" class="space-y-5">
-						<!-- Type -->
-						<div>
-							<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-								Notification Type
-							</label>
-							<select
-								v-model="form.type"
-								class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-							>
-								<option value="scheduled_maintenance">Maintenance</option>
-								<option value="system_status">System Status</option>
-								<option value="security_alert">Security Alert</option>
-								<option value="isp_issue">ISP Issue</option>
-								<option value="device_offline">Device Offline</option>
-								<option value="device_online">Device Online</option>
-								<option value="device_degraded">Device Degraded</option>
-								<option value="anomaly_detected">Anomaly Detected</option>
-								<option value="high_latency">High Latency</option>
-								<option value="packet_loss">Packet Loss</option>
-							</select>
-						</div>
-
-						<!-- Priority -->
-						<div>
-							<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-								Priority
-							</label>
-							<select
-								v-model="form.priority"
-								class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-							>
-								<option value="low">Low</option>
-								<option value="medium">Medium</option>
-								<option value="high">High</option>
-								<option value="critical">Critical</option>
-							</select>
+					<div v-if="activeTab === 'compose'" class="space-y-4">
+						<!-- Type & Priority row -->
+						<div class="grid grid-cols-2 gap-3">
+							<div>
+								<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+									Notification Type
+								</label>
+								<select
+									v-model="form.type"
+									class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
+								>
+									<option value="scheduled_maintenance">Maintenance</option>
+									<option value="system_status">System Status</option>
+									<option value="security_alert">Security Alert</option>
+									<option value="isp_issue">ISP Issue</option>
+									<option value="device_offline">Device Offline</option>
+									<option value="device_online">Device Online</option>
+									<option value="device_degraded">Device Degraded</option>
+									<option value="anomaly_detected">Anomaly Detected</option>
+									<option value="high_latency">High Latency</option>
+									<option value="packet_loss">Packet Loss</option>
+								</select>
+							</div>
+							<div>
+								<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+									Priority
+								</label>
+								<select
+									v-model="form.priority"
+									class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
+								>
+									<option value="low">Low</option>
+									<option value="medium">Medium</option>
+									<option value="high">High</option>
+									<option value="critical">Critical</option>
+								</select>
+							</div>
 						</div>
 
 						<!-- Title -->
 						<div>
-							<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+							<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
 								Title
 							</label>
 							<input
 								v-model="form.title"
 								type="text"
 								placeholder="Notification title"
-								class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+								class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
 							/>
 						</div>
 
 						<!-- Message -->
 						<div>
-							<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+							<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
 								Message
 							</label>
 							<textarea
 								v-model="form.message"
 								rows="3"
 								placeholder="Notification message"
-								class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white resize-none"
+								class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white resize-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
 							></textarea>
 						</div>
 
 						<!-- Schedule -->
-						<div class="space-y-3">
+						<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/50 space-y-2">
 							<div class="flex items-center gap-3">
 								<input
 									type="radio"
@@ -132,7 +130,7 @@
 									v-model="scheduleMode"
 									class="w-4 h-4 text-violet-600"
 								/>
-								<label for="send-now" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+								<label for="send-now" class="text-sm text-slate-700 dark:text-slate-300">
 									Send immediately
 								</label>
 							</div>
@@ -144,19 +142,19 @@
 									v-model="scheduleMode"
 									class="w-4 h-4 text-violet-600"
 								/>
-								<label for="schedule" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+								<label for="schedule" class="text-sm text-slate-700 dark:text-slate-300">
 									Schedule for later
 								</label>
 							</div>
-							<div v-if="scheduleMode === 'schedule'" class="ml-7 space-y-2">
+							<div v-if="scheduleMode === 'schedule'" class="ml-7 space-y-1.5">
 								<input
 									v-model="scheduledDateTime"
 									type="datetime-local"
 									:min="minScheduleDateTime"
-									class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+									class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
 								/>
 								<p class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-									<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
 									</svg>
 									Time is in your local timezone ({{ detectedTimezone }})
@@ -165,44 +163,46 @@
 						</div>
 
 						<!-- Error/Success Message -->
-						<div v-if="error" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
+						<div v-if="error" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200/80 dark:border-red-800/50 rounded-lg">
 							<p class="text-sm text-red-700 dark:text-red-400">{{ error }}</p>
 						</div>
-						<div v-if="successMessage" class="p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-lg">
+						<div v-if="successMessage" class="p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200/80 dark:border-emerald-800/50 rounded-lg">
 							<p class="text-sm text-emerald-700 dark:text-emerald-400">{{ successMessage }}</p>
 						</div>
 					</div>
 
 					<!-- Scheduled Tab -->
-					<div v-else-if="activeTab === 'scheduled'" class="space-y-4">
-						<div v-if="loadingScheduled" class="flex items-center justify-center py-8">
-							<svg class="animate-spin h-6 w-6 text-violet-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-							</svg>
+					<div v-else-if="activeTab === 'scheduled'" class="space-y-3">
+						<div v-if="loadingScheduled" class="flex flex-col items-center justify-center py-8">
+							<div class="flex gap-1.5 mb-3">
+								<span class="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 0ms"></span>
+								<span class="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 150ms"></span>
+								<span class="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style="animation-delay: 300ms"></span>
+							</div>
+							<p class="text-sm text-slate-500 dark:text-slate-400">Loading scheduled...</p>
 						</div>
 
 						<div v-else-if="scheduledBroadcasts.length === 0" class="text-center py-8">
-							<svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
 							</svg>
-							<p class="text-slate-500 dark:text-slate-400">No scheduled broadcasts</p>
-							<p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Schedule a notification using the Compose tab</p>
+							<p class="text-sm text-slate-500 dark:text-slate-400">No scheduled broadcasts</p>
+							<p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Schedule a notification using the Compose tab</p>
 						</div>
 
-						<div v-else class="space-y-3">
+						<div v-else class="space-y-2">
 							<div 
 								v-for="broadcast in scheduledBroadcasts" 
 								:key="broadcast.id"
-								class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600"
+								class="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-lg border border-slate-200/80 dark:border-slate-700/50"
 							>
 								<div class="flex items-start justify-between gap-3">
 									<div class="flex-1 min-w-0">
 										<div class="flex items-center gap-2 mb-1">
-											<span class="text-lg">{{ getTypeIcon(broadcast.event_type) }}</span>
-											<p class="font-medium text-slate-900 dark:text-white truncate">{{ broadcast.title }}</p>
+											<span class="text-base">{{ getTypeIcon(broadcast.event_type) }}</span>
+											<p class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{{ broadcast.title }}</p>
 										</div>
-										<p class="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-2">{{ broadcast.message }}</p>
+										<p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-2">{{ broadcast.message }}</p>
 										<div class="flex items-center gap-2 flex-wrap">
 											<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400">
 												<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -216,7 +216,7 @@
 											>
 												{{ broadcast.priority }}
 											</span>
-											<span v-if="broadcast.timezone" class="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
+											<span v-if="broadcast.timezone" class="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
 												{{ broadcast.timezone }}
 											</span>
 										</div>
@@ -224,7 +224,7 @@
 									<div class="flex items-center gap-1 flex-shrink-0">
 										<button
 											@click="openEditModal(broadcast)"
-											class="p-1.5 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors rounded hover:bg-slate-200 dark:hover:bg-slate-600"
+											class="p-1.5 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors rounded hover:bg-slate-200 dark:hover:bg-slate-800"
 											title="Edit"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -233,7 +233,7 @@
 										</button>
 										<button
 											@click="cancelBroadcast(broadcast.id)"
-											class="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded hover:bg-slate-200 dark:hover:bg-slate-600"
+											class="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded hover:bg-slate-200 dark:hover:bg-slate-800"
 											title="Cancel"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -248,23 +248,23 @@
 				</div>
 
 				<!-- Footer -->
-				<div v-if="activeTab === 'compose'" class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 rounded-b-xl">
+				<div v-if="activeTab === 'compose'" class="flex items-center justify-end gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-b-xl">
 					<button
 						@click="$emit('close')"
-						class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+						class="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
 					>
 						Cancel
 					</button>
 					<button
 						@click="handleSend"
 						:disabled="!isValid || isSending"
-						class="px-4 py-2 text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+						class="px-4 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 rounded-lg shadow-sm shadow-violet-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 					>
 						<svg v-if="isSending" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
 							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 						</svg>
-						{{ isSending ? 'Sending...' : scheduleMode === 'schedule' ? 'Schedule Notification' : 'Send Notification' }}
+						{{ isSending ? 'Sending...' : scheduleMode === 'schedule' ? 'Schedule' : 'Send Now' }}
 					</button>
 				</div>
 			</div>
@@ -280,112 +280,114 @@
 			leave-to-class="opacity-0"
 		>
 			<div v-if="editingBroadcast" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-				<div class="fixed inset-0 bg-black/50" @click="closeEditModal"></div>
-				<div class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-xl">
-					<div class="p-6">
-						<div class="flex items-center justify-between mb-4">
-							<h3 class="text-lg font-semibold text-slate-900 dark:text-white">Edit Scheduled Broadcast</h3>
-							<button @click="closeEditModal" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-								<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-								</svg>
-							</button>
+				<div class="fixed inset-0 bg-black/50 backdrop-blur-sm" @click="closeEditModal"></div>
+				<div class="relative w-full max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200/80 dark:border-slate-800/80">
+					<!-- Modal Header -->
+					<div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+						</svg>
+						<h3 class="font-semibold text-slate-800 dark:text-slate-100">Edit Scheduled Broadcast</h3>
+						<button @click="closeEditModal" class="ml-auto p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
+
+					<div class="p-4 space-y-3">
+						<!-- Title -->
+						<div>
+							<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Title</label>
+							<input
+								v-model="editForm.title"
+								type="text"
+								class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
+							/>
 						</div>
 
-						<div class="space-y-4">
-							<!-- Title -->
+						<!-- Message -->
+						<div>
+							<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Message</label>
+							<textarea
+								v-model="editForm.message"
+								rows="3"
+								class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none transition-shadow"
+							></textarea>
+						</div>
+
+						<!-- Type & Priority -->
+						<div class="grid grid-cols-2 gap-3">
 							<div>
-								<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title</label>
-								<input
-									v-model="editForm.title"
-									type="text"
-									class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-								/>
-							</div>
-
-							<!-- Message -->
-							<div>
-								<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Message</label>
-								<textarea
-									v-model="editForm.message"
-									rows="3"
-									class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-none"
-								></textarea>
-							</div>
-
-							<!-- Type & Priority -->
-							<div class="grid grid-cols-2 gap-3">
-								<div>
-									<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
-									<select
-										v-model="editForm.type"
-										class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-									>
-										<option value="scheduled_maintenance">Maintenance</option>
-										<option value="system_status">System Status</option>
-										<option value="security_alert">Security Alert</option>
-										<option value="isp_issue">ISP Issue</option>
-										<option value="device_offline">Device Offline</option>
-										<option value="device_online">Device Online</option>
-										<option value="device_degraded">Device Degraded</option>
-										<option value="anomaly_detected">Anomaly</option>
-										<option value="high_latency">High Latency</option>
-										<option value="packet_loss">Packet Loss</option>
-									</select>
-								</div>
-								<div>
-									<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
-									<select
-										v-model="editForm.priority"
-										class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-									>
-										<option value="low">Low</option>
-										<option value="medium">Medium</option>
-										<option value="high">High</option>
-										<option value="critical">Critical</option>
-									</select>
-								</div>
-							</div>
-
-							<!-- Scheduled Time -->
-							<div>
-								<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Scheduled Time</label>
-								<input
-									v-model="editForm.scheduledAt"
-									type="datetime-local"
-									:min="minScheduleDateTime"
-									class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-								/>
-								<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-									Time is in your local timezone ({{ detectedTimezone }})
-								</p>
-							</div>
-
-							<!-- Edit Error -->
-							<div v-if="editError" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg">
-								<p class="text-sm text-red-700 dark:text-red-400">{{ editError }}</p>
-							</div>
-
-							<!-- Actions -->
-							<div class="flex justify-end gap-3 pt-2">
-								<button
-									@click="closeEditModal"
-									class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+								<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
+								<select
+									v-model="editForm.type"
+									class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
 								>
-									Cancel
-								</button>
-								<button
-									@click="saveEdit"
-									:disabled="savingEdit || !editForm.title.trim() || !editForm.message.trim() || !editForm.scheduledAt"
-									class="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-								>
-									<svg v-if="savingEdit" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-									</svg>
-									{{ savingEdit ? 'Saving...' : 'Save Changes' }}
-								</button>
+									<option value="scheduled_maintenance">Maintenance</option>
+									<option value="system_status">System Status</option>
+									<option value="security_alert">Security Alert</option>
+									<option value="isp_issue">ISP Issue</option>
+									<option value="device_offline">Device Offline</option>
+									<option value="device_online">Device Online</option>
+									<option value="device_degraded">Device Degraded</option>
+									<option value="anomaly_detected">Anomaly</option>
+									<option value="high_latency">High Latency</option>
+									<option value="packet_loss">Packet Loss</option>
+								</select>
 							</div>
+							<div>
+								<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
+								<select
+									v-model="editForm.priority"
+									class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
+								>
+									<option value="low">Low</option>
+									<option value="medium">Medium</option>
+									<option value="high">High</option>
+									<option value="critical">Critical</option>
+								</select>
+							</div>
+						</div>
+
+						<!-- Scheduled Time -->
+						<div>
+							<label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Scheduled Time</label>
+							<input
+								v-model="editForm.scheduledAt"
+								type="datetime-local"
+								:min="minScheduleDateTime"
+								class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800/60 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-shadow"
+							/>
+							<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+								Time is in your local timezone ({{ detectedTimezone }})
+							</p>
+						</div>
+
+						<!-- Edit Error -->
+						<div v-if="editError" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200/80 dark:border-red-800/50 rounded-lg">
+							<p class="text-sm text-red-700 dark:text-red-400">{{ editError }}</p>
+						</div>
+
+						<!-- Actions -->
+						<div class="flex justify-end gap-3 pt-2">
+							<button
+								@click="closeEditModal"
+								class="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								@click="saveEdit"
+								:disabled="savingEdit || !editForm.title.trim() || !editForm.message.trim() || !editForm.scheduledAt"
+								class="px-4 py-1.5 text-sm font-medium bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-lg hover:from-violet-500 hover:to-fuchsia-500 shadow-sm shadow-violet-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+							>
+								<svg v-if="savingEdit" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+									<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+								</svg>
+								{{ savingEdit ? 'Saving...' : 'Save Changes' }}
+							</button>
 						</div>
 					</div>
 				</div>

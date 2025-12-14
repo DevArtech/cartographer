@@ -1,13 +1,26 @@
 <template>
 	<div class="w-full h-full relative">
-		<!-- Base background - solid color to avoid gradient banding -->
+		<!-- Clean gradient background -->
 		<div class="absolute inset-0 overflow-hidden pointer-events-none">
-			<!-- Solid base -->
-			<div class="absolute inset-0 transition-colors" :class="isDark ? 'bg-[#0c1222]' : 'bg-slate-50'"></div>
-			<!-- Noise texture overlay to prevent banding -->
-			<div class="absolute inset-0 mix-blend-soft-light" :class="isDark ? 'opacity-[0.5]' : 'opacity-[0.4]'" style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noise%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noise)%22/%3E%3C/svg%3E');"></div>
-			<!-- Subtle radial glow from center -->
-			<div class="absolute inset-0 bg-radial-glow-embed" :class="isDark ? 'opacity-20' : 'opacity-30'"></div>
+			<!-- Multi-stop gradient for smooth transitions -->
+			<div 
+				class="absolute inset-0 transition-colors"
+				:style="isDark 
+					? 'background: linear-gradient(to bottom right, #0a0f1a, #0d1424, #0f172a)' 
+					: 'background: linear-gradient(to bottom right, rgb(241 245 249), rgb(248 250 252), white)'"
+			></div>
+			<!-- Subtle radial accent glow -->
+			<div 
+				class="absolute inset-0"
+				:class="isDark ? 'opacity-25' : 'opacity-40'"
+				style="background: radial-gradient(ellipse 100% 80% at 50% 30%, rgba(56, 189, 248, 0.08) 0%, transparent 50%)"
+			></div>
+			<!-- Bottom corner accent -->
+			<div 
+				class="absolute inset-0"
+				:class="isDark ? 'opacity-15' : 'opacity-30'"
+				style="background: radial-gradient(ellipse 60% 50% at 90% 90%, rgba(99, 102, 241, 0.06) 0%, transparent 50%)"
+			></div>
 		</div>
 		<!-- SVG with grid pattern that pans with content -->
 		<svg ref="svgRef" class="relative w-full h-full transition-colors"></svg>
@@ -540,11 +553,6 @@ watch(() => [props.data, props.sensitiveMode, props.isDark, props.healthMetrics]
 </script>
 
 <style>
-/* Radial glow background effect for embed */
-.bg-radial-glow-embed {
-	background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(56, 189, 248, 0.06) 0%, transparent 60%);
-}
-
 /* Animation for network links */
 @keyframes link-flow {
 	from {
