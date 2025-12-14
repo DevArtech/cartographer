@@ -67,64 +67,147 @@ def _save_service_state(clean_shutdown: bool):
         logger.warning(f"Failed to save service state: {e}")
 
 
-async def _send_cartographer_up_notification(previous_state: dict):
-    """Send notification that Cartographer is back online"""
+async def _send_cartographer_status_notification(event_type: str, downtime_minutes: int = None, message: str = None):
+    """
+    Send Cartographer status notification directly (without HTTP).
+    
+    This is called during startup/shutdown when the HTTP server isn't available.
+    """
+    import uuid
+    from .services.email_service import send_notification_email, is_email_configured
+    from .services.discord_service import discord_service, is_discord_configured, send_discord_notification
+    from .models import DiscordConfig, DiscordDeliveryMethod, DiscordChannelConfig, get_default_priority_for_type
+    
     try:
-        # Determine downtime message
-        last_shutdown = previous_state.get("last_shutdown")
-        clean_shutdown = previous_state.get("clean_shutdown", False)
+        # Map event type to NotificationType
+        if event_type == "up":
+            notification_type = NotificationType.CARTOGRAPHER_UP
+            downtime_str = ""
+            if downtime_minutes:
+                downtime_str = f"Service was down for approximately {downtime_minutes} minutes. "
+            title = "Cartographer is Back Online"
+            default_message = f"{downtime_str}The Cartographer monitoring service is now operational."
+        else:
+            notification_type = NotificationType.CARTOGRAPHER_DOWN
+            title = "Cartographer Service Alert"
+            default_message = "The Cartographer monitoring service may be unavailable."
         
-        downtime_minutes = None
-        if clean_shutdown and last_shutdown:
-            try:
-                shutdown_time = datetime.fromisoformat(last_shutdown)
-                downtime = datetime.utcnow() - shutdown_time
-                downtime_minutes = int(downtime.total_seconds() / 60)
-            except:
-                pass
+        event = NetworkEvent(
+            event_type=notification_type,
+            priority=get_default_priority_for_type(notification_type),
+            title=title,
+            message=message or default_message,
+            network_id=None,
+            details={
+                "service": "cartographer",
+                "downtime_minutes": downtime_minutes,
+                "reported_at": datetime.utcnow().isoformat(),
+            },
+        )
         
-        # Use the new Cartographer status service
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "http://localhost:8005/api/cartographer-status/notify",
-                json={
-                    "event_type": "up",
-                    "downtime_minutes": downtime_minutes,
-                },
-                timeout=10.0
-            )
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"Sent cartographer_up notification to {result.get('subscribers_notified', 0)} subscribers")
-            else:
-                logger.error(f"Failed to send cartographer_up notification: {response.text}")
+        # Get subscribers
+        subscribers = cartographer_status_service.get_subscribers_for_event(notification_type)
+        
+        if not subscribers:
+            logger.info(f"No subscribers found for {event_type} notification")
+            return 0
+        
+        # Check available services
+        email_available = is_email_configured()
+        discord_available = is_discord_configured()
+        
+        if not email_available and not discord_available:
+            logger.warning("Cannot send Cartographer status notifications: Neither email nor Discord is configured")
+            return 0
+        
+        # Send to each subscriber
+        notification_id = str(uuid.uuid4())
+        successful = 0
+        
+        for subscriber in subscribers:
+            subscriber_notified = False
+            
+            # Send via email if enabled
+            if subscriber.email_enabled and subscriber.email_address and email_available:
+                try:
+                    record = await send_notification_email(
+                        to_email=subscriber.email_address,
+                        event=event,
+                        notification_id=notification_id,
+                    )
+                    if record.success:
+                        logger.info(f"✓ Cartographer {event_type} email sent to {subscriber.email_address}")
+                        subscriber_notified = True
+                    else:
+                        logger.error(f"✗ Failed to send email to {subscriber.email_address}: {record.error_message}")
+                except Exception as e:
+                    logger.error(f"✗ Exception sending email to {subscriber.email_address}: {e}")
+            
+            # Send via Discord if enabled
+            if subscriber.discord_enabled and discord_available:
+                try:
+                    discord_config = None
+                    if subscriber.discord_delivery_method == "channel" and subscriber.discord_channel_id:
+                        discord_config = DiscordConfig(
+                            enabled=True,
+                            delivery_method=DiscordDeliveryMethod.CHANNEL,
+                            channel_config=DiscordChannelConfig(
+                                guild_id=subscriber.discord_guild_id or "",
+                                channel_id=subscriber.discord_channel_id,
+                            ),
+                        )
+                    elif subscriber.discord_delivery_method == "dm" and subscriber.discord_user_id:
+                        discord_config = DiscordConfig(
+                            enabled=True,
+                            delivery_method=DiscordDeliveryMethod.DM,
+                            discord_user_id=subscriber.discord_user_id,
+                        )
+                    
+                    if discord_config:
+                        record = await send_discord_notification(discord_config, event, notification_id)
+                        if record.success:
+                            logger.info(f"✓ Cartographer {event_type} Discord sent to user {subscriber.user_id}")
+                            subscriber_notified = True
+                        else:
+                            logger.error(f"✗ Failed to send Discord to user {subscriber.user_id}: {record.error_message}")
+                except Exception as e:
+                    logger.error(f"✗ Exception sending Discord to user {subscriber.user_id}: {e}")
+            
+            if subscriber_notified:
+                successful += 1
+        
+        logger.info(f"Cartographer {event_type} notification complete: {successful}/{len(subscribers)} subscribers notified")
+        return successful
         
     except Exception as e:
-        logger.error(f"Failed to send cartographer_up notification: {e}", exc_info=True)
+        logger.error(f"Failed to send cartographer_{event_type} notification: {e}", exc_info=True)
+        return 0
+
+
+async def _send_cartographer_up_notification(previous_state: dict):
+    """Send notification that Cartographer is back online"""
+    # Determine downtime
+    last_shutdown = previous_state.get("last_shutdown")
+    clean_shutdown = previous_state.get("clean_shutdown", False)
+    
+    downtime_minutes = None
+    if clean_shutdown and last_shutdown:
+        try:
+            shutdown_time = datetime.fromisoformat(last_shutdown)
+            downtime = datetime.utcnow() - shutdown_time
+            downtime_minutes = int(downtime.total_seconds() / 60)
+        except:
+            pass
+    
+    await _send_cartographer_status_notification("up", downtime_minutes=downtime_minutes)
 
 
 async def _send_cartographer_down_notification():
     """Send notification that Cartographer is shutting down"""
-    try:
-        # Use the new Cartographer status service
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "http://localhost:8005/api/cartographer-status/notify",
-                json={
-                    "event_type": "down",
-                    "message": "The Cartographer monitoring service is shutting down for maintenance or restart. You will receive a notification when it comes back online.",
-                }
-            )
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"Sent cartographer_down notification to {result.get('subscribers_notified', 0)} subscribers")
-            else:
-                logger.error(f"Failed to send cartographer_down notification: {response.text}")
-        
-    except Exception as e:
-        logger.error(f"Failed to send cartographer_down notification: {e}", exc_info=True)
+    await _send_cartographer_status_notification(
+        "down",
+        message="The Cartographer monitoring service is shutting down for maintenance or restart. You will receive a notification when it comes back online."
+    )
 
 
 @asynccontextmanager
