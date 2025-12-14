@@ -7,12 +7,13 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
 
 from ..database import get_db
 import os
 from ..services.discord_oauth import discord_oauth_service
 from ..services.user_preferences import user_preferences_service
-from ..models.database import DiscordUserLink
+from ..models.database import DiscordUserLink, UserNetworkNotificationPrefs, UserGlobalNotificationPrefs
 
 logger = logging.getLogger(__name__)
 
@@ -74,16 +75,29 @@ async def discord_oauth_callback(
             expires_in=expires_in,
         )
         
-        # Update user preferences to use this Discord ID
-        # Update network preferences
-        network_prefs = await user_preferences_service.get_network_preferences(db, user_id, 0)  # This won't work - need to update all networks
-        # Actually, we should update preferences when they're accessed, not here
+        # Update user preferences to use this Discord ID and enable Discord notifications
+        # Update all network preferences with the new Discord ID and enable Discord
+        await db.execute(
+            update(UserNetworkNotificationPrefs)
+            .where(UserNetworkNotificationPrefs.user_id == user_id)
+            .values(discord_user_id=discord_id, discord_enabled=True)
+        )
         
         # Update global preferences
         global_prefs = await user_preferences_service.get_global_preferences(db, user_id)
         if global_prefs:
             global_prefs.discord_user_id = discord_id
-            await db.commit()
+            global_prefs.discord_enabled = True
+        else:
+            # Create global preferences if they don't exist
+            new_prefs = UserGlobalNotificationPrefs(
+                user_id=user_id,
+                discord_user_id=discord_id,
+                discord_enabled=True,
+            )
+            db.add(new_prefs)
+        
+        await db.commit()
         
         logger.info(f"Linked Discord account {discord_id} for user {user_id}")
         
@@ -109,9 +123,6 @@ async def unlink_discord(
     if success:
         # Clear discord_user_id from preferences
         # Update all network preferences
-        from sqlalchemy import select, update
-        from ..models.database import UserNetworkNotificationPrefs, UserGlobalNotificationPrefs
-        
         await db.execute(
             update(UserNetworkNotificationPrefs)
             .where(UserNetworkNotificationPrefs.user_id == user_id)
