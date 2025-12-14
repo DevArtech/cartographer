@@ -1,5 +1,5 @@
 <template>
-	<div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900 flex items-center justify-center p-4">
+	<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 flex items-center justify-center p-4">
 		<div class="w-full max-w-md">
 			<!-- Loading State -->
 			<div v-if="isLoading" class="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 text-center border border-slate-200/80 dark:border-slate-700/80">

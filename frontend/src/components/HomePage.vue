@@ -1,10 +1,10 @@
 <template>
 	<!-- Loading State (checking auth) -->
-	<div v-if="authLoading" class="h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-white dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 relative overflow-hidden transition-colors">
+	<div v-if="authLoading" class="h-screen flex items-center justify-center bg-white dark:bg-slate-950 relative overflow-hidden transition-colors">
 		<!-- Animated background elements -->
 		<div class="absolute inset-0 overflow-hidden pointer-events-none">
-			<div class="absolute top-1/4 -left-20 w-72 h-72 bg-cyan-400/10 dark:bg-cyan-500/5 rounded-full blur-3xl animate-pulse" />
-			<div class="absolute bottom-1/4 -right-20 w-80 h-80 bg-blue-400/10 dark:bg-blue-500/5 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s" />
+			<div class="absolute top-1/4 -left-20 w-72 h-72 bg-cyan-400/10 dark:bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
+			<div class="absolute bottom-1/4 -right-20 w-80 h-80 bg-blue-400/10 dark:bg-blue-500/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s" />
 		</div>
 		
 		<div class="relative text-center">
