@@ -298,17 +298,21 @@ class TestMonitoringDevices:
     
     def test_register_devices(self, client):
         """Should register devices for monitoring"""
-        with patch('app.routers.health.health_checker') as mock_checker:
+        with patch('app.routers.health.health_checker') as mock_checker, \
+             patch('app.routers.health.sync_devices_with_notification_service', new_callable=AsyncMock) as mock_sync:
             mock_checker.set_monitored_devices = MagicMock()
+            mock_sync.return_value = True
             
             response = client.post(
                 "/api/health/monitoring/devices",
-                json={"ips": ["192.168.1.1", "192.168.1.2"]}
+                json={"ips": ["192.168.1.1", "192.168.1.2"], "network_id": 42}
             )
             
             assert response.status_code == 200
             data = response.json()
             assert data["message"] == "Registered 2 devices for monitoring"
+            assert data["network_id"] == 42
+            mock_sync.assert_called_once_with(["192.168.1.1", "192.168.1.2"], network_id=42)
     
     def test_get_monitored_devices(self, client):
         """Should return monitored devices"""
@@ -322,13 +326,16 @@ class TestMonitoringDevices:
     
     def test_clear_monitored_devices(self, client):
         """Should clear monitored devices"""
-        with patch('app.routers.health.health_checker') as mock_checker:
+        with patch('app.routers.health.health_checker') as mock_checker, \
+             patch('app.routers.health.sync_devices_with_notification_service', new_callable=AsyncMock) as mock_sync:
             mock_checker.set_monitored_devices = MagicMock()
+            mock_sync.return_value = False  # No network_id means it returns False
             
             response = client.delete("/api/health/monitoring/devices")
             
             assert response.status_code == 200
-            mock_checker.set_monitored_devices.assert_called_once_with([])
+            mock_checker.set_monitored_devices.assert_called_once_with({})
+            mock_sync.assert_called_once_with([])
 
 
 class TestMonitoringConfig:

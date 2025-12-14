@@ -233,7 +233,7 @@ class TestSyncDevicesWithNotificationService:
     """Tests for sync_devices_with_notification_service function"""
     
     async def test_sync_devices_success(self):
-        """Should sync devices successfully"""
+        """Should sync devices successfully with network_id"""
         mock_response = AsyncMock()
         mock_response.status_code = 200
         
@@ -244,13 +244,22 @@ class TestSyncDevicesWithNotificationService:
         
         with patch('httpx.AsyncClient', return_value=mock_client):
             result = await sync_devices_with_notification_service(
-                ["192.168.1.1", "192.168.1.2", "192.168.1.3"]
+                ["192.168.1.1", "192.168.1.2", "192.168.1.3"],
+                network_id=42
             )
             
             assert result is True
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
             assert call_args.kwargs.get('json') == ["192.168.1.1", "192.168.1.2", "192.168.1.3"]
+            assert call_args.kwargs.get('params') == {"network_id": 42}
+    
+    async def test_sync_devices_without_network_id(self):
+        """Should return False without network_id"""
+        result = await sync_devices_with_notification_service(
+            ["192.168.1.1", "192.168.1.2"]
+        )
+        assert result is False
     
     async def test_sync_devices_non_200_response(self):
         """Should return False for non-200 response"""
@@ -265,7 +274,8 @@ class TestSyncDevicesWithNotificationService:
         
         with patch('httpx.AsyncClient', return_value=mock_client):
             result = await sync_devices_with_notification_service(
-                ["192.168.1.1"]
+                ["192.168.1.1"],
+                network_id=42
             )
             
             assert result is False
@@ -279,7 +289,8 @@ class TestSyncDevicesWithNotificationService:
         
         with patch('httpx.AsyncClient', return_value=mock_client):
             result = await sync_devices_with_notification_service(
-                ["192.168.1.1"]
+                ["192.168.1.1"],
+                network_id=42
             )
             
             assert result is False
@@ -293,13 +304,14 @@ class TestSyncDevicesWithNotificationService:
         
         with patch('httpx.AsyncClient', return_value=mock_client):
             result = await sync_devices_with_notification_service(
-                ["192.168.1.1"]
+                ["192.168.1.1"],
+                network_id=42
             )
             
             assert result is False
     
     async def test_sync_empty_devices_list(self):
-        """Should sync empty devices list (clearing all devices)"""
+        """Should sync empty devices list (clearing all devices for a network)"""
         mock_response = AsyncMock()
         mock_response.status_code = 200
         
@@ -309,9 +321,10 @@ class TestSyncDevicesWithNotificationService:
         mock_client.post = AsyncMock(return_value=mock_response)
         
         with patch('httpx.AsyncClient', return_value=mock_client):
-            result = await sync_devices_with_notification_service([])
+            result = await sync_devices_with_notification_service([], network_id=42)
             
             assert result is True
             call_args = mock_client.post.call_args
             assert call_args.kwargs.get('json') == []
+            assert call_args.kwargs.get('params') == {"network_id": 42}
 

@@ -149,7 +149,7 @@ async def register_devices(request: RegisterDevicesRequest):
     health_checker.set_monitored_devices(devices_map)
     
     # Sync with notification service so ML anomaly detection tracks only current devices
-    await sync_devices_with_notification_service(request.ips)
+    await sync_devices_with_notification_service(request.ips, network_id=request.network_id)
     
     return {
         "message": f"Registered {len(request.ips)} devices for monitoring",
