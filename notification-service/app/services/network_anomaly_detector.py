@@ -402,6 +402,8 @@ class NetworkAnomalyDetector:
                 
                 # Track that we sent an offline notification - prevents duplicate notifications
                 self._notified_offline.add(device_ip)
+                # Save state immediately to persist offline tracking across restarts
+                self._save_state()
                 
                 logger.info(
                     f"[Network {self.network_id}] Device {device_ip} went offline - creating notification "
@@ -428,6 +430,8 @@ class NetworkAnomalyDetector:
                 
                 # Remove from tracking
                 self._notified_offline.discard(device_ip)
+                # Save state immediately to persist tracking changes across restarts
+                self._save_state()
                 
                 logger.info(
                     f"[Network {self.network_id}] Device {device_ip} came back online - creating notification"
