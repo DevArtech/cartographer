@@ -195,10 +195,7 @@ class VersionChecker:
             return None
     
     async def _check_for_updates(self):
-        """Check for updates and send notifications if needed"""
-        # Import here to avoid circular imports
-        from .notification_manager import notification_manager
-        
+        """Check for updates and send notifications if needed (called by background loop)"""
         latest_version = await self._fetch_latest_version()
         if not latest_version:
             return
@@ -220,6 +217,91 @@ class VersionChecker:
         
         logger.info(f"New version available: {latest_version} (current: {CURRENT_VERSION}, type: {update_type})")
         
+        # Send the notification using the shared helper
+        await self._send_update_notification(latest_version, update_type)
+        
+        self._save_state()
+    
+    async def check_now(self, send_notification: bool = False, force: bool = False) -> dict:
+        """
+        Manually trigger a version check.
+        
+        Args:
+            send_notification: If True and an update is found, send notifications
+                             to all networks with SYSTEM_STATUS enabled.
+            force: If True, send notifications even if already notified about this version.
+        
+        Returns dict with check results.
+        """
+        # Create a temporary HTTP client if the background checker isn't running
+        temp_client = None
+        if not self._http_client:
+            temp_client = httpx.AsyncClient(timeout=30.0)
+            self._http_client = temp_client
+        
+        try:
+            latest_version = await self._fetch_latest_version()
+        finally:
+            # Clean up temp client if we created one
+            if temp_client:
+                await temp_client.aclose()
+                self._http_client = None
+        
+        if not latest_version:
+            return {
+                "success": False,
+                "error": "Failed to fetch latest version from GitHub",
+                "current_version": CURRENT_VERSION,
+            }
+        
+        self._last_check_time = datetime.utcnow()
+        has_update, update_type = compare_versions(CURRENT_VERSION, latest_version)
+        
+        notification_sent = False
+        notification_results = None
+        skipped_already_notified = False
+        
+        # Send notification if requested and there's an update
+        if send_notification and has_update:
+            # Check if we already notified about this version (unless forcing)
+            if not force and self._last_notified_version == latest_version:
+                logger.info(f"Already notified about version {latest_version}, skipping notification")
+                skipped_already_notified = True
+            else:
+                notification_results = await self._send_update_notification(latest_version, update_type)
+                notification_sent = notification_results is not None and len(notification_results) > 0
+        
+        self._save_state()
+        
+        result = {
+            "success": True,
+            "current_version": CURRENT_VERSION,
+            "latest_version": latest_version,
+            "has_update": has_update,
+            "update_type": update_type,
+            "changelog_url": CHANGELOG_URL if has_update else None,
+            "last_notified_version": self._last_notified_version,
+            "last_check_time": self._last_check_time.isoformat() if self._last_check_time else None,
+        }
+        
+        if send_notification:
+            result["notification_sent"] = notification_sent
+            result["skipped_already_notified"] = skipped_already_notified
+            if notification_results:
+                result["networks_notified"] = len(notification_results)
+        
+        return result
+    
+    async def _send_update_notification(self, latest_version: str, update_type: str) -> dict:
+        """
+        Send version update notification to all subscribed networks.
+        
+        Returns dict of network_id -> notification records, or None on failure.
+        """
+        from .notification_manager import notification_manager
+        
+        logger.info(f"Sending version update notification: {latest_version} (type: {update_type})")
+        
         # Create notification event
         event = NetworkEvent(
             event_type=NotificationType.SYSTEM_STATUS,
@@ -236,8 +318,6 @@ class VersionChecker:
         )
         
         # Broadcast to all networks with SYSTEM_STATUS notifications enabled
-        # Note: This sends to network preferences, not global preferences
-        # Version updates are network-scoped notifications
         results = await notification_manager.broadcast_notification(event)
         
         if results:
@@ -248,40 +328,11 @@ class VersionChecker:
         else:
             logger.warning(
                 f"No networks to notify about version update. "
-                f"Networks need to have notifications enabled with email or discord configured, "
-                f"and SYSTEM_STATUS must be in their enabled_notification_types. "
+                f"Networks need to have SYSTEM_STATUS in their enabled_notification_types. "
                 f"Current enabled networks: {notification_manager.get_all_networks_with_notifications_enabled()}"
             )
         
-        self._save_state()
-    
-    async def check_now(self) -> dict:
-        """
-        Manually trigger a version check.
-        
-        Returns dict with check results.
-        """
-        latest_version = await self._fetch_latest_version()
-        
-        if not latest_version:
-            return {
-                "success": False,
-                "error": "Failed to fetch latest version from GitHub",
-                "current_version": CURRENT_VERSION,
-            }
-        
-        has_update, update_type = compare_versions(CURRENT_VERSION, latest_version)
-        
-        return {
-            "success": True,
-            "current_version": CURRENT_VERSION,
-            "latest_version": latest_version,
-            "has_update": has_update,
-            "update_type": update_type,
-            "changelog_url": CHANGELOG_URL if has_update else None,
-            "last_notified_version": self._last_notified_version,
-            "last_check_time": self._last_check_time.isoformat() if self._last_check_time else None,
-        }
+        return results
     
     def get_status(self) -> dict:
         """Get current version checker status"""

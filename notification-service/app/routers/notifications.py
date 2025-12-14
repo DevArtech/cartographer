@@ -751,15 +751,18 @@ async def get_version_status():
 
 
 @router.post("/version/check")
-async def check_for_updates():
+async def check_for_updates(send_notification: bool = True):
     """
     Manually trigger a version check and get results.
     
     This will check GitHub for the latest version and return whether
-    an update is available. If an update is found and users haven't
-    been notified yet, this will also trigger notifications.
+    an update is available. If an update is found and send_notification is True,
+    this will also trigger notifications to all networks with SYSTEM_STATUS enabled.
+    
+    Args:
+        send_notification: If True (default), send notifications when update found
     """
-    return await version_checker.check_now()
+    return await version_checker.check_now(send_notification=send_notification)
 
 
 @router.post("/version/notify")
@@ -769,65 +772,10 @@ async def send_version_notification():
     
     This will check for updates and force-send notifications regardless
     of whether users have already been notified about this version.
+    
+    Networks must have SYSTEM_STATUS in their enabled_notification_types
+    to receive version update notifications.
     """
-    # First check for the latest version
-    result = await version_checker.check_now()
-    
-    if not result.get("success"):
-        return {
-            "success": False,
-            "error": result.get("error", "Failed to check for updates"),
-        }
-    
-    if not result.get("has_update"):
-        return {
-            "success": False,
-            "message": "No update available",
-            "current_version": result.get("current_version"),
-            "latest_version": result.get("latest_version"),
-        }
-    
-    # Import the helper functions from version_checker
-    from ..services.version_checker import (
-        get_update_priority,
-        get_update_title,
-        get_update_message,
-        CHANGELOG_URL,
-    )
-    
-    update_type = result.get("update_type")
-    current_version = result.get("current_version")
-    latest_version = result.get("latest_version")
-    
-    # Create and send the notification
-    event = NetworkEvent(
-        event_type=NotificationType.SYSTEM_STATUS,
-        priority=get_update_priority(update_type),
-        title=get_update_title(update_type, latest_version),
-        message=get_update_message(update_type, current_version, latest_version),
-        details={
-            "update_type": update_type,
-            "current_version": current_version,
-            "latest_version": latest_version,
-            "changelog_url": CHANGELOG_URL,
-            "is_version_update": True,
-            "manual_trigger": True,
-        },
-    )
-    
-    # Version updates are network-scoped (not global)
-    # They go to all networks that have SYSTEM_STATUS notifications enabled
-    results = await notification_manager.broadcast_notification(event)
-    
-    total_networks = len(results)
-    total_channels = sum(len(records) for records in results.values())
-    
-    return {
-        "success": True,
-        "networks_notified": total_networks,
-        "channels_notified": total_channels,
-        "current_version": current_version,
-        "latest_version": latest_version,
-        "update_type": update_type,
-    }
+    # Force send notification (bypass "already notified" check)
+    return await version_checker.check_now(send_notification=True, force=True)
 
