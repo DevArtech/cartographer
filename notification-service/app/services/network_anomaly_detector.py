@@ -275,30 +275,27 @@ class NetworkAnomalyDetector:
             not stats.is_stable_online()  # Stable online devices with occasional failures shouldn't alert
         )
         
-        # Check for genuine recovery (first success after being offline)
-        just_came_online = (
-            success and
-            stats and
-            stats.consecutive_successes == 1 and
-            stats.failed_checks >= 3 and
-            not stats.is_stable_offline()  # Stable offline devices with occasional successes shouldn't alert
-        )
-        
         if not success:
             # Device is offline
-            if is_stable_offline_device:
+            if device_ip in self._notified_offline:
+                # Already sent an offline notification for this device - don't send another
+                logger.debug(
+                    f"[Network {self.network_id}] Skipping duplicate offline notification for {device_ip} "
+                    f"(already notified)"
+                )
+                should_notify = False
+            elif is_stable_offline_device:
                 # This device is normally offline - don't notify
                 logger.debug(
                     f"[Network {self.network_id}] Skipping notification for stable offline device {device_ip} "
                     f"(availability: {stats.availability:.1f}%)"
                 )
                 should_notify = False
-            elif (device_ip in self._notified_offline or 
-                  state_changed or 
+            elif (state_changed or 
                   just_went_offline or
                   effective_previous_state == "online" or
                   result.is_anomaly):
-                # Device went offline - send notification
+                # Device just went offline - send notification
                 should_notify = True
                 event_type = NotificationType.DEVICE_OFFLINE
                 priority = NotificationPriority.HIGH if result.is_anomaly else NotificationPriority.MEDIUM
@@ -310,7 +307,7 @@ class NetworkAnomalyDetector:
                     title = f"Device Offline: {device_name or device_ip}"
                     message = f"The device at {device_ip} is no longer responding."
                 
-                # Track that we sent an offline notification
+                # Track that we sent an offline notification - prevents duplicate notifications
                 self._notified_offline.add(device_ip)
                 
                 logger.info(
@@ -325,11 +322,11 @@ class NetworkAnomalyDetector:
         
         elif success:
             # Device is online
-            if (device_ip in self._notified_offline or
-                state_changed or
-                just_came_online or
-                effective_previous_state in ("offline", "degraded")):
-                # Device came back online
+            # Only send "back online" notification if we previously sent an offline notification
+            # This ensures we don't spam users with online notifications for devices that were
+            # never reported as offline
+            if device_ip in self._notified_offline:
+                # We sent an offline notification - now send the recovery notification
                 should_notify = True
                 event_type = NotificationType.DEVICE_ONLINE
                 priority = NotificationPriority.LOW
@@ -337,12 +334,10 @@ class NetworkAnomalyDetector:
                 message = f"The device at {device_ip} is now responding."
                 
                 # Remove from tracking
-                had_offline_notification = device_ip in self._notified_offline
                 self._notified_offline.discard(device_ip)
                 
                 logger.info(
-                    f"[Network {self.network_id}] Device {device_ip} came back online - creating notification "
-                    f"(had_offline_notification={had_offline_notification})"
+                    f"[Network {self.network_id}] Device {device_ip} came back online - creating notification"
                 )
             
             # Check for degraded performance (high latency or packet loss)
