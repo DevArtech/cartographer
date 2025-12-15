@@ -409,14 +409,18 @@ class NotificationManager:
             
             if user_ids:
                 # Send to specific network members based on their preferences
+                # Use force=True because scheduled broadcasts are intentionally created
+                # by users and should always be sent (bypassing priority/type filters)
                 results = await self.send_notification_to_network_members(
-                    broadcast.network_id, user_ids, event
+                    broadcast.network_id, user_ids, event, force=True
                 )
                 users_notified = len(results)
                 total_records = sum(len(records) for records in results.values())
             else:
                 # Fallback to network-level preferences (backwards compatibility)
-                records = await self.send_notification_to_network(broadcast.network_id, event)
+                # Use force=True because scheduled broadcasts are intentionally created
+                # by users and should always be sent (bypassing priority/type filters)
+                records = await self.send_notification_to_network(broadcast.network_id, event, force=True)
                 users_notified = 1 if records else 0
                 total_records = len(records)
             
