@@ -165,6 +165,14 @@ class NotificationManager:
                     record_data["network_id"] = None
                     del record_data["user_id"]
                 
+                # Handle migration from old integer network_id (0) to string/None
+                if "network_id" in record_data:
+                    if record_data["network_id"] == 0 or record_data["network_id"] == "0":
+                        record_data["network_id"] = None
+                    elif isinstance(record_data["network_id"], int):
+                        # Convert other integers to string (shouldn't happen, but be safe)
+                        record_data["network_id"] = str(record_data["network_id"])
+                
                 try:
                     self._history.append(NotificationRecord(**record_data))
                 except Exception as e:
