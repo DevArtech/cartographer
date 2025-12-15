@@ -294,9 +294,13 @@ class TestAnomalyDetectionModels:
             model_version="1.0.0",
             samples_count=1000,
             devices_tracked=10,
-            is_trained=True
+            is_trained=True,
+            is_online_learning=True,
+            training_status="online_learning"
         )
         assert status.is_trained is True
+        assert status.is_online_learning is True
+        assert status.training_status == "online_learning"
 
 
 class TestScheduledBroadcastModels:

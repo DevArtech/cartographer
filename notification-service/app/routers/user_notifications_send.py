@@ -39,6 +39,7 @@ async def send_network_notification(
     Send a notification to all users in a network.
     Backend provides user_ids list, we fetch each user's preferences and send accordingly.
     """
+    logger.info(f"Sending notification to network {network_id} to {len(request.user_ids)} users")
     try:
         event_type = NotificationType(request.type)
         priority = NotificationPriority(request.priority)
@@ -65,7 +66,7 @@ async def send_network_notification(
             "scheduled_at": request.scheduled_at,
         }
     )
-    
+
     # Dispatch to all users
     results = await notification_dispatch_service.send_to_network_users(
         db=db,

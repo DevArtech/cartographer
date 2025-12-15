@@ -101,7 +101,9 @@ class TestServiceStatusEndpoints:
                             model_version="1.0",
                             devices_tracked=10,
                             samples_count=1000,
-                            is_trained=True
+                            is_trained=True,
+                            is_online_learning=True,
+                            training_status="online_learning"
                         )
                         
                         with patch('app.routers.notifications.version_checker') as mock_vc:
@@ -260,7 +262,9 @@ class TestMLAnomalyEndpoints:
                 model_version="1.0",
                 devices_tracked=10,
                 samples_count=1000,
-                is_trained=True
+                is_trained=True,
+                is_online_learning=True,
+                training_status="online_learning"
             )
             
             response = test_client.get("/api/notifications/ml/status")

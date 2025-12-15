@@ -852,6 +852,8 @@ class AnomalyDetector:
         else:
             devices_tracked = len(self._device_stats)
         
+        has_data = len(self._device_stats) > 0 and self._last_training is not None
+        
         return MLModelStatus(
             model_version=self.MODEL_VERSION,
             last_training=self._last_training,
@@ -859,7 +861,12 @@ class AnomalyDetector:
             devices_tracked=devices_tracked,
             anomalies_detected_total=self._anomalies_detected,
             anomalies_detected_24h=anomalies_24h,
-            is_trained=len(self._device_stats) > 0 and self._last_training is not None,
+            # Deprecated: kept for backward compatibility
+            is_trained=has_data,
+            # Model is always online learning once it has data
+            is_online_learning=has_data,
+            # Status reflects continuous learning nature
+            training_status="online_learning" if has_data else "initializing",
         )
     
     def mark_false_positive(self, event_id: str):

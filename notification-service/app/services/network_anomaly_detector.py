@@ -525,6 +525,8 @@ class NetworkAnomalyDetector:
         cutoff = datetime.utcnow() - timedelta(days=1)
         anomalies_24h = sum(1 for ts in self._anomaly_timestamps if ts > cutoff)
         
+        has_data = len(self._device_stats) > 0 and self._last_training is not None
+        
         return MLModelStatus(
             model_version="1.0.0",
             last_training=self._last_training,
@@ -532,7 +534,12 @@ class NetworkAnomalyDetector:
             devices_tracked=len(self._current_devices) if self._current_devices else len(self._device_stats),
             anomalies_detected_total=self._anomalies_detected,
             anomalies_detected_24h=anomalies_24h,
-            is_trained=len(self._device_stats) > 0 and self._last_training is not None,
+            # Deprecated: kept for backward compatibility
+            is_trained=has_data,
+            # Model is always online learning once it has data
+            is_online_learning=has_data,
+            # Status reflects continuous learning nature
+            training_status="online_learning" if has_data else "initializing",
         )
     
     def sync_current_devices(self, device_ips: list):

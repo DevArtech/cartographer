@@ -254,7 +254,7 @@
 					</div>
 					<div>
 						<p class="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Model Status</p>
-						<p class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ anomalyStats.is_trained ? 'Trained' : 'Training' }}</p>
+						<p class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ anomalyStats.is_online_learning ? 'Online Learning' : 'Initializing' }}</p>
 					</div>
 				</div>
 			</div>

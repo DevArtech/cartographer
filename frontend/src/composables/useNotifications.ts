@@ -70,7 +70,9 @@ export interface NotificationServiceStatus {
   discord_bot_connected: boolean;
   ml_model_status: {
     model_version: string;
-    is_trained: boolean;
+    is_trained: boolean;  // Deprecated: use is_online_learning
+    is_online_learning: boolean;  // Model is always online learning
+    training_status: 'initializing' | 'online_learning';  // Current status
     devices_tracked: number;
     anomalies_detected_total: number;
     anomalies_detected_24h: number;

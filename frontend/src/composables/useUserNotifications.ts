@@ -259,7 +259,9 @@ export function useUserNotifications() {
   async function getAnomalyStats(networkId: string): Promise<{
     devices_tracked: number;
     anomalies_detected_24h: number;
-    is_trained: boolean;
+    is_trained: boolean;  // Deprecated: use is_online_learning
+    is_online_learning: boolean;
+    training_status: 'initializing' | 'online_learning';
   }> {
     try {
       // Use the notifications API which proxies to notification service
@@ -270,6 +272,8 @@ export function useUserNotifications() {
         devices_tracked: response.data.devices_tracked || 0,
         anomalies_detected_24h: response.data.anomalies_detected_24h || 0,
         is_trained: response.data.is_trained || false,
+        is_online_learning: response.data.is_online_learning || false,
+        training_status: response.data.training_status || 'initializing',
       };
     } catch (e: any) {
       error.value = e.response?.data?.detail || e.message;

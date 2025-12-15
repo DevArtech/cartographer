@@ -368,7 +368,12 @@ class MLModelStatus(BaseModel):
     anomalies_detected_total: int = 0
     anomalies_detected_24h: int = 0
     false_positive_rate: Optional[float] = None
+    # Deprecated: use is_online_learning instead. Kept for backward compatibility.
     is_trained: bool = False
+    # The model is always online learning - it continuously adapts to network state
+    is_online_learning: bool = False
+    # Status: "initializing" (no data yet), "online_learning" (actively learning)
+    training_status: str = "initializing"
 
 
 # ==================== Scheduled Broadcasts ====================

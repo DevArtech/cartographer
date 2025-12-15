@@ -1,7 +1,7 @@
 """
 Service for dispatching notifications to users based on their preferences.
 """
-
+import uuid
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
@@ -48,17 +48,22 @@ class NotificationDispatchService:
         if event.event_type.value not in enabled_types:
             return False, f"Notification type {event.event_type.value} not enabled"
         
-        # Get effective priority (user override or default)
+        # Get effective priority:
+        # 1. User can override priority for specific types (type_priorities)
+        # 2. Otherwise, use the event's actual priority
+        # 3. Fall back to default priority for the type if event has no priority
         type_priorities = prefs.type_priorities or {}
         effective_priority_str = type_priorities.get(event.event_type.value)
         
         if effective_priority_str:
+            # User has overridden priority for this type
             try:
                 effective_priority = NotificationPriority(effective_priority_str)
             except ValueError:
-                effective_priority = get_default_priority_for_type(event.event_type)
+                effective_priority = event.priority or get_default_priority_for_type(event.event_type)
         else:
-            effective_priority = get_default_priority_for_type(event.event_type)
+            # Use the event's actual priority, falling back to default for the type
+            effective_priority = event.priority or get_default_priority_for_type(event.event_type)
         
         # Check minimum priority threshold
         priority_order = [
@@ -128,22 +133,28 @@ class NotificationDispatchService:
     ) -> List[NotificationRecord]:
         """Send notification to a single user based on their preferences"""
         records = []
-        
-        # Get user's network preferences
-        prefs = await user_preferences_service.get_network_preferences(db, user_id, network_id)
-        if not prefs:
-            logger.debug(f"No preferences found for user {user_id} in network {network_id}")
-            return records
-        
+        logger.info(f"Sending notification to user {user_id} for network {network_id}")
+        # Get or create user's network preferences (creates defaults if not configured)
+        prefs = await user_preferences_service.get_or_create_network_preferences(
+            db, user_id, network_id, user_email=user_email
+        )
+
+        logger.info(
+            f"Preferences for user {user_id} in network {network_id}: "
+            f"email_enabled={prefs.email_enabled}, discord_enabled={prefs.discord_enabled}, "
+            f"enabled_types={prefs.enabled_types}, minimum_priority={prefs.minimum_priority}"
+        )
+
         # Check if should notify
         should_notify, reason = self._should_notify_user(prefs, event)
+        logger.info(f"Should notify check for user {user_id}: should_notify={should_notify}, reason='{reason}', event_type={event.event_type.value}")
         if not should_notify:
-            logger.debug(f"Skipping notification for user {user_id}: {reason}")
+            logger.info(f"Skipping notification for user {user_id}: {reason}")
             return records
         
-        import uuid
+        logger.info(f"Should notify user {user_id}, sending notification")
         notification_id = str(uuid.uuid4())
-        
+        logger.info(f"Sending notification to user {user_id} with notification_id {notification_id}")
         # Send email if enabled
         if prefs.email_enabled:
             if not is_email_configured():
@@ -176,6 +187,7 @@ class NotificationDispatchService:
                     records.append(record)
         
         # Send Discord if enabled
+        logger.info(f"Sending Discord notification to user {user_id}")
         if prefs.discord_enabled and prefs.discord_user_id:
             if not is_discord_configured():
                 record = NotificationRecord(
@@ -239,7 +251,7 @@ class NotificationDispatchService:
         for user_id in user_ids:
             # Get user email from database
             user_email = await user_preferences_service.get_user_email(db, user_id)
-            
+
             user_records = await self.send_to_user(
                 db=db,
                 user_id=user_id,

@@ -364,6 +364,8 @@ class TestAnomalyDetector:
         
         assert status.devices_tracked == 1
         assert status.is_trained is True
+        assert status.is_online_learning is True
+        assert status.training_status == "online_learning"
     
     def test_mark_false_positive(self, anomaly_detector_instance):
         """Should mark false positive"""

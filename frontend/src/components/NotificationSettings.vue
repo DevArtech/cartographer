@@ -1071,7 +1071,7 @@
 										<p class="text-xs text-slate-500 dark:text-slate-400">Anomalies (24h)</p>
 									</div>
 									<div>
-										<p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ serviceStatus.ml_model_status.is_trained ? 'Active' : 'Training' }}</p>
+										<p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ serviceStatus.ml_model_status.is_online_learning ? 'Online Learning' : 'Initializing' }}</p>
 										<p class="text-xs text-slate-500 dark:text-slate-400">Model Status</p>
 									</div>
 								</div>
