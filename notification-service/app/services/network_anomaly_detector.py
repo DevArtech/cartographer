@@ -547,7 +547,7 @@ class NetworkAnomalyDetectorManager:
     """
     
     def __init__(self):
-        self._detectors: Dict[int, NetworkAnomalyDetector] = {}
+        self._detectors: Dict[str, NetworkAnomalyDetector] = {}
         # Load existing detectors from disk on startup
         self._load_all()
     
@@ -562,8 +562,8 @@ class NetworkAnomalyDetectorManager:
             for state_file in NETWORK_ANOMALY_DIR.glob("network_*.json"):
                 try:
                     # Extract network_id from filename
-                    filename = state_file.stem  # e.g., "network_123"
-                    network_id = int(filename.split("_")[1])
+                    filename = state_file.stem  # e.g., "network_<uuid>"
+                    network_id = filename.split("_", 1)[1]  # UUID string
                     
                     # Load the detector (it will load its own state)
                     detector = NetworkAnomalyDetector(network_id, load_state=True)

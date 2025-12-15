@@ -120,12 +120,8 @@ class NotificationManager:
                 
                 # Ensure network_id exists (for new format)
                 if "network_id" not in prefs_data:
-                    # Try to use key as network_id if it looks like an integer
-                    try:
-                        prefs_data["network_id"] = int(key)
-                    except ValueError:
-                        logger.warning(f"Skipping preferences with invalid key: {key}")
-                        continue
+                    # Use key as network_id (UUID string)
+                    prefs_data["network_id"] = key
                 
                 try:
                     self._preferences[key] = NotificationPreferences(**prefs_data)

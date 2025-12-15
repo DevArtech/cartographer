@@ -37,7 +37,7 @@ class DiscordOAuthService:
         self, 
         user_id: str, 
         context_type: str = "global",
-        context_id: Optional[int] = None
+        context_id: Optional[str] = None
     ) -> str:
         """
         Generate Discord OAuth authorization URL.
@@ -45,7 +45,7 @@ class DiscordOAuthService:
         Args:
             user_id: The user initiating the OAuth flow
             context_type: "network" or "global"
-            context_id: The network_id if context_type is "network", None for "global"
+            context_id: The network_id (UUID) if context_type is "network", None for "global"
         """
         if not DISCORD_CLIENT_ID:
             logger.error("DISCORD_CLIENT_ID not configured")
@@ -74,7 +74,7 @@ class DiscordOAuthService:
         query_string = urlencode(params)
         return f"https://discord.com/api/oauth2/authorize?{query_string}"
     
-    def validate_state(self, state_token: str) -> Optional[Tuple[str, str, Optional[int]]]:
+    def validate_state(self, state_token: str) -> Optional[Tuple[str, str, Optional[str]]]:
         """
         Validate OAuth state token and return context information.
         
@@ -147,7 +147,7 @@ class DiscordOAuthService:
         refresh_token: Optional[str],
         expires_in: int,
         context_type: str = "global",
-        context_id: Optional[int] = None,
+        context_id: Optional[str] = None,
     ) -> DiscordUserLink:
         """
         Create or update Discord user link for a specific context.
@@ -161,7 +161,7 @@ class DiscordOAuthService:
             refresh_token: OAuth refresh token
             expires_in: Token expiration time in seconds
             context_type: "network" or "global"
-            context_id: The network_id if context_type is "network", None for "global"
+            context_id: The network_id (UUID) if context_type is "network", None for "global"
         """
         # Check if link exists for this context
         existing_link = await self.get_link(db, user_id, context_type, context_id)
@@ -203,7 +203,7 @@ class DiscordOAuthService:
         db: AsyncSession, 
         user_id: str,
         context_type: str = "global",
-        context_id: Optional[int] = None
+        context_id: Optional[str] = None
     ) -> Optional[DiscordUserLink]:
         """
         Get Discord link for user in a specific context.
@@ -211,7 +211,7 @@ class DiscordOAuthService:
         Args:
             user_id: The user's ID
             context_type: "network" or "global"
-            context_id: The network_id if context_type is "network", None for "global"
+            context_id: The network_id (UUID) if context_type is "network", None for "global"
         """
         if context_type == "global" or context_id is None:
             result = await db.execute(
@@ -239,7 +239,7 @@ class DiscordOAuthService:
         db: AsyncSession, 
         user_id: str,
         context_type: str = "global",
-        context_id: Optional[int] = None
+        context_id: Optional[str] = None
     ) -> bool:
         """
         Delete Discord link for user in a specific context.
@@ -247,7 +247,7 @@ class DiscordOAuthService:
         Args:
             user_id: The user's ID
             context_type: "network" or "global"
-            context_id: The network_id if context_type is "network", None for "global"
+            context_id: The network_id (UUID) if context_type is "network", None for "global"
         """
         link = await self.get_link(db, user_id, context_type, context_id)
         if link:
