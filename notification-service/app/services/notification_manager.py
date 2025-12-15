@@ -1418,7 +1418,7 @@ class NotificationManager:
                 record = NotificationRecord(
                     notification_id=notification_id,
                     event_id=event.event_id,
-                    network_id=0,
+                    network_id=None,  # Global notifications have no network_id
                     channel=NotificationChannel.EMAIL,
                     success=False,
                     error_message=str(e),
