@@ -17,23 +17,20 @@ flowchart TB
     end
 
     subgraph Gateway["🚪 API Gateway"]
-        Backend["Backend Service<br/><i>:8000</i><br/><b>FastAPI</b> + <b>Python</b><br/>HTTPX • WebSocket Proxy"]
+        Backend["Backend Service<br/><i>:8000</i><br/><b>FastAPI</b> + <b>Python</b><br/>SQLAlchemy • HTTPX • WebSocket"]
     end
 
     subgraph Services["⚙️ Microservices"]
         Health["Health Service<br/><i>:8001</i><br/><b>FastAPI</b><br/>ICMP • DNS • Speedtest"]
-        Auth["Auth Service<br/><i>:8002</i><br/><b>FastAPI</b><br/>JWT • bcrypt"]
+        Auth["Auth Service<br/><i>:8002</i><br/><b>FastAPI</b><br/>JWT • bcrypt • SQLAlchemy"]
         Metrics["Metrics Service<br/><i>:8003</i><br/><b>FastAPI</b><br/>Redis Pub/Sub"]
         Assistant["Assistant Service<br/><i>:8004</i><br/><b>FastAPI</b><br/>LangChain • Streaming"]
-        Notification["Notification Service<br/><i>:8005</i><br/><b>FastAPI</b><br/>Anomaly Detection ML"]
+        Notification["Notification Service<br/><i>:8005</i><br/><b>FastAPI</b><br/>SQLAlchemy • Anomaly Detection"]
     end
 
     subgraph Storage["💾 Data Storage"]
+        Postgres[("PostgreSQL<br/><i>:5432</i><br/><b>Primary Database</b><br/>users • networks • notifications")]
         Redis[("Redis<br/><i>:6379</i><br/><b>Pub/Sub & Cache</b>")]
-        AuthData[("auth-data/<br/><b>JSON</b><br/>users • invites")]
-        HealthData[("health-data/<br/><b>JSON</b><br/>health_history")]
-        NotifData[("notification-data/<br/><b>JSON</b><br/>preferences • history")]
-        MapData[("cartographer-data/<br/><b>JSON</b><br/>network_layout")]
     end
 
     subgraph External["🌐 External Services"]
@@ -54,10 +51,9 @@ flowchart TB
     Backend -->|"/api/notifications/*"| Notification
 
     %% Service to storage
-    Auth --> AuthData
-    Health --> HealthData
-    Notification --> NotifData
-    Backend --> MapData
+    Backend --> Postgres
+    Auth --> Postgres
+    Notification --> Postgres
 
     %% Redis pub/sub
     Metrics -->|"Publish"| Redis
@@ -86,7 +82,7 @@ flowchart TB
 
     class Backend gateway
     class Health,Auth,Metrics,Assistant,Notification service
-    class Redis,AuthData,HealthData,NotifData,MapData storage
+    class Postgres,Redis storage
     class LAN,AI,Email,Discord external
     class Browser client
 ```
@@ -100,6 +96,7 @@ flowchart TB
 | Metrics | 8003 | Real-time topology metrics |
 | Assistant | 8004 | AI-powered network assistant |
 | Notification | 8005 | Alerts via Email/Discord |
+| PostgreSQL | 5432 | Primary database (users, networks, notifications) |
 | Redis | 6379 | Pub/Sub event streaming |
 
 ## What it does
