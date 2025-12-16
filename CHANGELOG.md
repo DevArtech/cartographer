@@ -5,6 +5,19 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.14.13](https://github.com/devartech/cartographer/compare/v0.14.12...v0.14.13) (2025-12-16)
+
+
+### 📚 Documentation
+
+* update for multi-tenant ([2d4f825](https://github.com/devartech/cartographer/commit/2d4f82549072bdfee90049d1eb1ba6ccdcad17f8))
+* update postgres considerations ([15ce252](https://github.com/devartech/cartographer/commit/15ce2525fd573833d20bd194849ab36cd5b8820c))
+
+
+### 🐛 Bug Fixes
+
+* empty commit ([ca430cd](https://github.com/devartech/cartographer/commit/ca430cd7ac24c396f2250775a45b98bb57604c6d))
+
 ### [0.14.12](https://github.com/devartech/cartographer/compare/v0.14.11...v0.14.12) (2025-12-16)
 
 
