@@ -11,9 +11,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to use for images (e.g., v0.14.12)'
+        description: 'Tag to use for images (leave empty to use VERSION file)'
         required: false
         default: ''
+      force:
+        description: 'Force rebuild even if images exist'
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io
@@ -24,69 +28,55 @@ permissions:
   packages: write
 
 jobs:
-  # Check if version changed and create tag if needed
-  check-version:
+  # Determine version and create tag if needed
+  prepare:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get-version.outputs.version }}
-      should_build: ${{ steps.check.outputs.should_build }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get version from VERSION file
-        id: get-version
+      - name: Determine version
+        id: version
         run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
-          echo "version=v$VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: v$VERSION"
-
-      - name: Check if tag already exists
-        id: check
-        run: |
-          VERSION="${{ steps.get-version.outputs.version }}"
-          
-          # For tag pushes, always build
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "Tag push detected, will build"
-            exit 0
-          fi
-          
-          # For workflow_dispatch with custom tag
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "Manual dispatch with custom tag, will build"
-            exit 0
-          fi
-          
-          # Check if this version tag already exists
-          if git rev-parse "$VERSION" >/dev/null 2>&1; then
-            echo "should_build=false" >> $GITHUB_OUTPUT
-            echo "Tag $VERSION already exists, skipping build"
+          # Priority: 1) Manual input, 2) Git tag, 3) VERSION file
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+            echo "Using manual input version: $VERSION"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            echo "Using git tag version: $VERSION"
           else
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "New version $VERSION detected, will build"
+            VERSION="v$(cat VERSION | tr -d '[:space:]')"
+            echo "Using VERSION file: $VERSION"
           fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create and push tag
-        if: steps.check.outputs.should_build == 'true' && github.ref == 'refs/heads/main'
+      - name: Create tag if it doesn't exist
+        if: github.ref == 'refs/heads/main'
         run: |
-          VERSION="${{ steps.get-version.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$VERSION" -m "Release $VERSION"
-          git push origin "$VERSION"
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists, skipping tag creation"
+          else
+            echo "Creating new tag: $VERSION"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$VERSION" -m "Release $VERSION"
+            git push origin "$VERSION"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-and-push:
-    needs: check-version
-    if: needs.check-version.outputs.should_build == 'true'
+    needs: prepare
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: cartographer-app
@@ -112,6 +102,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -122,19 +115,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine version tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
-            VERSION="${{ github.event.inputs.tag }}"
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            VERSION="${{ needs.check-version.outputs.version }}"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building with version: $VERSION"
-
       - name: Generate Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -142,9 +122,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.name }}
           tags: |
             # Tag with full version (e.g., v0.14.12)
-            type=raw,value=${{ steps.version.outputs.VERSION }}
-            # Tag with major.minor (e.g., 0.14)
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.VERSION }}
+            type=raw,value=${{ needs.prepare.outputs.version }}
             # Always tag as latest
             type=raw,value=latest
 
