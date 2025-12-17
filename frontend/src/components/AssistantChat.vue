@@ -48,17 +48,17 @@
 				<button
 					v-for="p in allProviders"
 					:key="p.provider"
-					@click="p.available ? selectProvider(p.provider) : null"
-					@dblclick="p.available ? setDefaultProvider(p.provider) : null"
-					:disabled="isStreaming || !p.available"
+					@click="p.available && !rateLimited ? selectProvider(p.provider) : null"
+					@dblclick="p.available && !rateLimited ? setDefaultProvider(p.provider) : null"
+					:disabled="inputDisabled || !p.available"
 					class="p-1.5 rounded-md transition-all relative"
 					:class="[
 						selectedProvider === p.provider 
 							? 'bg-slate-200 dark:bg-slate-800 ring-2 ring-violet-500' 
-							: p.available ? 'hover:bg-slate-200 dark:hover:bg-slate-800' : '',
-						isStreaming || !p.available ? 'opacity-30 cursor-not-allowed' : ''
+							: p.available && !rateLimited ? 'hover:bg-slate-200 dark:hover:bg-slate-800' : '',
+						inputDisabled || !p.available ? 'opacity-30 cursor-not-allowed' : ''
 					]"
-					:title="getProviderTitle(p)"
+					:title="rateLimited ? 'Rate limited - try again tomorrow' : getProviderTitle(p)"
 				>
 					<!-- Default provider indicator -->
 					<span 
@@ -102,8 +102,8 @@
 				<select 
 					v-model="selectedModel" 
 					class="text-xs bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none flex-1 min-w-0 transition-shadow"
-					:disabled="isStreaming || !currentProviderModels.length"
-					:title="selectedModel"
+					:disabled="inputDisabled || !currentProviderModels.length"
+					:title="rateLimited ? 'Rate limited - try again tomorrow' : selectedModel"
 				>
 					<option v-for="model in currentProviderModels" :key="model" :value="model">
 						{{ formatModelName(model) }}
@@ -252,21 +252,44 @@
 			</button>
 		</div>
 
+		<!-- Rate Limit Banner -->
+		<div v-if="rateLimited" class="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800/50 flex items-center gap-3">
+			<div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+				</svg>
+			</div>
+			<div class="flex-1">
+				<p class="text-sm font-medium text-amber-800 dark:text-amber-200">Daily limit reached</p>
+				<p class="text-xs text-amber-600 dark:text-amber-400">{{ rateLimitMessage || 'You have used all your assistant chats for today. Your limit will reset at midnight UTC.' }}</p>
+			</div>
+		</div>
+
 		<!-- Input Area -->
 		<div class="p-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50">
-			<form @submit.prevent="handleSubmit" class="flex gap-2">
+			<form @submit.prevent="handleSubmit" class="flex gap-2 items-center">
 				<input
 					v-model="inputMessage"
 					type="text"
-					placeholder="Ask about your network..."
-					class="flex-1 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-800 dark:text-white placeholder-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none text-sm transition-shadow"
-					:disabled="isStreaming"
+					:placeholder="rateLimited ? 'Chat limit reached - try again tomorrow' : 'Ask about your network...'"
+					class="flex-1 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-800 dark:text-white placeholder-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none text-sm transition-shadow disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:cursor-not-allowed"
+					:disabled="inputDisabled"
 					@keydown.enter.exact.prevent="handleSubmit"
 				/>
+				<!-- Remaining chats indicator -->
+				<span 
+					v-if="rateLimitInfo && !rateLimited" 
+					class="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap"
+					:class="{ 'text-amber-500 dark:text-amber-400': rateLimitInfo.remaining <= 3 }"
+					:title="`${rateLimitInfo.used} of ${rateLimitInfo.limit} daily chats used`"
+				>
+					{{ rateLimitInfo.remaining }} left
+				</span>
 				<button
 					type="submit"
-					:disabled="!inputMessage.trim() || isStreaming"
+					:disabled="!inputMessage.trim() || inputDisabled"
 					class="px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 disabled:from-slate-400 disabled:to-slate-400 dark:disabled:from-slate-700 dark:disabled:to-slate-700 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-all shadow-sm shadow-violet-500/20"
+					:title="rateLimited ? 'Daily limit reached' : ''"
 				>
 					<svg v-if="!isStreaming" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
@@ -339,6 +362,14 @@ const contextLoading = ref(true);
 const contextRefreshing = ref(false);
 const contextStatusPollInterval = ref<number | null>(null);
 
+// Rate limit state
+const rateLimited = ref(false);
+const rateLimitMessage = ref<string | null>(null);
+const rateLimitInfo = ref<{ used: number; limit: number; remaining: number; resets_in_seconds: number } | null>(null);
+
+// Computed: whether input should be disabled
+const inputDisabled = computed(() => isStreaming.value || rateLimited.value);
+
 // Computed property for current provider's models
 const currentProviderModels = computed(() => {
 	const provider = availableProviders.value.find(p => p.provider === selectedProvider.value);
@@ -368,6 +399,50 @@ function getAuthToken(): string | null {
 	return null;
 }
 
+// Check rate limit status proactively
+async function checkRateLimitStatus() {
+	try {
+		const response = await axios.get('/api/assistant/chat/limit');
+		const data = response.data;
+		
+		// Store the full rate limit info
+		rateLimitInfo.value = {
+			used: data.used,
+			limit: data.limit,
+			remaining: data.remaining,
+			resets_in_seconds: data.resets_in_seconds,
+		};
+		
+		if (data.is_limited) {
+			rateLimited.value = true;
+			rateLimitMessage.value = `You've used all ${data.limit} daily chats. Resets in ${formatTimeUntilReset(data.resets_in_seconds)}.`;
+		} else {
+			rateLimited.value = false;
+			rateLimitMessage.value = null;
+		}
+	} catch (err: any) {
+		// If we get a 429, we're rate limited
+		if (err.response?.status === 429) {
+			rateLimited.value = true;
+			rateLimitMessage.value = err.response?.data?.detail || 'Daily chat limit exceeded. Please try again tomorrow.';
+		} else {
+			// Don't block the UI for other errors, just log
+			console.error('Failed to check rate limit status:', err);
+		}
+	}
+}
+
+// Format seconds until reset as human-readable
+function formatTimeUntilReset(seconds: number): string {
+	const hours = Math.floor(seconds / 3600);
+	const minutes = Math.floor((seconds % 3600) / 60);
+	
+	if (hours > 0) {
+		return `${hours}h ${minutes}m`;
+	}
+	return `${minutes}m`;
+}
+
 const suggestions = [
 	"What's the health of my network?",
 	"Are there any unhealthy devices?",
@@ -378,8 +453,11 @@ const suggestions = [
 // Fetch available providers on mount
 onMounted(async () => {
 	loadDefaultProvider();
-	await fetchProviders();
-	await fetchContext();
+	await Promise.all([
+		fetchProviders(),
+		fetchContext(),
+		checkRateLimitStatus(),
+	]);
 });
 
 // Cleanup polling on unmount
@@ -643,7 +721,19 @@ async function handleSubmit() {
 
 		if (!response.ok) {
 			const errData = await response.json().catch(() => ({}));
-			throw new Error(errData.detail || `HTTP ${response.status}`);
+			const errorMessage = errData.detail || `HTTP ${response.status}`;
+			
+			// Check for rate limit (429)
+			if (response.status === 429) {
+				rateLimited.value = true;
+				const limitMsg = errorMessage.includes('Daily') 
+					? errorMessage 
+					: 'Daily chat limit exceeded. Please try again tomorrow.';
+				rateLimitMessage.value = limitMsg;
+				throw new Error(limitMsg);
+			}
+			
+			throw new Error(errorMessage);
 		}
 
 		const reader = response.body?.getReader();
@@ -697,6 +787,8 @@ async function handleSubmit() {
 		isStreaming.value = false;
 		currentStreamContent.value = '';
 		scrollToBottom();
+		// Refresh rate limit status after each chat attempt
+		checkRateLimitStatus();
 	}
 }
 

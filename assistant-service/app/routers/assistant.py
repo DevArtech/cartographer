@@ -34,6 +34,7 @@ from ..providers import (
 )
 from ..providers.base import ChatMessage as ProviderChatMessage
 from ..services.metrics_context import metrics_context_service
+from ..services.rate_limit import get_rate_limit_status
 
 logger = logging.getLogger(__name__)
 
@@ -598,3 +599,21 @@ async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(re
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         },
     )
+
+
+# ==================== Rate Limit Status ====================
+
+@router.get("/chat/limit")
+async def get_chat_limit_status(user: AuthenticatedUser = Depends(require_auth)):
+    """
+    Get the current chat rate limit status for the authenticated user.
+    Returns usage count, limit, remaining, and time until reset.
+    """
+    status = await get_rate_limit_status(user.user_id, "chat", CHAT_LIMIT_PER_DAY)
+    return {
+        "used": status["used"],
+        "limit": status["limit"],
+        "remaining": status["remaining"],
+        "resets_in_seconds": status["resets_in_seconds"],
+        "is_limited": status["remaining"] <= 0,
+    }

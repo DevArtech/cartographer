@@ -152,6 +152,12 @@ async def get_context_status(request: Request, user: AuthenticatedUser = Depends
 
 # ==================== Chat Endpoints ====================
 
+@router.get("/chat/limit")
+async def get_chat_limit(request: Request, user: AuthenticatedUser = Depends(require_auth)):
+    """Get current chat rate limit status. Requires authentication."""
+    return await proxy_request("GET", "/chat/limit", headers=get_auth_headers(request))
+
+
 @router.post("/chat")
 async def chat(request: Request, user: AuthenticatedUser = Depends(require_auth)):
     """Non-streaming chat. Requires authentication."""
@@ -169,25 +175,69 @@ async def chat_stream(request: Request, user: AuthenticatedUser = Depends(requir
     url = f"{ASSISTANT_SERVICE_URL}/api/assistant/chat/stream"
     auth_headers = get_auth_headers(request)
     
-    async def stream_proxy():
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            try:
-                async with client.stream("POST", url, json=body, headers=auth_headers) as response:
+    # First, make the request and check status before streaming
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        try:
+            response = await client.send(
+                client.build_request("POST", url, json=body, headers=auth_headers),
+                stream=True
+            )
+            
+            # Check for error status codes BEFORE streaming
+            if response.status_code == 429:
+                # Rate limit exceeded - return proper error response
+                try:
+                    error_body = await response.aread()
+                    import json
+                    error_data = json.loads(error_body)
+                    detail = error_data.get("detail", "Daily chat limit exceeded. Please try again tomorrow.")
+                except Exception:
+                    detail = "Daily chat limit exceeded. Please try again tomorrow."
+                
+                raise HTTPException(
+                    status_code=429,
+                    detail=detail,
+                    headers={"Retry-After": response.headers.get("Retry-After", "86400")}
+                )
+            
+            if response.status_code == 401:
+                raise HTTPException(status_code=401, detail="Not authenticated")
+            
+            if response.status_code >= 400:
+                try:
+                    error_body = await response.aread()
+                    import json
+                    error_data = json.loads(error_body)
+                    detail = error_data.get("detail", f"Assistant service error: {response.status_code}")
+                except Exception:
+                    detail = f"Assistant service error: {response.status_code}"
+                raise HTTPException(status_code=response.status_code, detail=detail)
+            
+            # Stream successful response
+            async def stream_response():
+                try:
                     async for chunk in response.aiter_bytes():
                         yield chunk
-            except httpx.ConnectError:
-                yield b'data: {"type": "error", "error": "Assistant service unavailable"}\n\n'
-            except httpx.TimeoutException:
-                yield b'data: {"type": "error", "error": "Assistant service timeout"}\n\n'
-            except Exception as e:
-                yield f'data: {{"type": "error", "error": "{str(e)}"}}\n\n'.encode()
-    
-    return StreamingResponse(
-        stream_proxy(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+                except Exception as e:
+                    yield f'data: {{"type": "error", "error": "{str(e)}"}}\n\n'.encode()
+                finally:
+                    await response.aclose()
+            
+            return StreamingResponse(
+                stream_response(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+            
+        except HTTPException:
+            raise
+        except httpx.ConnectError:
+            raise HTTPException(status_code=503, detail="Assistant service unavailable")
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Assistant service timeout")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
