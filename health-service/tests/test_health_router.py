@@ -305,14 +305,14 @@ class TestMonitoringDevices:
             
             response = client.post(
                 "/api/health/monitoring/devices",
-                json={"ips": ["192.168.1.1", "192.168.1.2"], "network_id": 42}
+                json={"ips": ["192.168.1.1", "192.168.1.2"], "network_id": "network-uuid-42"}
             )
             
             assert response.status_code == 200
             data = response.json()
             assert data["message"] == "Registered 2 devices for monitoring"
-            assert data["network_id"] == 42
-            mock_sync.assert_called_once_with(["192.168.1.1", "192.168.1.2"], network_id=42)
+            assert data["network_id"] == "network-uuid-42"
+            mock_sync.assert_called_once_with(["192.168.1.1", "192.168.1.2"], network_id="network-uuid-42")
     
     def test_get_monitored_devices(self, client):
         """Should return monitored devices"""

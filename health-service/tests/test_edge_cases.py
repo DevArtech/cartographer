@@ -241,7 +241,7 @@ class TestMonitoringLoopEdgeCases:
     async def test_perform_monitoring_check_empty_devices(self, health_checker_instance):
         """Should do nothing when no devices registered"""
         # Clear all devices
-        health_checker_instance._monitored_devices = set()
+        health_checker_instance._monitored_devices = {}
         health_checker_instance._gateway_test_ips = {}
         
         await health_checker_instance._perform_monitoring_check()
@@ -415,7 +415,7 @@ class TestMonitoringLoopErrors:
     
     async def test_monitoring_check_exception(self, health_checker_instance):
         """Should handle exceptions during monitoring check"""
-        health_checker_instance.register_devices(["192.168.1.1"])
+        health_checker_instance.register_devices({"192.168.1.1": "network-uuid-1"})
         
         # Make check_multiple_devices raise an exception
         async def failing_check(*args, **kwargs):

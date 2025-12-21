@@ -28,7 +28,7 @@ class TestHealthCheckerInit:
         """Should initialize with empty caches"""
         assert health_checker_instance._metrics_cache == {}
         assert health_checker_instance._history == {}
-        assert health_checker_instance._monitored_devices == set()
+        assert health_checker_instance._monitored_devices == {}
     
     def test_init_default_config(self, health_checker_instance):
         """Should have default monitoring config"""
@@ -541,7 +541,10 @@ class TestMonitoringDevices:
     
     def test_register_devices(self, health_checker_instance):
         """Should register devices for monitoring"""
-        health_checker_instance.register_devices(["192.168.1.1", "192.168.1.2"])
+        health_checker_instance.register_devices({
+            "192.168.1.1": "network-uuid-1",
+            "192.168.1.2": "network-uuid-1"
+        })
         
         devices = health_checker_instance.get_monitored_devices()
         
@@ -550,7 +553,10 @@ class TestMonitoringDevices:
     
     def test_unregister_devices(self, health_checker_instance):
         """Should unregister devices from monitoring"""
-        health_checker_instance.register_devices(["192.168.1.1", "192.168.1.2"])
+        health_checker_instance.register_devices({
+            "192.168.1.1": "network-uuid-1",
+            "192.168.1.2": "network-uuid-1"
+        })
         health_checker_instance.unregister_devices(["192.168.1.1"])
         
         devices = health_checker_instance.get_monitored_devices()
@@ -560,8 +566,11 @@ class TestMonitoringDevices:
     
     def test_set_monitored_devices(self, health_checker_instance):
         """Should replace all monitored devices"""
-        health_checker_instance.register_devices(["192.168.1.1"])
-        health_checker_instance.set_monitored_devices(["192.168.1.10", "192.168.1.20"])
+        health_checker_instance.register_devices({"192.168.1.1": "network-uuid-1"})
+        health_checker_instance.set_monitored_devices({
+            "192.168.1.10": "network-uuid-2",
+            "192.168.1.20": "network-uuid-2"
+        })
         
         devices = health_checker_instance.get_monitored_devices()
         
@@ -596,7 +605,7 @@ class TestMonitoringConfig:
     
     def test_get_monitoring_status(self, health_checker_instance):
         """Should return status with all fields"""
-        health_checker_instance.register_devices(["192.168.1.1"])
+        health_checker_instance.register_devices({"192.168.1.1": "network-uuid-1"})
         
         status = health_checker_instance.get_monitoring_status()
         
@@ -637,7 +646,7 @@ class TestMonitoringLifecycle:
     
     async def test_perform_monitoring_check(self, health_checker_instance, mock_ping_success):
         """Should perform monitoring check"""
-        health_checker_instance.register_devices(["192.168.1.1"])
+        health_checker_instance.register_devices({"192.168.1.1": "network-uuid-1"})
         health_checker_instance.ping_host = AsyncMock(return_value=mock_ping_success)
         
         with patch('app.services.health_checker.report_health_check', new_callable=AsyncMock):
@@ -648,7 +657,7 @@ class TestMonitoringLifecycle:
     async def test_perform_monitoring_check_skips_when_in_progress(self, health_checker_instance):
         """Should skip check if already in progress"""
         health_checker_instance._is_checking = True
-        health_checker_instance.register_devices(["192.168.1.1"])
+        health_checker_instance.register_devices({"192.168.1.1": "network-uuid-1"})
         
         await health_checker_instance._perform_monitoring_check()
         
