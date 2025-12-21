@@ -10,13 +10,34 @@ from fastapi.testclient import TestClient
 
 from app.routers.assistant import router, ModelCache, get_provider, model_cache
 from app.models import ModelProvider, ChatRole, ChatMessage
+from app.dependencies.auth import AuthenticatedUser, UserRole, require_auth, require_auth_with_rate_limit
+
+
+# Mock user for auth
+_mock_user = AuthenticatedUser(
+    user_id="test-user-123",
+    username="testuser",
+    role=UserRole.MEMBER
+)
+
+
+async def mock_require_auth():
+    """Mock auth dependency"""
+    return _mock_user
 
 
 @pytest.fixture
 def app():
-    """Create test app with assistant router"""
+    """Create test app with assistant router and mocked auth"""
+    from app.routers.assistant import require_chat_auth
+    
     test_app = FastAPI()
     test_app.include_router(router, prefix="/api")
+    
+    # Override auth dependencies
+    test_app.dependency_overrides[require_auth] = mock_require_auth
+    test_app.dependency_overrides[require_chat_auth] = mock_require_auth
+    
     return test_app
 
 

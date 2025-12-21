@@ -11,6 +11,57 @@ os.environ["OPENAI_API_KEY"] = ""
 os.environ["ANTHROPIC_API_KEY"] = ""
 os.environ["GOOGLE_API_KEY"] = ""
 os.environ["METRICS_SERVICE_URL"] = "http://test-metrics:8003"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+
+
+@pytest.fixture
+def mock_authenticated_user():
+    """Create a mock authenticated user for testing"""
+    from app.dependencies.auth import AuthenticatedUser, UserRole
+    return AuthenticatedUser(
+        user_id="test-user-123",
+        username="testuser",
+        role=UserRole.MEMBER
+    )
+
+
+@pytest.fixture
+def mock_admin_user():
+    """Create a mock admin user for testing"""
+    from app.dependencies.auth import AuthenticatedUser, UserRole
+    return AuthenticatedUser(
+        user_id="admin-user-123",
+        username="adminuser",
+        role=UserRole.ADMIN
+    )
+
+
+@pytest.fixture
+def override_auth_dependency(mock_authenticated_user):
+    """
+    Override the require_auth dependency to return a mock user.
+    Use this fixture when testing authenticated endpoints.
+    """
+    from app.dependencies.auth import require_auth
+    
+    async def mock_require_auth():
+        return mock_authenticated_user
+    
+    return mock_require_auth
+
+
+@pytest.fixture
+def override_rate_limit_dependency(mock_authenticated_user):
+    """
+    Override the require_auth_with_rate_limit dependency.
+    Use this fixture when testing rate-limited endpoints.
+    """
+    def create_mock_rate_limit(limit: int, endpoint: str):
+        async def mock_dependency():
+            return mock_authenticated_user
+        return mock_dependency
+    
+    return create_mock_rate_limit
 
 
 @pytest.fixture

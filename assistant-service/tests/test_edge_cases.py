@@ -9,6 +9,35 @@ import httpx
 
 from app.providers.base import ProviderConfig, ChatMessage
 from app.services.metrics_context import MetricsContextService
+from app.dependencies.auth import AuthenticatedUser, UserRole, require_auth
+
+
+# Mock user for auth
+_mock_user = AuthenticatedUser(
+    user_id="test-user-123",
+    username="testuser",
+    role=UserRole.MEMBER
+)
+
+
+async def mock_require_auth():
+    """Mock auth dependency"""
+    return _mock_user
+
+
+def create_test_app_with_auth():
+    """Create a test app with mocked auth"""
+    from fastapi import FastAPI
+    from app.routers.assistant import router, require_chat_auth
+    
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    
+    # Override auth dependencies
+    app.dependency_overrides[require_auth] = mock_require_auth
+    app.dependency_overrides[require_chat_auth] = mock_require_auth
+    
+    return app
 
 
 class TestProviderEdgeCases:
@@ -350,12 +379,9 @@ class TestRouterEdgeCases:
     
     def test_chat_error(self):
         """Should handle chat errors"""
-        from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.routers.assistant import router
         
-        app = FastAPI()
-        app.include_router(router, prefix="/api")
+        app = create_test_app_with_auth()
         client = TestClient(app)
         
         with patch('app.routers.assistant.get_provider') as mock_get:
@@ -377,12 +403,9 @@ class TestRouterEdgeCases:
     
     def test_stream_error_handling(self):
         """Should handle stream errors gracefully"""
-        from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.routers.assistant import router
         
-        app = FastAPI()
-        app.include_router(router, prefix="/api")
+        app = create_test_app_with_auth()
         client = TestClient(app)
         
         with patch('app.routers.assistant.get_provider') as mock_get:
@@ -641,12 +664,9 @@ class TestAdditionalCoverage:
     
     async def test_context_status_not_ready(self):
         """Should return not ready when snapshot not available"""
-        from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.routers.assistant import router
         
-        app = FastAPI()
-        app.include_router(router, prefix="/api")
+        app = create_test_app_with_auth()
         client = TestClient(app)
         
         with patch('app.routers.assistant.metrics_context_service') as mock_service:
@@ -798,12 +818,9 @@ class TestAdditionalCoverage:
     
     def test_config_list_models_error(self):
         """Should handle model list error gracefully"""
-        from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.routers.assistant import router
         
-        app = FastAPI()
-        app.include_router(router, prefix="/api")
+        app = create_test_app_with_auth()
         client = TestClient(app)
         
         with patch('app.routers.assistant.get_provider') as mock_get:
