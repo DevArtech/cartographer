@@ -451,6 +451,94 @@ class TestMainEdgeCases:
         
         # Should complete without errors
         assert True
+    
+    async def test_lifespan_provider_exception(self):
+        """Should handle provider exception during startup"""
+        from app.main import lifespan
+        from fastapi import FastAPI
+        
+        test_app = FastAPI()
+        
+        # Mock provider to raise exception - providers are imported inside lifespan
+        with patch('app.providers.OpenAIProvider') as mock_openai:
+            mock_provider = MagicMock()
+            mock_provider.is_available = AsyncMock(side_effect=Exception("Provider error"))
+            mock_openai.return_value = mock_provider
+            
+            # Should complete without errors even with exception
+            async with lifespan(test_app):
+                pass
+    
+    def test_healthz_provider_exception(self):
+        """Should handle provider exception in healthz"""
+        from app.main import create_app
+        from fastapi.testclient import TestClient
+        
+        with patch('app.main.lifespan'):
+            test_app = create_app()
+            client = TestClient(test_app)
+            
+            # Mock providers - imported inside healthz endpoint
+            with patch('app.providers.OpenAIProvider') as mock_openai:
+                mock_provider = MagicMock()
+                mock_provider.is_available = AsyncMock(side_effect=Exception("Provider error"))
+                mock_openai.return_value = mock_provider
+                
+                response = client.get("/healthz")
+            
+            # Should return degraded status
+            assert response.status_code == 200
+            data = response.json()
+            assert "status" in data
+    
+    def test_ready_provider_available(self):
+        """Should return ready when provider is available"""
+        from app.main import create_app
+        from fastapi.testclient import TestClient
+        
+        with patch('app.main.lifespan'):
+            test_app = create_app()
+            client = TestClient(test_app)
+            
+            # Mock provider to be available - imported inside ready endpoint
+            with patch('app.providers.OpenAIProvider') as mock_openai:
+                mock_provider = MagicMock()
+                mock_provider.is_available = AsyncMock(return_value=True)
+                mock_openai.return_value = mock_provider
+                
+                response = client.get("/ready")
+            
+            # Should return ready
+            assert response.status_code == 200
+            data = response.json()
+            assert data["ready"] is True
+    
+    def test_ready_provider_exception(self):
+        """Should handle provider exception in ready endpoint"""
+        from app.main import create_app
+        from fastapi.testclient import TestClient
+        
+        with patch('app.main.lifespan'):
+            test_app = create_app()
+            client = TestClient(test_app)
+            
+            # Mock all providers to raise exception - imported inside ready endpoint
+            with patch('app.providers.OpenAIProvider') as mock_openai, \
+                 patch('app.providers.AnthropicProvider') as mock_anthropic, \
+                 patch('app.providers.GeminiProvider') as mock_gemini, \
+                 patch('app.providers.OllamaProvider') as mock_ollama:
+                
+                for mock_cls in [mock_openai, mock_anthropic, mock_gemini, mock_ollama]:
+                    mock_provider = MagicMock()
+                    mock_provider.is_available = AsyncMock(side_effect=Exception("Provider error"))
+                    mock_cls.return_value = mock_provider
+                
+                response = client.get("/ready")
+            
+            # Should return not ready
+            assert response.status_code == 200
+            data = response.json()
+            assert data["ready"] is False
 
 
 class TestAdditionalCoverage:

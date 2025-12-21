@@ -17,7 +17,8 @@ class TestMetricsContextServiceInit:
         """Should initialize with default values"""
         assert metrics_context_instance.timeout == 10.0
         assert metrics_context_instance._cached_context is None
-        assert metrics_context_instance._snapshot_available is False
+        # Multi-tenant: _snapshot_available is now a dict, empty by default
+        assert metrics_context_instance.is_snapshot_available() is False
 
 
 class TestFetchNetworkSnapshot:
@@ -36,7 +37,8 @@ class TestFetchNetworkSnapshot:
         
         assert result is not None
         assert result["snapshot_id"] == "test-snapshot-123"
-        assert metrics_context_instance._snapshot_available is True
+        # Multi-tenant: check is_snapshot_available() for the default network
+        assert metrics_context_instance.is_snapshot_available() is True
     
     async def test_fetch_snapshot_force_refresh(self, metrics_context_instance, sample_snapshot):
         """Should use POST when force_refresh is True"""
@@ -63,7 +65,8 @@ class TestFetchNetworkSnapshot:
             result = await metrics_context_instance.fetch_network_snapshot()
         
         assert result is None
-        assert metrics_context_instance._snapshot_available is False
+        # Multi-tenant: check is_snapshot_available() for the default network
+        assert metrics_context_instance.is_snapshot_available() is False
     
     async def test_fetch_snapshot_connect_error(self, metrics_context_instance):
         """Should handle connection error"""
@@ -183,10 +186,13 @@ class TestBuildContextString:
     
     async def test_build_context_cached(self, metrics_context_instance):
         """Should use cached context"""
-        # Set up cache
-        metrics_context_instance._cached_context = "Cached context"
-        metrics_context_instance._cached_summary = {"total_nodes": 1}
-        metrics_context_instance._cache_timestamp = datetime.utcnow()
+        # Set up cache using new multi-tenant structure
+        # _context_cache[network_id] = (context, summary, timestamp)
+        metrics_context_instance._context_cache[None] = (
+            "Cached context",
+            {"total_nodes": 1},
+            datetime.utcnow()
+        )
         
         context, summary = await metrics_context_instance.build_context_string()
         
@@ -194,10 +200,12 @@ class TestBuildContextString:
     
     async def test_build_context_force_refresh(self, metrics_context_instance, sample_snapshot):
         """Should bypass cache when force_refresh is True"""
-        # Set up cache
-        metrics_context_instance._cached_context = "Cached context"
-        metrics_context_instance._cached_summary = {"total_nodes": 1}
-        metrics_context_instance._cache_timestamp = datetime.utcnow()
+        # Set up cache using new multi-tenant structure
+        metrics_context_instance._context_cache[None] = (
+            "Cached context",
+            {"total_nodes": 1},
+            datetime.utcnow()
+        )
         
         with patch.object(metrics_context_instance, 'fetch_network_snapshot', AsyncMock(return_value=sample_snapshot["snapshot"])):
             context, summary = await metrics_context_instance.build_context_string(force_refresh=True)
@@ -214,7 +222,8 @@ class TestBuildContextString:
     
     async def test_build_context_fallback(self, metrics_context_instance):
         """Should return fallback context when unavailable"""
-        metrics_context_instance._snapshot_available = True  # Was previously available
+        # Multi-tenant: set snapshot was previously available for default network
+        metrics_context_instance._snapshot_available[None] = True
         
         with patch.object(metrics_context_instance, 'fetch_network_snapshot', AsyncMock(return_value=None)):
             context, summary = await metrics_context_instance.build_context_string(wait_for_data=False)
@@ -318,7 +327,8 @@ class TestCacheAndStatus:
         """Should return snapshot availability"""
         assert metrics_context_instance.is_snapshot_available() is False
         
-        metrics_context_instance._snapshot_available = True
+        # Multi-tenant: set availability for default network
+        metrics_context_instance._snapshot_available[None] = True
         assert metrics_context_instance.is_snapshot_available() is True
     
     def test_should_recheck_no_previous_check(self, metrics_context_instance):
@@ -327,7 +337,8 @@ class TestCacheAndStatus:
     
     def test_should_recheck_snapshot_available(self, metrics_context_instance):
         """Should not recheck when snapshot available"""
-        metrics_context_instance._snapshot_available = True
+        # Multi-tenant: set availability for default network
+        metrics_context_instance._snapshot_available[None] = True
         assert metrics_context_instance.should_recheck() is False
     
     def test_should_recheck_interval(self, metrics_context_instance):
@@ -339,24 +350,34 @@ class TestCacheAndStatus:
     
     def test_clear_cache(self, metrics_context_instance):
         """Should clear cache"""
-        metrics_context_instance._cached_context = "test"
-        metrics_context_instance._cached_summary = {"test": True}
-        metrics_context_instance._cache_timestamp = datetime.utcnow()
+        # Multi-tenant: set cache using new structure
+        metrics_context_instance._context_cache[None] = (
+            "test",
+            {"test": True},
+            datetime.utcnow()
+        )
         
         metrics_context_instance.clear_cache()
         
+        # Backwards-compatible properties should now return None
         assert metrics_context_instance._cached_context is None
         assert metrics_context_instance._cached_summary is None
     
     def test_reset_state(self, metrics_context_instance):
         """Should reset all state"""
-        metrics_context_instance._cached_context = "test"
-        metrics_context_instance._snapshot_available = True
+        # Multi-tenant: set cache and availability using new structures
+        metrics_context_instance._context_cache[None] = (
+            "test",
+            {"test": True},
+            datetime.utcnow()
+        )
+        metrics_context_instance._snapshot_available[None] = True
         
         metrics_context_instance.reset_state()
         
+        # Backwards-compatible properties should now return None/False
         assert metrics_context_instance._cached_context is None
-        assert metrics_context_instance._snapshot_available is False
+        assert metrics_context_instance.is_snapshot_available() is False
     
     def test_get_status(self, metrics_context_instance):
         """Should return status dict"""
