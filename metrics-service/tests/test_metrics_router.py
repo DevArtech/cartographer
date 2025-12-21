@@ -462,7 +462,7 @@ class TestDebugEndpoints:
         
         assert response.status_code == 200
         data = response.json()
-        assert data["error"] == "Failed to fetch layout"
+        assert data["error"] == "Failed to fetch layout for network_id=None"
 
 
 class TestConnectionManager:

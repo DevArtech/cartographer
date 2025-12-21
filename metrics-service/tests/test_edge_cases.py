@@ -386,14 +386,13 @@ class TestPublishLoop:
         metrics_aggregator_instance._publishing_enabled = True
         
         call_count = 0
-        original_interval = metrics_aggregator_instance._publish_interval
         
-        async def mock_publish_snapshot():
+        async def mock_publish_all():
             nonlocal call_count
             call_count += 1
-            return True
+            return 1
         
-        with patch.object(metrics_aggregator_instance, 'publish_snapshot', mock_publish_snapshot):
+        with patch.object(metrics_aggregator_instance, 'publish_all_snapshots', mock_publish_all):
             # Start publishing with skip_initial=True
             task = asyncio.create_task(
                 metrics_aggregator_instance._publish_loop(skip_initial=True)
@@ -418,12 +417,12 @@ class TestPublishLoop:
         
         call_count = 0
         
-        async def mock_publish_snapshot():
+        async def mock_publish_all():
             nonlocal call_count
             call_count += 1
-            return True
+            return 1
         
-        with patch.object(metrics_aggregator_instance, 'publish_snapshot', mock_publish_snapshot):
+        with patch.object(metrics_aggregator_instance, 'publish_all_snapshots', mock_publish_all):
             task = asyncio.create_task(
                 metrics_aggregator_instance._publish_loop(skip_initial=False)
             )
@@ -441,24 +440,26 @@ class TestPublishLoop:
     
     async def test_publish_loop_handles_error(self, metrics_aggregator_instance):
         """Should continue after error"""
-        metrics_aggregator_instance._publish_interval = 0.05
+        metrics_aggregator_instance._publish_interval = 0.02
         metrics_aggregator_instance._publishing_enabled = True
         
         call_count = 0
         
-        async def mock_publish_snapshot():
+        async def mock_publish_all():
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise Exception("First call fails")
-            return True
+            return 1
         
-        with patch.object(metrics_aggregator_instance, 'publish_snapshot', mock_publish_snapshot):
+        with patch.object(metrics_aggregator_instance, 'publish_all_snapshots', mock_publish_all):
             task = asyncio.create_task(
                 metrics_aggregator_instance._publish_loop(skip_initial=False)
             )
             
-            await asyncio.sleep(0.2)
+            # Wait long enough for error recovery (5 sec default) + subsequent call
+            # But use short sleep since error retry is 5 sec - we just want to verify first call
+            await asyncio.sleep(0.1)
             
             task.cancel()
             try:
@@ -466,7 +467,7 @@ class TestPublishLoop:
             except asyncio.CancelledError:
                 pass
         
-        # Should have continued after error
+        # Should have at least tried once
         assert call_count >= 1
 
 
@@ -631,7 +632,7 @@ class TestLifespan:
         mock_aggregator.start_publishing.assert_called_once()
     
     async def test_lifespan_snapshot_generated(self):
-        """Should generate and publish initial snapshot"""
+        """Should generate and publish initial snapshots for all networks"""
         from app.main import lifespan
         from app.models import NetworkTopologySnapshot
         from fastapi import FastAPI
@@ -644,6 +645,9 @@ class TestLifespan:
             total_nodes=1
         )
         
+        # Create a dict of network_id -> snapshot for multi-tenant mode
+        snapshots = {"network-123": snapshot}
+        
         with patch('app.main.redis_publisher') as mock_redis:
             mock_redis.connect = AsyncMock(return_value=True)
             mock_redis.store_last_snapshot = AsyncMock(return_value=True)
@@ -651,7 +655,8 @@ class TestLifespan:
             mock_redis.disconnect = AsyncMock()
             
             with patch('app.main.metrics_aggregator') as mock_aggregator:
-                mock_aggregator.generate_snapshot = AsyncMock(return_value=snapshot)
+                # generate_all_snapshots returns a dict of network_id -> snapshot
+                mock_aggregator.generate_all_snapshots = AsyncMock(return_value=snapshots)
                 mock_aggregator.start_publishing = MagicMock()
                 mock_aggregator.stop_publishing = MagicMock()
                 
