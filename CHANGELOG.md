@@ -5,6 +5,69 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.17.8](https://github.com/devartech/cartographer/compare/v0.17.7...v0.17.8) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* context manager ([fbd9cdb](https://github.com/devartech/cartographer/commit/fbd9cdb72f441ce6825210e88390cbf8a765356f))
+
+### [0.17.7](https://github.com/devartech/cartographer/compare/v0.17.6...v0.17.7) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* temp logging ([37865aa](https://github.com/devartech/cartographer/commit/37865aa8a7ee7f8a720d001796d7b6c16b1942b6))
+
+### [0.17.6](https://github.com/devartech/cartographer/compare/v0.17.5...v0.17.6) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* async operations in chat ([6685125](https://github.com/devartech/cartographer/commit/66851255eee319f19fe62766e0856729a9d61bfa))
+
+### [0.17.5](https://github.com/devartech/cartographer/compare/v0.17.4...v0.17.5) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* change limits to per-user ([119647f](https://github.com/devartech/cartographer/commit/119647fe7837d22d51a3869d26e6d8d00a12a307))
+
+### [0.17.4](https://github.com/devartech/cartographer/compare/v0.17.3...v0.17.4) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* add limit bypass ([8795e0d](https://github.com/devartech/cartographer/commit/8795e0d772f08dd1683a8c2379f4768688abf26b))
+
+### [0.17.3](https://github.com/devartech/cartographer/compare/v0.17.2...v0.17.3) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* add proactive blocking ([9fdf4bc](https://github.com/devartech/cartographer/commit/9fdf4bc5e55c90e88c61d877828d51df3e06ed0e))
+
+### [0.17.2](https://github.com/devartech/cartographer/compare/v0.17.1...v0.17.2) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* change to merge with auth ([91f6acd](https://github.com/devartech/cartographer/commit/91f6acde616c8bf6d6ccf7881bfda000793bbfae))
+
+### [0.17.1](https://github.com/devartech/cartographer/compare/v0.17.0...v0.17.1) (2025-12-17)
+
+
+### 🐛 Bug Fixes
+
+* add auth vars to assistant service ([b717b08](https://github.com/devartech/cartographer/commit/b717b0814451d988d34a2dff2fb4bad1a99a91b9))
+
+## [0.17.0](https://github.com/devartech/cartographer/compare/v0.16.0...v0.17.0) (2025-12-17)
+
+
+### ✨ Features
+
+* add limit to assistant messages per day ([cb06be7](https://github.com/devartech/cartographer/commit/cb06be7007036db023b41df3ea1057539255eea1))
+
 ## [0.16.0](https://github.com/devartech/cartographer/compare/v0.15.0...v0.16.0) (2025-12-16)
 
 
