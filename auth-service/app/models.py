@@ -136,6 +136,21 @@ class ErrorResponse(BaseModel):
     code: Optional[str] = None
 
 
+# ==================== Preferences Models ====================
+
+class UserPreferences(BaseModel):
+    """User preferences (stored as JSON in database)"""
+    dark_mode: Optional[bool] = None
+    # Add more preferences here as needed
+    # timezone: Optional[str] = None
+    # locale: Optional[str] = None
+
+
+class UserPreferencesUpdate(BaseModel):
+    """Request to update user preferences (partial update)"""
+    dark_mode: Optional[bool] = None
+
+
 # ==================== Invitation Models ====================
 
 class InviteCreate(BaseModel):

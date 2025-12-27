@@ -327,6 +327,7 @@ import { useNetworkData } from "../composables/useNetworkData";
 import { useMapLayout } from "../composables/useMapLayout";
 import { useHealthMonitoring, type MonitoringConfig, type MonitoringStatus } from "../composables/useHealthMonitoring";
 import { useAuth } from "../composables/useAuth";
+import { useDarkMode } from "../composables/useDarkMode";
 import { apiUrl } from "../config";
 import EmbedGenerator from "./EmbedGenerator.vue";
 
@@ -352,11 +353,11 @@ const emit = defineEmits<{
 const loading = ref(false);
 const saving = ref(false);
 const message = ref("");
-const isDark = ref(false);
 const { parseNetworkMap } = useNetworkData();
 const { exportLayout, importLayout } = useMapLayout();
 const { fetchConfig, updateConfig, fetchStatus } = useHealthMonitoring();
 const { token } = useAuth();
+const { isDark, toggleDarkMode } = useDarkMode();
 let es: EventSource | null = null;
 // Prefer relative URLs to avoid mixed-content; use APPLICATION_URL only if safe (https or same protocol)
 const baseUrl = ref<string>("");
@@ -372,22 +373,7 @@ const healthConfig = reactive<MonitoringConfig>({
 const healthStatus = ref<MonitoringStatus | null>(null);
 
 onMounted(async () => {
-	// Initialize dark mode from localStorage
-	const savedDarkMode = localStorage.getItem('darkMode');
-	if (savedDarkMode === 'true') {
-		isDark.value = true;
-		document.documentElement.classList.add('dark');
-	} else if (savedDarkMode === 'false') {
-		isDark.value = false;
-		document.documentElement.classList.remove('dark');
-	} else {
-		// Check system preference if no saved preference
-		isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
-		if (isDark.value) {
-			document.documentElement.classList.add('dark');
-		}
-	}
-
+	// Dark mode is now initialized by useDarkMode composable (uses localStorage immediately)
 	try {
 		const res = await fetch(apiUrl("/api/config"));
 		if (res.ok) {
@@ -469,17 +455,9 @@ async function toggleDns() {
 	await updateHealthConfig();
 }
 
-function formatTimestamp(isoString: string): string {
-	const date = new Date(isoString);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffMins = Math.floor(diffMs / 60000);
-	
-	if (diffMins < 1) return 'just now';
-	if (diffMins < 60) return `${diffMins}m ago`;
-	
-	return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
+// formatTimestamp - use formatShortTime from utils/formatters
+import { formatShortTime } from '../utils/formatters';
+const formatTimestamp = (isoString: string) => formatShortTime(isoString);
 
 // Close health settings dropdown when clicking outside
 function handleClickOutside(event: MouseEvent) {
@@ -571,16 +549,6 @@ function cleanUpLayout() {
 	setTimeout(() => { message.value = ""; }, 2000);
 }
 
-function toggleDarkMode() {
-	isDark.value = !isDark.value;
-	if (isDark.value) {
-		document.documentElement.classList.add('dark');
-		localStorage.setItem('darkMode', 'true');
-	} else {
-		document.documentElement.classList.remove('dark');
-		localStorage.setItem('darkMode', 'false');
-	}
-}
 
 function startSSE() {
 	endSSE();

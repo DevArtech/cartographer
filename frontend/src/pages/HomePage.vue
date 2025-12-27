@@ -482,6 +482,8 @@ import { ref, reactive, onMounted, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useNetworks, type Network } from "../composables/useNetworks";
+import { useDarkMode } from "../composables/useDarkMode";
+import { formatRelativeTime } from "../utils/formatters";
 import SetupWizard from "../components/SetupWizard.vue";
 import LoginScreen from "../components/LoginScreen.vue";
 import UserMenu from "../components/UserMenu.vue";
@@ -490,8 +492,9 @@ import UserManagement from "../components/UserManagement.vue";
 import UpdateSettings from "../components/UpdateSettings.vue";
 
 const router = useRouter();
-const { isAuthenticated, user, checkSetupStatus, verifySession } = useAuth();
+const { isAuthenticated, user, initAuthState } = useAuth();
 const { networks, loading: networksLoading, clearNetworks, fetchNetworks, createNetwork: createNetworkApi, updateNetwork: updateNetworkApi, deleteNetwork: deleteNetworkApi, canWriteNetwork } = useNetworks();
+const { isDark, toggleDarkMode, syncFromServer } = useDarkMode();
 
 // Auth state
 const authLoading = ref(true);
@@ -499,9 +502,6 @@ const needsSetup = ref(false);
 const showUserManagement = ref(false);
 const showNotificationSettings = ref(false);
 const showUpdateSettings = ref(false);
-
-// Dark mode state
-const isDark = ref(true);
 
 // Create Modal state
 const showCreateModal = ref(false);
@@ -530,19 +530,12 @@ const isDeleting = ref(false);
 const deleteError = ref("");
 const deletingNetwork = ref<Network | null>(null);
 
-// Check auth status on mount
+// Check auth status on mount using composable helper
 async function initAuth() {
 	authLoading.value = true;
 	try {
-		const status = await checkSetupStatus();
-		needsSetup.value = !status.is_setup_complete;
-
-		if (status.is_setup_complete) {
-			await verifySession();
-		}
-	} catch (e) {
-		console.error("[Auth] Failed to check setup status:", e);
-		needsSetup.value = false;
+		const result = await initAuthState();
+		needsSetup.value = result.needsSetup;
 	} finally {
 		authLoading.value = false;
 	}
@@ -569,21 +562,8 @@ async function loadNetworks() {
 	}
 }
 
-function formatDate(dateStr: string): string {
-	const date = new Date(dateStr);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffMins = Math.floor(diffMs / 60000);
-	const diffHours = Math.floor(diffMs / 3600000);
-	const diffDays = Math.floor(diffMs / 86400000);
-
-	if (diffMins < 1) return "just now";
-	if (diffMins < 60) return `${diffMins}m ago`;
-	if (diffHours < 24) return `${diffHours}h ago`;
-	if (diffDays < 7) return `${diffDays}d ago`;
-
-	return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+// formatDate - use formatRelativeTime from utils/formatters
+const formatDate = (dateStr: string) => formatRelativeTime(dateStr);
 
 function closeCreateModal() {
 	showCreateModal.value = false;
@@ -676,36 +656,6 @@ async function executeDeleteNetwork() {
 	}
 }
 
-// Dark mode functions
-function initDarkMode() {
-	const savedDarkMode = localStorage.getItem('darkMode');
-	if (savedDarkMode === 'true') {
-		isDark.value = true;
-		document.documentElement.classList.add('dark');
-	} else if (savedDarkMode === 'false') {
-		isDark.value = false;
-		document.documentElement.classList.remove('dark');
-	} else {
-		// Default to system preference
-		isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches;
-		if (isDark.value) {
-			document.documentElement.classList.add('dark');
-		} else {
-			document.documentElement.classList.remove('dark');
-		}
-	}
-}
-
-function toggleDarkMode() {
-	isDark.value = !isDark.value;
-	if (isDark.value) {
-		document.documentElement.classList.add('dark');
-		localStorage.setItem('darkMode', 'true');
-	} else {
-		document.documentElement.classList.remove('dark');
-		localStorage.setItem('darkMode', 'false');
-	}
-}
 
 // Watch for authentication state changes to reload networks
 // This handles the case when user logs in/out without page reload
@@ -730,14 +680,15 @@ watch(isAuthenticated, async (newValue, oldValue) => {
 });
 
 onMounted(async () => {
-	initDarkMode();
 	await initAuth();
-	// If already authenticated on mount, load networks
+	// If already authenticated on mount, load networks and sync preferences
 	// (The watcher won't fire for the initial value)
 	if (isAuthenticated.value) {
 		console.log("[HomePage] Already authenticated on mount, loading networks...");
 		clearNetworks();
 		try {
+			// Sync dark mode preference from server for cross-device consistency
+			await syncFromServer();
 			await fetchNetworks();
 			console.log("[HomePage] Networks loaded:", networks.value.length);
 		} catch (e) {

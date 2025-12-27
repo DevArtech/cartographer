@@ -165,7 +165,7 @@ export interface DiscordGuild {
 export interface DiscordChannel {
   id: string;
   name: string;
-  type: string;
+  type: number; // Discord channel type: 0=text, 2=voice, etc.
 }
 
 export interface DiscordLinkInfo {
@@ -236,5 +236,20 @@ export interface AnomalyStats {
   is_trained: boolean;
   is_online_learning: boolean;
   training_status: 'initializing' | 'online_learning';
+}
+
+// ==================== Cartographer Status Types ====================
+
+export interface CartographerStatusSubscription {
+  subscribed: boolean;
+  email_address?: string;
+  email_enabled?: boolean;
+  discord_enabled?: boolean;
+  discord_user_id?: string;
+  discord_guild_id?: string;
+  discord_channel_id?: string;
+  discord_delivery_method?: 'dm' | 'channel';
+  cartographer_up_enabled?: boolean;
+  cartographer_down_enabled?: boolean;
 }
 

@@ -27,6 +27,7 @@ import * as d3 from "d3";
 import { onMounted, onBeforeUnmount, ref, watch, computed } from "vue";
 import type { TreeNode, DeviceMetrics, HealthStatus } from "../types/network";
 import { useMapLayout } from "../composables/useMapLayout";
+import { compareIpAddresses } from "../utils/networkUtils";
 
 const props = defineProps<{
 	data: TreeNode;
@@ -226,31 +227,11 @@ function roleIcon(role?: string): string {
 	});
 
 	// Sort nodes within each depth by parent position, then by IP address
-	const parseIpForSorting = (ipStr: string): number[] => {
-		const match = ipStr.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
-		if (match) {
-			return [
-				parseInt(match[1]),
-				parseInt(match[2]),
-				parseInt(match[3]),
-				parseInt(match[4])
-			];
-		}
-		return [0, 0, 0, 0];
-	};
-	
+	// IP comparison using shared utility
 	const compareIps = (a: TreeNode, b: TreeNode): number => {
 		const ipA = (a as any).ip || a.id;
 		const ipB = (b as any).ip || b.id;
-		const partsA = parseIpForSorting(ipA);
-		const partsB = parseIpForSorting(ipB);
-		
-		for (let i = 0; i < 4; i++) {
-			if (partsA[i] !== partsB[i]) {
-				return partsA[i] - partsB[i];
-			}
-		}
-		return 0;
+		return compareIpAddresses(ipA, ipB);
 	};
 	
 	// Track node sort order for parent-based sorting

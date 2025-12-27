@@ -20,6 +20,11 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version)
   },
+  resolve: {
+    alias: {
+      '@': path.resolve(dirname, './src'),
+    },
+  },
   server: {
     port: 5173,
     proxy: {
@@ -30,14 +35,28 @@ export default defineConfig({
     }
   },
   test: {
-    projects: [{
+    projects: [
+      // Unit tests project
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['src/__tests__/**/*.test.ts'],
+          environment: 'jsdom',
+          globals: true,
+          setupFiles: ['src/__tests__/setup.ts'],
+        },
+      },
+      // Storybook tests project
+      {
       extends: true,
       plugins: [
       // The plugin will run tests for the stories defined in your Storybook config
       // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
       storybookTest({
         configDir: path.join(dirname, '.storybook')
-      })],
+          })
+        ],
       test: {
         name: 'storybook',
         browser: {
@@ -50,6 +69,7 @@ export default defineConfig({
         },
         setupFiles: ['.storybook/vitest.setup.ts']
       }
-    }]
+      }
+    ]
   }
 });

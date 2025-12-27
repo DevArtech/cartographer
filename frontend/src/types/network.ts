@@ -25,32 +25,38 @@ export interface GatewayInfo {
 export interface NodeVersion {
 	version: number;
 	timestamp: string;
-	changes: string[]; // Description of what changed
+	/** Description of what changed */
+	changes: string[];
 }
 
 export interface TreeNode {
-	id: string; // typically ip or synthetic group id
+	id: string;
 	name: string;
 	role?: DeviceRole | "group";
 	ip?: string;
 	hostname?: string;
 	children?: TreeNode[];
-	// Freeform layout positions (persisted)
+	/** Freeform layout X position (persisted) */
 	fx?: number;
+	/** Freeform layout Y position (persisted) */
 	fy?: number;
-	// Parent connection
-	parentId?: string; // ID of parent node for topology connections
-	connectionSpeed?: string; // Connection speed label (e.g., "1GbE", "10GbE")
-	// Version management
-	createdAt?: string; // ISO timestamp when node was created
-	updatedAt?: string; // ISO timestamp when node was last modified
-	version?: number; // Increments on each change
-	history?: NodeVersion[]; // Previous versions for audit trail
-	// Health monitoring
-	monitoringEnabled?: boolean; // Whether to include this node in health monitoring (default: true)
-	// User notes
-	notes?: string; // Custom notes attached to this node
-	// LAN port configuration (for switches, routers, servers with multiple ports)
+	/** Parent node ID for topology connections */
+	parentId?: string;
+	/** Connection speed label (e.g., "1GbE", "10GbE") */
+	connectionSpeed?: string;
+	/** ISO timestamp when node was created */
+	createdAt?: string;
+	/** ISO timestamp when node was last modified */
+	updatedAt?: string;
+	/** Version number, increments on each change */
+	version?: number;
+	/** Previous versions for audit trail */
+	history?: NodeVersion[];
+	/** Whether to include in health monitoring (default: true) */
+	monitoringEnabled?: boolean;
+	/** Custom user notes */
+	notes?: string;
+	/** LAN port configuration for switches/routers */
 	lanPorts?: LanPortsConfig;
 }
 
@@ -61,7 +67,6 @@ export interface ParsedNetworkMap {
 	root: TreeNode;
 }
 
-// Health monitoring types
 export type HealthStatus = "healthy" | "degraded" | "unhealthy" | "unknown";
 
 export interface PingResult {
@@ -89,7 +94,8 @@ export interface PortCheckResult {
 }
 
 export interface CheckHistoryEntry {
-	timestamp: string; // ISO timestamp
+	/** ISO timestamp */
+	timestamp: string;
 	success: boolean;
 	latency_ms?: number;
 }
@@ -97,34 +103,28 @@ export interface CheckHistoryEntry {
 export interface DeviceMetrics {
 	ip: string;
 	status: HealthStatus;
-	last_check: string; // ISO timestamp
-	
-	// Ping metrics
+	/** ISO timestamp of last health check */
+	last_check: string;
 	ping?: PingResult;
-	
-	// DNS metrics
 	dns?: DnsResult;
-	
-	// Open ports discovered
 	open_ports: PortCheckResult[];
-	
-	// Historical data
 	uptime_percent_24h?: number;
 	avg_latency_24h_ms?: number;
 	checks_passed_24h: number;
 	checks_failed_24h: number;
-	check_history: CheckHistoryEntry[]; // Recent check history for timeline display
-	
-	// Additional info
-	last_seen_online?: string; // ISO timestamp
+	/** Recent check history for timeline display */
+	check_history: CheckHistoryEntry[];
+	/** ISO timestamp when device was last seen online */
+	last_seen_online?: string;
 	consecutive_failures: number;
 	error_message?: string;
 }
 
-// Gateway Test IP types (for internet connectivity testing)
+/** Gateway Test IP for internet connectivity testing */
 export interface GatewayTestIP {
 	ip: string;
-	label?: string; // Optional friendly name (e.g., "Google DNS", "Cloudflare")
+	/** Friendly name (e.g., "Google DNS", "Cloudflare") */
+	label?: string;
 }
 
 export interface GatewayTestIPConfig {
@@ -137,100 +137,85 @@ export interface GatewayTestIPMetrics {
 	ip: string;
 	label?: string;
 	status: HealthStatus;
-	last_check: string; // ISO timestamp
-	
-	// Ping metrics
+	/** ISO timestamp */
+	last_check: string;
 	ping?: PingResult;
-	
-	// Historical data
 	uptime_percent_24h?: number;
 	avg_latency_24h_ms?: number;
 	checks_passed_24h: number;
 	checks_failed_24h: number;
 	check_history: CheckHistoryEntry[];
-	
-	// Additional info
-	last_seen_online?: string; // ISO timestamp
+	/** ISO timestamp */
+	last_seen_online?: string;
 	consecutive_failures: number;
 }
 
 export interface GatewayTestIPsResponse {
 	gateway_ip: string;
 	test_ips: GatewayTestIPMetrics[];
-	last_check?: string; // ISO timestamp
+	/** ISO timestamp */
+	last_check?: string;
 }
 
-// Speed Test types
 export interface SpeedTestResult {
 	success: boolean;
-	timestamp: string; // ISO timestamp
-	
-	// Speed results (in Mbps)
+	/** ISO timestamp */
+	timestamp: string;
+	/** Speed in Mbps */
 	download_mbps?: number;
+	/** Speed in Mbps */
 	upload_mbps?: number;
-	
-	// Ping to speed test server
+	/** Ping to speed test server in ms */
 	ping_ms?: number;
-	
-	// Server info
 	server_name?: string;
 	server_location?: string;
 	server_sponsor?: string;
-	
-	// Client info
 	client_ip?: string;
 	client_isp?: string;
-	
-	// Error info (if failed)
 	error_message?: string;
-	
-	// Duration of the test
 	duration_seconds?: number;
 }
 
-// LAN Port Configuration types
 export type PortType = "rj45" | "sfp" | "sfp+";
 
-export type PortStatus = "active" | "unused" | "blocked"; // blocked = does not exist or permanently disabled
+/** Port status: blocked = does not exist or permanently disabled */
+export type PortStatus = "active" | "unused" | "blocked";
 
 export type PortSpeed = "10M" | "100M" | "1G" | "2.5G" | "5G" | "10G" | "25G" | "40G" | "100G" | "auto" | string;
 
-export type PoeStatus = "off" | "poe" | "poe+" | "poe++"; // 802.3af (15W), 802.3at (30W), 802.3bt (60W+)
+/** PoE power levels: 802.3af (15W), 802.3at (30W), 802.3bt (60W+) */
+export type PoeStatus = "off" | "poe" | "poe+" | "poe++";
 
 export interface LanPort {
-	// Position in the grid (1-indexed)
+	/** Position row in the grid (1-indexed) */
 	row: number;
+	/** Position column in the grid (1-indexed) */
 	col: number;
-	
-	// Port configuration
-	portNumber?: number; // Optional port label/number
+	portNumber?: number;
 	type: PortType;
 	status: PortStatus;
-	
-	// Speed configuration
-	speed?: PortSpeed; // Configured speed
-	negotiatedSpeed?: PortSpeed; // Actual negotiated speed (if different)
-	
-	// PoE configuration
-	poe?: PoeStatus; // Power over Ethernet status
-	
-	// Connection info
-	connectedDeviceId?: string; // ID of the connected TreeNode
-	connectedDeviceName?: string; // Cached name for display
-	connectionLabel?: string; // Optional custom label for the connection
+	/** Configured speed */
+	speed?: PortSpeed;
+	/** Actual negotiated speed (if different from configured) */
+	negotiatedSpeed?: PortSpeed;
+	poe?: PoeStatus;
+	/** ID of the connected TreeNode */
+	connectedDeviceId?: string;
+	/** Cached name for display */
+	connectedDeviceName?: string;
+	connectionLabel?: string;
 }
 
 export interface LanPortsConfig {
-	// Grid dimensions
-	rows: number; // Number of rows (Y axis)
-	cols: number; // Number of columns (X axis)
-	
-	// Port definitions
+	/** Number of rows (Y axis) */
+	rows: number;
+	/** Number of columns (X axis) */
+	cols: number;
 	ports: LanPort[];
-	
-	// Display options
-	labelFormat?: "numeric" | "alpha" | "custom"; // How to auto-label ports (1,2,3 or A,B,C)
-	startNumber?: number; // Starting number for numeric labels (default: 1)
+	/** Port label format: numeric (1,2,3) or alpha (A,B,C) */
+	labelFormat?: "numeric" | "alpha" | "custom";
+	/** Starting number for numeric labels (default: 1) */
+	startNumber?: number;
 }
 
 

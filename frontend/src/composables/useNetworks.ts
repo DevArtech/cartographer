@@ -8,8 +8,18 @@ import { ref } from 'vue';
 import * as networksApi from '../api/networks';
 import { extractErrorMessage } from '../api/client';
 import type { SavedLayout } from '../types/layout';
+import type {
+  Network,
+  NetworkLayoutResponse,
+  CreateNetworkData,
+  UpdateNetworkData,
+  NetworkPermissionRole,
+  NetworkPermission,
+  CreateNetworkPermission,
+} from '../types/networks';
 
 // Re-export types for backwards compatibility
+// NOTE: Types should be imported from 'types/networks' directly
 export type {
   Network,
   NetworkLayoutResponse,
@@ -18,17 +28,7 @@ export type {
   NetworkPermissionRole,
   NetworkPermission,
   CreateNetworkPermission,
-} from '../api/networks';
-
-// Import types for local use
-import type {
-  Network,
-  NetworkLayoutResponse,
-  CreateNetworkData,
-  UpdateNetworkData,
-  NetworkPermission,
-  CreateNetworkPermission,
-} from '../api/networks';
+} from '../types/networks';
 
 // Shared state across components
 const networks = ref<Network[]>([]);

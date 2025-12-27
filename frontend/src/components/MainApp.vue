@@ -500,7 +500,7 @@
 				<div v-for="(line, idx) in logs" :key="idx" class="whitespace-pre-wrap text-slate-700 dark:text-slate-300">
 					<template v-if="downloadHref(line)">
 						<button 
-							@click="downloadNetworkMap(downloadHref(line)!)"
+							@click="handleDownloadNetworkMap(downloadHref(line)!)"
 							class="text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 underline cursor-pointer"
 						>
 							Download network_map.txt
@@ -591,6 +591,9 @@ import { useNetworkData } from "../composables/useNetworkData";
 import { useHealthMonitoring } from "../composables/useHealthMonitoring";
 import { useAuth } from "../composables/useAuth";
 import { useNotifications } from "../composables/useNotifications";
+import { formatTimestamp } from "../utils/formatters";
+import { parseIpAddress, compareIpAddresses } from "../utils/networkUtils";
+import { downloadNetworkMap } from "../utils/download";
 
 // Props for network-specific view
 const props = defineProps<{
@@ -602,7 +605,7 @@ const props = defineProps<{
 }>();
 
 // Auth state
-const { isAuthenticated, canWrite, checkSetupStatus, verifySession } = useAuth();
+const { isAuthenticated, canWrite, initAuthState } = useAuth();
 const authLoading = ref(true);
 const needsSetup = ref(false);
 const showUserManagement = ref(false);
@@ -636,22 +639,12 @@ const effectiveCanWrite = computed(() => {
 // Whether we're in network-specific mode (skip auth wrapper)
 const isNetworkMode = computed(() => props.networkId !== undefined);
 
-// Check auth status on mount
+// Check auth status on mount using composable helper
 async function initAuth() {
 	authLoading.value = true;
 	try {
-		// Check if setup is complete
-		const status = await checkSetupStatus();
-		needsSetup.value = !status.is_setup_complete;
-		
-		// If setup is complete and we have a stored token, verify it
-		if (status.is_setup_complete) {
-			await verifySession();
-		}
-	} catch (e) {
-		console.error("[Auth] Failed to check setup status:", e);
-		// If we can't reach the auth service, assume setup is needed
-		needsSetup.value = false;
+		const result = await initAuthState();
+		needsSetup.value = result.needsSetup;
 	} finally {
 		authLoading.value = false;
 	}
@@ -680,56 +673,7 @@ function onLogout() {
 	window.location.reload();
 }
 
-// Version management helpers
-function initializeNodeVersion(node: TreeNode, source: 'manual' | 'mapper' = 'manual'): void {
-	const now = new Date().toISOString();
-	if (!node.createdAt) {
-		node.createdAt = now;
-		node.version = 1;
-		node.history = [{
-			version: 1,
-			timestamp: now,
-			changes: [`Node created (${source})`]
-		}];
-	}
-	node.updatedAt = now;
-}
-
-function updateNodeVersion(node: TreeNode, changes: string[]): void {
-	const now = new Date().toISOString();
-	const newVersion = (node.version || 1) + 1;
-	
-	// Initialize if not already done
-	if (!node.createdAt) {
-		node.createdAt = now;
-	}
-	
-	node.updatedAt = now;
-	node.version = newVersion;
-	
-	// Add to history (keep last 20 versions to avoid bloat)
-	if (!node.history) {
-		node.history = [];
-	}
-	node.history.push({
-		version: newVersion,
-		timestamp: now,
-		changes
-	});
-	if (node.history.length > 20) {
-		node.history = node.history.slice(-20);
-	}
-}
-
-function ensureAllNodesVersioned(root: TreeNode, source: 'manual' | 'mapper' = 'mapper'): void {
-	const walk = (n: TreeNode) => {
-		if (n.role !== 'group') {
-			initializeNodeVersion(n, source);
-		}
-		for (const c of (n.children || [])) walk(c);
-	};
-	walk(root);
-}
+// Version management helpers - imported from useNetworkData
 
 const parsed = ref<ParsedNetworkMap | null>(null);
 const selectedId = ref<string | undefined>(undefined);
@@ -803,8 +747,21 @@ function stopResize() {
 	document.body.style.userSelect = '';
 }
 
-const { applySavedPositions, clearPositions, exportLayout } = useMapLayout();
-const { parseNetworkMap } = useNetworkData();
+const { applySavedPositions, clearPositions, exportLayout, cleanUpLayout } = useMapLayout();
+const {
+  parseNetworkMap,
+  initializeNodeVersion,
+  updateNodeVersion,
+  ensureAllNodesVersioned,
+  findNodeById,
+  flattenDevices,
+  walkAll,
+  removeFromAllGroups,
+  findGroupByPrefix,
+  getTargetGroupForRole,
+  getMonitoredDeviceIPs,
+  getSilencedDeviceIPs,
+} = useNetworkData();
 const { registerDevices, startPolling, stopPolling, cachedMetrics } = useHealthMonitoring();
 const notificationsApi = useNotifications(props.networkId);
 const { silenceDevice, unsilenceDevice, setSilencedDevices } = notificationsApi;
@@ -813,24 +770,7 @@ const { silenceDevice, unsilenceDevice, setSilencedDevices } = notificationsApi;
 let hasRegisteredDevices = false;
 
 // Helper to get IPs of ALL devices for health monitoring
-// ALL devices are tracked by the health service for ML anomaly detection
-// The notification service's silenced devices list controls which devices can trigger notifications
-function getMonitoredDeviceIPs(root: TreeNode): string[] {
-	const devices = flattenDevices(root);
-	return devices
-		.filter(d => d.ip) // Include ALL devices with IPs
-		.map(d => d.ip!)
-		.filter((ip): ip is string => !!ip);
-}
-
-// Helper to get IPs of devices that have monitoring disabled (for notification service)
-function getSilencedDeviceIPs(root: TreeNode): string[] {
-	const devices = flattenDevices(root);
-	return devices
-		.filter(d => d.ip && d.monitoringEnabled === false) // Only include nodes with monitoring explicitly disabled
-		.map(d => d.ip!)
-		.filter((ip): ip is string => !!ip);
-}
+// Health monitoring helpers - imported from useNetworkData
 
 // Register devices for health monitoring whenever parsed changes
 watch(() => parsed.value?.root, async (root) => {
@@ -928,34 +868,7 @@ function onUpdateMap(p: ParsedNetworkMap) {
 	triggerAutoSave();
 }
 
-function findNodeById(n: TreeNode, id?: string): TreeNode | undefined {
-	if (!id) return undefined;
-	if (n.id === id) return n;
-	for (const c of (n.children || [])) {
-		const f = findNodeById(c, id);
-		if (f) return f;
-	}
-	return undefined;
-}
-
-function flattenDevices(root: TreeNode): TreeNode[] {
-	const res: TreeNode[] = [];
-	const seen = new Set<string>();
-	const walk = (n: TreeNode) => {
-		// Include ALL non-group nodes, including the root if it's a real device (e.g., gateway/router)
-		// Deduplicate by IP/ID to avoid counting the same device twice (root might also exist as a child)
-		if (n.role !== "group") {
-			const key = n.ip || n.id;
-			if (!seen.has(key)) {
-				seen.add(key);
-			res.push(n);
-		}
-		}
-		for (const c of n.children || []) walk(c);
-	};
-	walk(root);
-	return res;
-}
+// Node manipulation helpers - imported from useNetworkData
 
 // Sort nodes by depth, parent position, and IP address (matching DeviceList)
 function sortByDepthAndIP(nodes: TreeNode[], root: TreeNode): TreeNode[] {
@@ -991,32 +904,11 @@ function sortByDepthAndIP(nodes: TreeNode[], root: TreeNode): TreeNode[] {
 		nodesByDepth.get(depth)!.push(node);
 	});
 	
-	// Parse IP address for sorting
-	const parseIpForSorting = (ipStr: string): number[] => {
-		const match = ipStr.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
-		if (match) {
-			return [
-				parseInt(match[1]),
-				parseInt(match[2]),
-				parseInt(match[3]),
-				parseInt(match[4])
-			];
-		}
-		return [0, 0, 0, 0];
-	};
-	
+	// IP comparison using shared utility
 	const compareIps = (a: TreeNode, b: TreeNode): number => {
 		const ipA = (a as any).ip || a.id;
 		const ipB = (b as any).ip || b.id;
-		const partsA = parseIpForSorting(ipA);
-		const partsB = parseIpForSorting(ipB);
-		
-		for (let i = 0; i < 4; i++) {
-			if (partsA[i] !== partsB[i]) {
-				return partsA[i] - partsB[i];
-			}
-		}
-		return 0;
+		return compareIpAddresses(ipA, ipB);
 	};
 	
 	// Track node sort order for parent-based sorting
@@ -1061,29 +953,7 @@ function sortByDepthAndIP(nodes: TreeNode[], root: TreeNode): TreeNode[] {
 	return sorted;
 }
 
-function findGroupByPrefix(root: TreeNode, prefix: string): TreeNode | undefined {
-	return (root.children || []).find(c => c.name.toLowerCase().startsWith(prefix));
-}
-
-function removeFromAllGroups(root: TreeNode, id: string): TreeNode | undefined {
-	for (const g of (root.children || [])) {
-		const idx = (g.children || []).findIndex(c => c.id === id);
-		if (idx !== -1) {
-			const [node] = g.children!.splice(idx, 1);
-			return node;
-		}
-	}
-	return undefined;
-}
-
-function walkAll(root: TreeNode, fn: (n: TreeNode, parent?: TreeNode) => void) {
-	fn(root, undefined);
-	for (const g of (root.children || [])) {
-		for (const c of (g.children || [])) {
-			fn(c, g);
-		}
-	}
-}
+// Group/tree helpers - imported from useNetworkData
 
 function onChangeRole() {
 	if (!parsed.value || !selectedId.value) return;
@@ -1186,26 +1056,7 @@ const allNodesHistory = computed((): HistoryEntry[] => {
 	return entries.slice(0, 100);
 });
 
-function formatTimestamp(isoString: string): string {
-	const date = new Date(isoString);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffMins = Math.floor(diffMs / 60000);
-	const diffHours = Math.floor(diffMs / 3600000);
-	const diffDays = Math.floor(diffMs / 86400000);
-	
-	if (diffMins < 1) return 'Just now';
-	if (diffMins < 60) return `${diffMins}m ago`;
-	if (diffHours < 24) return `${diffHours}h ago`;
-	if (diffDays < 7) return `${diffDays}d ago`;
-	
-	return date.toLocaleDateString(undefined, { 
-		month: 'short', 
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit'
-	});
-}
+// formatTimestamp imported from utils/formatters
 
 function selectNodeFromHistory(nodeId: string) {
 	selectedId.value = nodeId;
@@ -1592,21 +1443,10 @@ function downloadHref(line: string): string | null {
 	return m ? m[1] : null;
 }
 
-async function downloadNetworkMap(url: string) {
+// downloadNetworkMap imported from utils/download
+async function handleDownloadNetworkMap(url: string) {
 	try {
-		// Use client which already has the auth token configured
-		const response = await client.get(url, { responseType: 'blob' });
-		
-		// Create a blob URL and trigger download
-		const blob = new Blob([response.data], { type: 'text/plain' });
-		const blobUrl = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = blobUrl;
-		a.download = 'network_map.txt';
-		document.body.appendChild(a);
-		a.click();
-		URL.revokeObjectURL(blobUrl);
-		document.body.removeChild(a);
+		await downloadNetworkMap(url);
 	} catch (error) {
 		console.error('[Download] Failed to download network map:', error);
 		logs.value.push('ERROR: Failed to download network map');
@@ -1727,150 +1567,12 @@ onBeforeUnmount(() => {
 function onCleanUpLayout() {
 	if (!parsed.value) return;
 	
-	// Clear all saved positions
-	clearPositions();
-	
-	// Remove fx/fy from all nodes in the tree and calculate depth-based layout
-	const root = parsed.value.root;
-	
-	// Build a map of all nodes (including nested ones)
-	const allNodes = new Map<string, TreeNode>();
-	const collectNodes = (n: TreeNode) => {
-		allNodes.set(n.id, n);
-		for (const g of (n.children || [])) {
-			for (const c of (g.children || [])) {
-				allNodes.set(c.id, c);
-			}
-		}
-	};
-	collectNodes(root);
-	
-	// Calculate depth for each node based on parentId chain
-	const getDepth = (nodeId: string, visited = new Set<string>()): number => {
-		if (nodeId === root.id) return 0;
-		if (visited.has(nodeId)) return 0; // Prevent infinite loops
-		visited.add(nodeId);
-		
-		const node = allNodes.get(nodeId);
-		if (!node) return 0;
-		
-		const parentId = (node as any).parentId;
-		if (!parentId || parentId === root.id) {
-			// Direct connection to root
-			return 1;
-		}
-		
-		// Recursively get parent's depth
-		return getDepth(parentId, visited) + 1;
-	};
-	
-	// Group nodes by depth
-	const nodesByDepth = new Map<number, TreeNode[]>();
-	allNodes.forEach((node, id) => {
-		if (id === root.id) return; // Skip root itself
-		const depth = getDepth(id);
-		if (!nodesByDepth.has(depth)) {
-			nodesByDepth.set(depth, []);
-		}
-		nodesByDepth.get(depth)!.push(node);
-	});
-	
-	// Sort nodes within each depth by parent position, then by IP address
-	const parseIpForSorting = (ipStr: string): number[] => {
-		const match = ipStr.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
-		if (match) {
-			return [
-				parseInt(match[1]),
-				parseInt(match[2]),
-				parseInt(match[3]),
-				parseInt(match[4])
-			];
-		}
-		return [0, 0, 0, 0];
-	};
-	
-	const compareIps = (a: TreeNode, b: TreeNode): number => {
-		const ipA = (a as any).ip || a.id;
-		const ipB = (b as any).ip || b.id;
-		const partsA = parseIpForSorting(ipA);
-		const partsB = parseIpForSorting(ipB);
-		
-		for (let i = 0; i < 4; i++) {
-			if (partsA[i] !== partsB[i]) {
-				return partsA[i] - partsB[i];
-			}
-		}
-		return 0;
-	};
-	
-	// Track node sort order for parent-based sorting
-	const nodeSortOrder = new Map<string, number>();
-	nodeSortOrder.set(root.id, 0);
-	
-	// Sort each depth level, considering parent positions
-	const maxDepthForSort = Math.max(...Array.from(nodesByDepth.keys()), 0);
-	for (let depth = 1; depth <= maxDepthForSort; depth++) {
-		const nodesAtDepth = nodesByDepth.get(depth) || [];
-		if (nodesAtDepth.length === 0) continue;
-		
-		// Sort by: 1) parent's sort order, 2) IP address
-		nodesAtDepth.sort((a, b) => {
-			const parentIdA = (a as any).parentId || root.id;
-			const parentIdB = (b as any).parentId || root.id;
-			const parentOrderA = nodeSortOrder.get(parentIdA) ?? 999999;
-			const parentOrderB = nodeSortOrder.get(parentIdB) ?? 999999;
-			
-			// First, compare by parent position
-			if (parentOrderA !== parentOrderB) {
-				return parentOrderA - parentOrderB;
-			}
-			
-			// Within same parent group, sort by IP
-			return compareIps(a, b);
-		});
-		
-		// Record sort order for this depth (for next depth's sorting)
-		nodesAtDepth.forEach((node, index) => {
-			nodeSortOrder.set(node.id, index);
-		});
-	}
-	
-	// Layout parameters
-	const columnWidth = 220;
-	const nodeGapY = 100;
-	const marginX = 60;
-	const marginY = 40;
-	const canvasHeight = 800; // Approximate canvas height
-	
-	// Clear all positions
-	const clearNodePositions = (n: TreeNode) => {
-		delete (n as any).fx;
-		delete (n as any).fy;
-		for (const c of (n.children || [])) {
-			clearNodePositions(c);
-		}
-	};
-	clearNodePositions(root);
-	
-	// Position root
-	(root as any).fx = marginX;
-	(root as any).fy = canvasHeight / 2;
-	
-	// Position nodes by depth
-	const maxDepth = Math.max(...Array.from(nodesByDepth.keys()));
-	for (let depth = 1; depth <= maxDepth; depth++) {
-		const nodesAtDepth = nodesByDepth.get(depth) || [];
-		if (nodesAtDepth.length === 0) continue;
-		
-		const columnX = marginX + depth * columnWidth;
-		const totalHeight = Math.max(0, (nodesAtDepth.length - 1) * nodeGapY);
-		const startY = (canvasHeight - totalHeight) / 2;
-		
-		nodesAtDepth.forEach((node, idx) => {
-			(node as any).fx = columnX;
-			(node as any).fy = startY + idx * nodeGapY;
-		});
-	}
+	// Use composable's cleanUpLayout which handles:
+	// - Clearing saved positions
+	// - Calculating depth-based layout
+	// - Sorting nodes by parent and IP
+	// - Positioning nodes in columns
+	cleanUpLayout(parsed.value.root);
 	
 	// Trigger re-render by creating a new reference
 	parsed.value = { ...parsed.value };

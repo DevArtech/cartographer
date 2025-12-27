@@ -301,6 +301,27 @@ async function acceptInvite(request: AcceptInviteRequest): Promise<User> {
   }
 }
 
+/**
+ * Helper for common auth initialization pattern.
+ * Checks setup status and verifies session if setup is complete.
+ * Used by pages that need to check setup and verify session.
+ */
+export async function initAuthState(): Promise<{ needsSetup: boolean }> {
+  try {
+    const status = await checkSetupStatus();
+    const requiresSetup = !status.is_setup_complete;
+
+    if (status.is_setup_complete) {
+      await verifySession();
+    }
+
+    return { needsSetup: requiresSetup };
+  } catch (e) {
+    console.error('[Auth] Failed to check setup status:', e);
+    return { needsSetup: false };
+  }
+}
+
 // Main composable export
 export function useAuth() {
   // Initialize from storage on first use
@@ -330,6 +351,7 @@ export function useAuth() {
     logout,
     verifySession,
     refreshSession,
+    initAuthState,
 
     // User management
     listUsers,

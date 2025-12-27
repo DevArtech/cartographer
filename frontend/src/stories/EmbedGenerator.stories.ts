@@ -167,19 +167,9 @@ const createMockedEmbedGenerator = (authState: { canWrite: boolean; isOwner: boo
   })
 }
 
-function formatDate(isoString: string): string {
-  if (!isoString) return ''
-  const date = new Date(isoString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / 86400000)
-  
-  if (diffDays === 0) return 'today'
-  if (diffDays === 1) return 'yesterday'
-  if (diffDays < 7) return `${diffDays} days ago`
-  
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
+// formatDate - use formatRelativeDate from utils/formatters
+import { formatRelativeDate } from '../utils/formatters';
+const formatDate = (isoString: string) => formatRelativeDate(isoString);
 
 const meta = {
   title: 'Modals/EmbedGenerator',

@@ -677,15 +677,9 @@ function getRoleBadgeClass(role: UserRole): string {
 	}
 }
 
-function formatDate(dateStr: string): string {
-	const date = new Date(dateStr);
-	return date.toLocaleDateString(undefined, { 
-		month: "short", 
-		day: "numeric",
-		hour: "2-digit",
-		minute: "2-digit"
-	});
-}
+// formatDate - use formatDateTime from utils/formatters
+import { formatDateTime } from '../utils/formatters';
+const formatDate = (dateStr: string) => formatDateTime(dateStr);
 
 function editUser(user: User) {
 	editingUser.value = user;

@@ -6,7 +6,7 @@ Compatible with cartographer-cloud user format with additional role field.
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
-from sqlalchemy import String, Text, Boolean, DateTime, Enum as SQLEnum
+from sqlalchemy import String, Text, Boolean, DateTime, Enum as SQLEnum, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -64,6 +64,10 @@ class User(Base):
     # Account status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=True)  # Self-hosted users are auto-verified
+
+    # User preferences (JSON blob for flexible storage)
+    # Contains: { dark_mode?: boolean, ... }
+    preferences: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

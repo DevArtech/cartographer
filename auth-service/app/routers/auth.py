@@ -17,7 +17,8 @@ from ..models import (
     UserCreate, UserUpdate, UserResponse,
     LoginRequest, LoginResponse, OwnerSetupRequest, SetupStatus,
     ChangePasswordRequest, SessionInfo, ErrorResponse,
-    InviteCreate, InviteResponse, AcceptInviteRequest, InviteTokenInfo
+    InviteCreate, InviteResponse, AcceptInviteRequest, InviteTokenInfo,
+    UserPreferences, UserPreferencesUpdate,
 )
 from ..services.auth_service import auth_service, hash_password_async
 
@@ -401,6 +402,41 @@ async def change_password(
         return {"message": "Password changed successfully"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/me/preferences", response_model=UserPreferences)
+async def get_preferences(user: User = Depends(require_auth)):
+    """Get current user's preferences"""
+    prefs = user.preferences or {}
+    return UserPreferences(**prefs)
+
+
+@router.patch("/me/preferences", response_model=UserPreferences)
+async def update_preferences(
+    request: UserPreferencesUpdate,
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update current user's preferences (partial update)"""
+    # Get existing preferences or empty dict
+    current_prefs = user.preferences or {}
+    
+    # Merge in new preferences (only non-None values)
+    update_data = request.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        if value is not None:
+            current_prefs[key] = value
+        elif key in current_prefs:
+            # Allow explicit None to remove a preference
+            del current_prefs[key]
+    
+    # Update in database
+    user.preferences = current_prefs if current_prefs else None
+    await db.commit()
+    await db.refresh(user)
+    
+    logger.info(f"User preferences updated: {user.username}")
+    return UserPreferences(**(user.preferences or {}))
 
 
 # ==================== Invitation Endpoints ====================

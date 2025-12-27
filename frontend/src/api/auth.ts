@@ -107,3 +107,19 @@ export async function acceptInvite(request: AcceptInviteRequest): Promise<User> 
   return response.data;
 }
 
+// ==================== User Preferences ====================
+
+export interface UserPreferences {
+  dark_mode?: boolean;
+}
+
+export async function getPreferences(): Promise<UserPreferences> {
+  const response = await client.get<UserPreferences>('/api/auth/me/preferences');
+  return response.data;
+}
+
+export async function updatePreferences(preferences: Partial<UserPreferences>): Promise<UserPreferences> {
+  const response = await client.patch<UserPreferences>('/api/auth/me/preferences', preferences);
+  return response.data;
+}
+

@@ -2,6 +2,7 @@
  * Composables module exports
  * 
  * Centralized exports for all composables.
+ * NOTE: Types should be imported from 'types/' directory directly.
  */
 
 export { useAuth } from './useAuth';
@@ -12,21 +13,12 @@ export { useHealthMonitoring } from './useHealthMonitoring';
 export { useVersionCheck } from './useVersionCheck';
 export { useNetworkData } from './useNetworkData';
 export { useMapLayout } from './useMapLayout';
+export { useDarkMode } from './useDarkMode';
+export { useAutoSave } from './useAutoSave';
 
-// Re-export types from composables for backwards compatibility
-export type {
-  Network,
-  NetworkLayoutResponse,
-  CreateNetworkData,
-  UpdateNetworkData,
-  NetworkPermissionRole,
-  NetworkPermission,
-  CreateNetworkPermission,
-} from './useNetworks';
-
-export type { MonitoringConfig, MonitoringStatus } from './useHealthMonitoring';
-
-export type { SavedLayout } from './useMapLayout';
-
-export type { VersionType, VersionPreferences, VersionInfo } from './useVersionCheck';
-
+// NOTE: Type re-exports removed. Import types from their canonical locations:
+// - Network types: import from 'types/networks'
+// - Notification types: import from 'types/notifications'
+// - Layout types: import from 'types/layout'
+// - Version types: import from 'types/version'
+// - Health types: import from 'composables/useHealthMonitoring' (MonitoringConfig, MonitoringStatus)

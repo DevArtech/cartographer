@@ -24,7 +24,11 @@ import type {
   GlobalPreferences,
   DiscordLinkInfo,
   AnomalyStats,
+  CartographerStatusSubscription,
 } from '../types/notifications';
+
+// Re-export types for backwards compatibility (consumers should import from types/ directly)
+export type { CartographerStatusSubscription, DiscordChannel } from '../types/notifications';
 
 const API_BASE = '/api/notifications';
 
@@ -321,19 +325,6 @@ export async function triggerVersionNotification(): Promise<{
 
 // ==================== Cartographer Status ====================
 
-export interface CartographerStatusSubscription {
-  subscribed: boolean;
-  email_address?: string;
-  email_enabled?: boolean;
-  discord_enabled?: boolean;
-  discord_user_id?: string;
-  discord_guild_id?: string;
-  discord_channel_id?: string;
-  discord_delivery_method?: 'dm' | 'channel';
-  cartographer_up_enabled?: boolean;
-  cartographer_down_enabled?: boolean;
-}
-
 export async function getCartographerStatusSubscription(): Promise<CartographerStatusSubscription> {
   const response = await client.get(`${API_BASE}/cartographer-status/subscription`);
   return response.data;
@@ -377,12 +368,6 @@ export async function testCartographerStatusNotification(
 }
 
 // ==================== Discord Channels ====================
-
-export interface DiscordChannel {
-  id: string;
-  name: string;
-  type: number;
-}
 
 export async function getDiscordGuildChannels(guildId: string): Promise<{ channels: DiscordChannel[] }> {
   const response = await client.get(`${API_BASE}/discord/guilds/${guildId}/channels`);
