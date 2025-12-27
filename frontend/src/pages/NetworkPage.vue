@@ -68,7 +68,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useNetworks, type Network } from "../composables/useNetworks";
 import { useAuth } from "../composables/useAuth";
-import MainApp from "./MainApp.vue";
+import MainApp from "../components/MainApp.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -91,7 +91,7 @@ async function ensureAuthenticated(): Promise<boolean> {
 		const isValid = await verifySession();
 		if (!isValid) {
 			// Session is no longer valid on server, redirect to home for re-login
-			console.log("[NetworkView] Session invalid, redirecting to home");
+			console.log("[NetworkPage] Session invalid, redirecting to home");
 			router.replace("/");
 			return false;
 		}
@@ -99,7 +99,7 @@ async function ensureAuthenticated(): Promise<boolean> {
 	}
 	
 	// No auth token at all, redirect to home for login
-	console.log("[NetworkView] Not authenticated, redirecting to home");
+	console.log("[NetworkPage] Not authenticated, redirecting to home");
 	router.replace("/");
 	return false;
 }
@@ -126,22 +126,23 @@ async function loadNetwork() {
 
 	try {
 		network.value = await getNetwork(id);
-	} catch (e: any) {
+	} catch (e: unknown) {
 		// Check if this is an auth error - redirect to home instead of showing error
-		const status = e.status || e.response?.status;
+		const err = e as { status?: number; response?: { status?: number }; message?: string };
+		const status = err.status || err.response?.status;
 		const isAuthError = 
 			status === 401 ||
 			status === 403 ||
-			e.message?.toLowerCase().includes("not authenticated") || 
-			e.message?.toLowerCase().includes("unauthorized") ||
-			e.message?.toLowerCase().includes("authentication");
+			err.message?.toLowerCase().includes("not authenticated") || 
+			err.message?.toLowerCase().includes("unauthorized") ||
+			err.message?.toLowerCase().includes("authentication");
 		
 		if (isAuthError) {
-			console.log("[NetworkView] Auth error loading network, redirecting to home");
+			console.log("[NetworkPage] Auth error loading network, redirecting to home");
 			router.replace("/");
 			return;
 		}
-		error.value = e.message || "Network not found";
+		error.value = err.message || "Network not found";
 		network.value = null;
 	} finally {
 		loading.value = false;

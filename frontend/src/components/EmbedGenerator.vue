@@ -311,7 +311,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue';
-import axios from 'axios';
+import * as embedsApi from '../api/embeds';
 import { useAuth } from '../composables/useAuth';
 
 interface EmbedConfig {
@@ -389,9 +389,17 @@ function formatDate(isoString: string): string {
 async function loadEmbeds() {
 	loading.value = true;
 	try {
-		const params = props.networkId ? { network_id: props.networkId } : {};
-		const response = await axios.get('/api/embeds', { params });
-		embeds.value = response.data.embeds || [];
+		const embedList = await embedsApi.listEmbeds(props.networkId);
+		embeds.value = embedList.map(e => ({
+			id: e.id,
+			name: e.name,
+			sensitiveMode: e.sensitive_mode,
+			showOwner: false,
+			ownerDisplayName: null,
+			createdAt: e.created_at,
+			updatedAt: e.updated_at,
+			networkId: e.network_id,
+		}));
 	} catch (err) {
 		console.error('Failed to load embeds:', err);
 	} finally {
@@ -404,19 +412,22 @@ async function createEmbed() {
 	
 	creating.value = true;
 	try {
-		const response = await axios.post('/api/embeds', {
+		const response = await embedsApi.createEmbed({
 			name: newEmbedName.value.trim(),
 			sensitiveMode: newEmbedSensitive.value,
-			showOwner: newEmbedShowOwner.value,
-			ownerDisplayType: newEmbedOwnerType.value,
-			ownerDisplayName: newEmbedShowOwner.value ? getOwnerDisplayName() : null,
-			networkId: props.networkId || null
+			networkId: props.networkId || undefined,
 		});
 		
 		// Add new embed to list and select it
 		const newEmbed: EmbedConfig = {
-			id: response.data.id,
-			...response.data.embed
+			id: response.id,
+			name: response.name,
+			sensitiveMode: response.sensitive_mode,
+			showOwner: newEmbedShowOwner.value,
+			ownerDisplayName: newEmbedShowOwner.value ? getOwnerDisplayName() : null,
+			createdAt: response.created_at,
+			updatedAt: response.updated_at,
+			networkId: response.network_id,
 		};
 		embeds.value.unshift(newEmbed);
 		selectedEmbed.value = newEmbed;
@@ -444,7 +455,7 @@ async function deleteEmbed() {
 	
 	deleting.value = true;
 	try {
-		await axios.delete(`/api/embeds/${selectedEmbed.value.id}`);
+		await embedsApi.deleteEmbed(selectedEmbed.value.id);
 		embeds.value = embeds.value.filter(e => e.id !== selectedEmbed.value!.id);
 		selectedEmbed.value = null;
 		confirmDelete.value = false;

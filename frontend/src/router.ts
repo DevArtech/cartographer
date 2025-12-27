@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import HomePage from './components/HomePage.vue';
-import NetworkView from './components/NetworkView.vue';
-import EmbedView from './components/EmbedView.vue';
-import AcceptInvite from './components/AcceptInvite.vue';
+import HomePage from './pages/HomePage.vue';
+import NetworkPage from './pages/NetworkPage.vue';
+import EmbedPage from './pages/EmbedPage.vue';
+import AcceptInvitePage from './pages/AcceptInvitePage.vue';
 
 const routes = [
 	{
@@ -13,19 +13,19 @@ const routes = [
 	{
 		path: '/network/:id',
 		name: 'network',
-		component: NetworkView,
+		component: NetworkPage,
 		props: true
 	},
 	{
 		path: '/embed/:embedId',
 		name: 'embed',
-		component: EmbedView,
+		component: EmbedPage,
 		props: true
 	},
 	{
 		path: '/accept-invite',
 		name: 'accept-invite',
-		component: AcceptInvite
+		component: AcceptInvitePage
 	}
 ];
 

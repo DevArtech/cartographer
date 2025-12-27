@@ -1462,7 +1462,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted, watch } from "vue";
-import axios from "axios";
+import * as notificationsApi from "../api/notifications";
 import { 
 	useNotifications, 
 	NOTIFICATION_TYPE_INFO, 
@@ -1649,8 +1649,8 @@ const networkNotificationTypes = computed(() => {
 // Load user email from account
 async function loadUserEmail() {
 	try {
-		const response = await axios.get('/api/user/profile');
-		userEmail.value = response.data.email || '';
+		const profile = await notificationsApi.getUserProfile();
+		userEmail.value = profile.email || '';
 	} catch (e) {
 		console.error('Failed to load user email:', e);
 	}
@@ -1856,8 +1856,8 @@ async function onGlobalGuildChange() {
 	if (globalSelectedGuildId.value) {
 		loadingGlobalChannels.value = true;
 		try {
-			const response = await axios.get(`/api/notifications/discord/guilds/${globalSelectedGuildId.value}/channels`);
-			globalDiscordChannels.value = response.data.channels || [];
+			const response = await notificationsApi.getDiscordGuildChannels(globalSelectedGuildId.value);
+			globalDiscordChannels.value = response.channels || [];
 		} catch (e) {
 			console.error('Failed to load channels:', e);
 			globalDiscordChannels.value = [];
@@ -1880,19 +1880,20 @@ async function testGlobalDiscord() {
 	testResult.value = null;
 	try {
 		if (globalPrefs.value.discord_delivery_method === 'channel' && globalSelectedChannelId.value) {
-			await axios.post('/api/notifications/cartographer-status/test/discord', {
+			await notificationsApi.testCartographerStatusNotification({
 				channel_id: globalSelectedChannelId.value,
 			});
 		} else if (globalPrefs.value.discord_delivery_method === 'dm' && globalPrefs.value.discord_user_id) {
-			await axios.post('/api/notifications/cartographer-status/test/discord', {
+			await notificationsApi.testCartographerStatusNotification({
 				user_id: globalPrefs.value.discord_user_id,
 			});
 		}
 		testResult.value = { success: true, channel: 'discord', message: 'Test Discord notification sent!' };
 		setTimeout(() => { testResult.value = null; }, 5000);
-	} catch (e: any) {
+	} catch (e: unknown) {
 		console.error('Failed to send test Discord:', e);
-		testResult.value = { success: false, channel: 'discord', message: '', error: e.message };
+		const error = e instanceof Error ? e.message : 'Unknown error';
+		testResult.value = { success: false, channel: 'discord', message: '', error };
 		setTimeout(() => { testResult.value = null; }, 5000);
 	} finally {
 		testingGlobalDiscord.value = false;
@@ -1901,7 +1902,7 @@ async function testGlobalDiscord() {
 
 async function saveGlobalPrefs() {
 	try {
-		await axios.put("/api/notifications/cartographer-status/subscription", {
+		await notificationsApi.updateCartographerStatusSubscription({
 			email_enabled: globalPrefs.value.email_enabled,
 			discord_enabled: globalPrefs.value.discord_enabled,
 			discord_delivery_method: globalPrefs.value.discord_delivery_method,
@@ -2304,36 +2305,36 @@ function formatScheduledTime(isoString: string): string {
 async function loadCartographerStatus() {
 	cartographerStatusLoading.value = true;
 	try {
-		const response = await axios.get("/api/notifications/cartographer-status/subscription");
-		cartographerStatus.value = response.data;
-		if (response.data.email_address) {
-			cartographerStatusEmail.value = response.data.email_address;
+		const data = await notificationsApi.getCartographerStatusSubscription();
+		cartographerStatus.value = data;
+		if (data.email_address) {
+			cartographerStatusEmail.value = data.email_address;
 		}
 		// Load global prefs from subscription
-		globalPrefs.value.email_enabled = response.data.email_enabled ?? false;
-		globalPrefs.value.discord_enabled = response.data.discord_enabled ?? false;
-		globalPrefs.value.discord_delivery_method = response.data.discord_delivery_method ?? 'dm';
-		globalPrefs.value.discord_guild_id = response.data.discord_guild_id ?? '';
-		globalPrefs.value.discord_channel_id = response.data.discord_channel_id ?? '';
-		globalPrefs.value.discord_user_id = response.data.discord_user_id ?? '';
-		globalPrefs.value.cartographer_up_enabled = response.data.cartographer_up_enabled ?? true;
-		globalPrefs.value.cartographer_down_enabled = response.data.cartographer_down_enabled ?? true;
-		globalPrefs.value.cartographer_up_priority = response.data.cartographer_up_priority ?? 'medium';
-		globalPrefs.value.cartographer_down_priority = response.data.cartographer_down_priority ?? 'critical';
-		globalPrefs.value.minimum_priority = response.data.minimum_priority ?? 'medium';
-		globalPrefs.value.quiet_hours_enabled = response.data.quiet_hours_enabled ?? false;
-		globalPrefs.value.quiet_hours_start = response.data.quiet_hours_start ?? '22:00';
-		globalPrefs.value.quiet_hours_end = response.data.quiet_hours_end ?? '08:00';
-		globalPrefs.value.quiet_hours_bypass_priority = response.data.quiet_hours_bypass_priority ?? null;
-		globalPrefs.value.timezone = response.data.timezone ?? null;
+		globalPrefs.value.email_enabled = data.email_enabled ?? false;
+		globalPrefs.value.discord_enabled = data.discord_enabled ?? false;
+		globalPrefs.value.discord_delivery_method = data.discord_delivery_method ?? 'dm';
+		globalPrefs.value.discord_guild_id = data.discord_guild_id ?? '';
+		globalPrefs.value.discord_channel_id = data.discord_channel_id ?? '';
+		globalPrefs.value.discord_user_id = data.discord_user_id ?? '';
+		globalPrefs.value.cartographer_up_enabled = data.cartographer_up_enabled ?? true;
+		globalPrefs.value.cartographer_down_enabled = data.cartographer_down_enabled ?? true;
+		globalPrefs.value.cartographer_up_priority = (data as Record<string, unknown>).cartographer_up_priority as string ?? 'medium';
+		globalPrefs.value.cartographer_down_priority = (data as Record<string, unknown>).cartographer_down_priority as string ?? 'critical';
+		globalPrefs.value.minimum_priority = (data as Record<string, unknown>).minimum_priority as string ?? 'medium';
+		globalPrefs.value.quiet_hours_enabled = (data as Record<string, unknown>).quiet_hours_enabled as boolean ?? false;
+		globalPrefs.value.quiet_hours_start = (data as Record<string, unknown>).quiet_hours_start as string ?? '22:00';
+		globalPrefs.value.quiet_hours_end = (data as Record<string, unknown>).quiet_hours_end as string ?? '08:00';
+		globalPrefs.value.quiet_hours_bypass_priority = (data as Record<string, unknown>).quiet_hours_bypass_priority as string ?? null;
+		globalPrefs.value.timezone = (data as Record<string, unknown>).timezone as string ?? null;
 		
 		// Set up global Discord channel selection if previously configured
 		if (globalPrefs.value.discord_guild_id) {
 			globalSelectedGuildId.value = globalPrefs.value.discord_guild_id;
 			// Load channels for this guild
 			try {
-				const channelsResponse = await axios.get(`/api/notifications/discord/guilds/${globalPrefs.value.discord_guild_id}/channels`);
-				globalDiscordChannels.value = channelsResponse.data.channels || [];
+				const channelsResponse = await notificationsApi.getDiscordGuildChannels(globalPrefs.value.discord_guild_id);
+				globalDiscordChannels.value = channelsResponse.channels || [];
 				if (globalPrefs.value.discord_channel_id) {
 					globalSelectedChannelId.value = globalPrefs.value.discord_channel_id;
 				}
@@ -2341,8 +2342,9 @@ async function loadCartographerStatus() {
 				console.error('Failed to load global Discord channels:', e);
 			}
 		}
-	} catch (e: any) {
-		if (e.response?.status === 404) {
+	} catch (e: unknown) {
+		const axiosError = e as { response?: { status?: number } };
+		if (axiosError.response?.status === 404) {
 			cartographerStatus.value = { subscribed: false };
 		} else {
 			console.error("Failed to load Cartographer status subscription:", e);
@@ -2357,15 +2359,16 @@ async function subscribeCartographerStatus() {
 	
 	savingCartographerStatus.value = true;
 	try {
-		const response = await axios.post("/api/notifications/cartographer-status/subscription", {
+		const data = await notificationsApi.createCartographerStatusSubscription({
 			email_address: cartographerStatusEmail.value,
 			cartographer_up_enabled: true,
 			cartographer_down_enabled: true,
 		});
-		cartographerStatus.value = response.data;
-	} catch (e: any) {
+		cartographerStatus.value = data;
+	} catch (e: unknown) {
 		console.error("Failed to subscribe:", e);
-		alert(e.response?.data?.detail || "Failed to subscribe");
+		const axiosError = e as { response?: { data?: { detail?: string } } };
+		alert(axiosError.response?.data?.detail || "Failed to subscribe");
 	} finally {
 		savingCartographerStatus.value = false;
 	}
@@ -2377,14 +2380,15 @@ async function updateCartographerStatusEmail() {
 	
 	savingCartographerStatus.value = true;
 	try {
-		const response = await axios.put("/api/notifications/cartographer-status/subscription", {
+		const data = await notificationsApi.updateCartographerStatusSubscription({
 			email_address: newEmail,
 		});
-		cartographerStatus.value = response.data;
+		cartographerStatus.value = data;
 		cartographerStatusEmail.value = newEmail;
-	} catch (e: any) {
+	} catch (e: unknown) {
 		console.error("Failed to update email:", e);
-		alert(e.response?.data?.detail || "Failed to update email");
+		const axiosError = e as { response?: { data?: { detail?: string } } };
+		alert(axiosError.response?.data?.detail || "Failed to update email");
 	} finally {
 		savingCartographerStatus.value = false;
 	}
@@ -2395,13 +2399,14 @@ async function toggleCartographerUp() {
 	
 	savingCartographerStatus.value = true;
 	try {
-		const response = await axios.put("/api/notifications/cartographer-status/subscription", {
+		const data = await notificationsApi.updateCartographerStatusSubscription({
 			cartographer_up_enabled: !cartographerStatus.value.cartographer_up_enabled,
 		});
-		cartographerStatus.value = response.data;
-	} catch (e: any) {
+		cartographerStatus.value = data;
+	} catch (e: unknown) {
 		console.error("Failed to update:", e);
-		alert(e.response?.data?.detail || "Failed to update");
+		const axiosError = e as { response?: { data?: { detail?: string } } };
+		alert(axiosError.response?.data?.detail || "Failed to update");
 	} finally {
 		savingCartographerStatus.value = false;
 	}
@@ -2412,13 +2417,14 @@ async function toggleCartographerDown() {
 	
 	savingCartographerStatus.value = true;
 	try {
-		const response = await axios.put("/api/notifications/cartographer-status/subscription", {
+		const data = await notificationsApi.updateCartographerStatusSubscription({
 			cartographer_down_enabled: !cartographerStatus.value.cartographer_down_enabled,
 		});
-		cartographerStatus.value = response.data;
-	} catch (e: any) {
+		cartographerStatus.value = data;
+	} catch (e: unknown) {
 		console.error("Failed to update:", e);
-		alert(e.response?.data?.detail || "Failed to update");
+		const axiosError = e as { response?: { data?: { detail?: string } } };
+		alert(axiosError.response?.data?.detail || "Failed to update");
 	} finally {
 		savingCartographerStatus.value = false;
 	}
@@ -2431,12 +2437,13 @@ async function unsubscribeCartographerStatus() {
 	
 	savingCartographerStatus.value = true;
 	try {
-		await axios.delete("/api/notifications/cartographer-status/subscription");
+		await notificationsApi.deleteCartographerStatusSubscription();
 		cartographerStatus.value = { subscribed: false };
 		cartographerStatusEmail.value = "";
-	} catch (e: any) {
+	} catch (e: unknown) {
 		console.error("Failed to unsubscribe:", e);
-		alert(e.response?.data?.detail || "Failed to unsubscribe");
+		const axiosError = e as { response?: { data?: { detail?: string } } };
+		alert(axiosError.response?.data?.detail || "Failed to unsubscribe");
 	} finally {
 		savingCartographerStatus.value = false;
 	}

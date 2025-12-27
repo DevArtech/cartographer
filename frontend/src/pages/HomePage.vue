@@ -482,12 +482,12 @@ import { ref, reactive, onMounted, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useNetworks, type Network } from "../composables/useNetworks";
-import SetupWizard from "./SetupWizard.vue";
-import LoginScreen from "./LoginScreen.vue";
-import UserMenu from "./UserMenu.vue";
-import NotificationSettingsPanel from "./NotificationSettingsPanel.vue";
-import UserManagement from "./UserManagement.vue";
-import UpdateSettings from "./UpdateSettings.vue";
+import SetupWizard from "../components/SetupWizard.vue";
+import LoginScreen from "../components/LoginScreen.vue";
+import UserMenu from "../components/UserMenu.vue";
+import NotificationSettingsPanel from "../components/NotificationSettingsPanel.vue";
+import UserManagement from "../components/UserManagement.vue";
+import UpdateSettings from "../components/UpdateSettings.vue";
 
 const router = useRouter();
 const { isAuthenticated, user, checkSetupStatus, verifySession } = useAuth();
@@ -605,8 +605,8 @@ async function createNetwork() {
 		});
 
 		closeCreateModal();
-	} catch (e: any) {
-		createError.value = e.message || "Failed to create network";
+	} catch (e: unknown) {
+		createError.value = e instanceof Error ? e.message : "Failed to create network";
 	} finally {
 		isCreating.value = false;
 	}
@@ -641,8 +641,8 @@ async function saveEditNetwork() {
 		});
 
 		closeEditModal();
-	} catch (e: any) {
-		editError.value = e.message || "Failed to update network";
+	} catch (e: unknown) {
+		editError.value = e instanceof Error ? e.message : "Failed to update network";
 	} finally {
 		isEditing.value = false;
 	}
@@ -669,8 +669,8 @@ async function executeDeleteNetwork() {
 	try {
 		await deleteNetworkApi(deletingNetwork.value.id);
 		closeDeleteModal();
-	} catch (e: any) {
-		deleteError.value = e.message || "Failed to delete network";
+	} catch (e: unknown) {
+		deleteError.value = e instanceof Error ? e.message : "Failed to delete network";
 	} finally {
 		isDeleting.value = false;
 	}

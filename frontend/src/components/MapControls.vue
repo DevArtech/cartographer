@@ -320,8 +320,8 @@
 </template>
 
 <script lang="ts" setup>
-import axios from "axios";
 import { onBeforeUnmount, ref, onMounted, reactive } from "vue";
+import * as networksApi from "../api/networks";
 import type { ParsedNetworkMap, TreeNode } from "../types/network";
 import { useNetworkData } from "../composables/useNetworkData";
 import { useMapLayout } from "../composables/useMapLayout";
@@ -413,23 +413,15 @@ onMounted(async () => {
 	try {
 		if (props.networkId) {
 			// Load from network-specific endpoint
-			const response = await axios.get(`/api/networks/${props.networkId}/layout`);
-			if (response.data.layout_data) {
-				emit("applyLayout", response.data.layout_data);
+			const layoutResponse = await networksApi.getNetworkLayout(props.networkId);
+			if (layoutResponse.layout_data) {
+				emit("applyLayout", layoutResponse.layout_data);
 				emit("saved"); // Mark as saved since we just loaded the saved state
 				message.value = "Loaded saved map";
 				setTimeout(() => { message.value = ""; }, 3000);
 			}
-		} else {
-			// Legacy: load from old endpoint
-		const response = await axios.get('/api/load-layout');
-		if (response.data.exists && response.data.layout) {
-			emit("applyLayout", response.data.layout);
-			emit("saved"); // Mark as saved since we just loaded the saved state
-			message.value = "Loaded saved map";
-			setTimeout(() => { message.value = ""; }, 3000);
-			}
 		}
+		// Legacy endpoint removed - networks now require networkId
 	} catch (error) {
 		console.error("Failed to load saved layout:", error);
 	}
@@ -521,24 +513,13 @@ async function saveLayout() {
 		
 		if (props.networkId) {
 			// Save to network-specific endpoint
-			const response = await axios.post(`/api/networks/${props.networkId}/layout`, {
-				layout_data: layout
-			});
-			if (response.data) {
-				message.value = "Map saved";
-				emit("saved");
-				setTimeout(() => { message.value = ""; }, 3000);
-			}
-		} else {
-			// Legacy: save to old endpoint
-		const response = await axios.post('/api/save-layout', layout);
-		if (response.data.success) {
+			await networksApi.saveNetworkLayout(props.networkId, layout);
 			message.value = "Map saved";
 			emit("saved");
 			setTimeout(() => { message.value = ""; }, 3000);
-			}
 		}
-	} catch (error: any) {
+		// Legacy endpoint removed - networks now require networkId
+	} catch (error: unknown) {
 		message.value = "Failed to save";
 		console.error("Save error:", error);
 		setTimeout(() => { message.value = ""; }, 5000);

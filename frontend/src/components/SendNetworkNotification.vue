@@ -434,7 +434,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
-import axios from 'axios';
+import * as notificationsApi from '../api/notifications';
 
 interface ScheduledBroadcast {
 	id: string;
@@ -530,8 +530,8 @@ async function markBroadcastAsSeen(broadcastId: string): Promise<string | null> 
 	
 	markedAsSeenIds.add(broadcastId);
 	try {
-		const response = await axios.post(`/api/notifications/scheduled/${broadcastId}/seen`);
-		return response.data.seen_at || null;
+		const response = await notificationsApi.markBroadcastAsSeen(broadcastId);
+		return response.seen_at || null;
 	} catch (e) {
 		console.error('Failed to mark broadcast as seen:', e);
 		// Remove from set so we can retry
@@ -544,10 +544,8 @@ async function markBroadcastAsSeen(broadcastId: string): Promise<string | null> 
 async function loadScheduledBroadcasts(showLoading = true) {
 	if (showLoading) loadingScheduled.value = true;
 	try {
-		const response = await axios.get(`/api/notifications/scheduled`, {
-			params: { include_completed: true }  // Include completed to show "Sent" briefly
-		});
-		const allBroadcasts = response.data.broadcasts.filter(
+		const response = await notificationsApi.getScheduledBroadcasts(true);
+		const allBroadcasts = (response.broadcasts as unknown as ScheduledBroadcast[]).filter(
 			(b: ScheduledBroadcast) => b.network_id === props.networkId
 		);
 		
@@ -755,15 +753,15 @@ async function handleSend() {
 		if (scheduleMode.value === 'schedule' && scheduledDateTime.value) {
 			// Schedule for later
 			const date = new Date(scheduledDateTime.value);
-			await axios.post(`/api/notifications/scheduled`, {
-				network_id: props.networkId,
-				title: form.value.title,
-				message: form.value.message,
-				event_type: form.value.type,
-				priority: form.value.priority,
-				scheduled_at: date.toISOString(),
-				timezone: detectedTimezone.value,
-			});
+			await notificationsApi.scheduleBroadcast(
+				props.networkId,
+				form.value.title,
+				form.value.message,
+				date,
+				form.value.type as 'scheduled_maintenance',
+				form.value.priority as 'medium',
+				detectedTimezone.value,
+			);
 			
 			successMessage.value = `Notification scheduled for ${date.toLocaleString()}`;
 			
@@ -778,20 +776,17 @@ async function handleSend() {
 			setTimeout(() => { successMessage.value = null; }, 5000);
 		} else {
 			// Send immediately
-			const payload = {
-				type: form.value.type,
-				priority: form.value.priority,
+			await notificationsApi.sendNetworkNotification(props.networkId, {
 				title: form.value.title,
 				message: form.value.message,
-			};
-			
-			await axios.post(`/api/notifications/networks/${props.networkId}/send`, payload);
+			});
 			
 			emit('sent');
 			emit('close');
 		}
-	} catch (e: any) {
-		error.value = e.response?.data?.detail || e.message || 'Failed to send notification';
+	} catch (e: unknown) {
+		const axiosError = e as { response?: { data?: { detail?: string } }; message?: string };
+		error.value = axiosError.response?.data?.detail || axiosError.message || 'Failed to send notification';
 		setTimeout(() => { error.value = null; }, 5000);
 	} finally {
 		isSending.value = false;
@@ -801,9 +796,9 @@ async function handleSend() {
 // Cancel a scheduled broadcast
 async function cancelBroadcast(broadcastId: string) {
 	try {
-		await axios.post(`/api/notifications/scheduled/${broadcastId}/cancel`);
+		await notificationsApi.cancelScheduledBroadcast(broadcastId);
 		await loadScheduledBroadcasts();
-	} catch (e: any) {
+	} catch (e: unknown) {
 		console.error('Failed to cancel broadcast:', e);
 	}
 }
@@ -837,19 +832,18 @@ async function saveEdit() {
 	editError.value = null;
 	
 	try {
-		const update: Record<string, any> = {};
+		const update: Partial<{
+			title: string;
+			message: string;
+			scheduled_at: string;
+			timezone: string;
+		}> = {};
 		
 		if (editForm.value.title !== editingBroadcast.value.title) {
 			update.title = editForm.value.title;
 		}
 		if (editForm.value.message !== editingBroadcast.value.message) {
 			update.message = editForm.value.message;
-		}
-		if (editForm.value.type !== editingBroadcast.value.event_type) {
-			update.event_type = editForm.value.type;
-		}
-		if (editForm.value.priority !== editingBroadcast.value.priority) {
-			update.priority = editForm.value.priority;
 		}
 		
 		// Check if scheduled time changed
@@ -860,12 +854,13 @@ async function saveEdit() {
 			update.timezone = detectedTimezone.value;
 		}
 		
-		await axios.patch(`/api/notifications/scheduled/${editingBroadcast.value.id}`, update);
+		await notificationsApi.updateScheduledBroadcast(editingBroadcast.value.id, update);
 		
 		await loadScheduledBroadcasts();
 		closeEditModal();
-	} catch (e: any) {
-		editError.value = e.response?.data?.detail || e.message || 'Failed to update broadcast';
+	} catch (e: unknown) {
+		const axiosError = e as { response?: { data?: { detail?: string } }; message?: string };
+		editError.value = axiosError.response?.data?.detail || axiosError.message || 'Failed to update broadcast';
 	} finally {
 		savingEdit.value = false;
 	}

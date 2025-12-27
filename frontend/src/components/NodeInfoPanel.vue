@@ -1997,7 +1997,7 @@
 
 <script lang="ts" setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
-import axios from 'axios';
+import * as healthApi from '../api/health';
 import type { TreeNode, DeviceMetrics, HealthStatus, GatewayTestIP, GatewayTestIPMetrics, GatewayTestIPsResponse, SpeedTestResult, LanPortsConfig, LanPort, PortType, PortStatus, PortSpeed, PoeStatus } from '../types/network';
 import MetricCard from './MetricCard.vue';
 import { useHealthMonitoring } from '../composables/useHealthMonitoring';
@@ -2272,7 +2272,7 @@ function getUptimeBarColor(percent: number): string {
 	return 'bg-red-500';
 }
 
-async function fetchHealth(includePorts = false) {
+async function fetchHealth(_includePorts = false) {
 	const ip = props.node?.ip;
 	if (!ip) return;
 	
@@ -2281,20 +2281,11 @@ async function fetchHealth(includePorts = false) {
 	
 	try {
 		// Call the backend proxy which forwards to health service
-		const response = await axios.get<DeviceMetrics>(
-			`/api/health/check/${ip}`,
-			{ 
-				params: { 
-					include_ports: includePorts,
-					include_dns: true
-				},
-				timeout: 30000 
-			}
-		);
-		localMetrics.value = response.data;
-	} catch (err: any) {
+		localMetrics.value = await healthApi.checkDeviceHealth(ip);
+	} catch (err: unknown) {
 		console.error('Health check failed:', err);
-		error.value = err.response?.data?.detail || err.message || 'Failed to connect to health service';
+		const axiosError = err as { response?: { data?: { detail?: string } }; message?: string };
+		error.value = axiosError.response?.data?.detail || axiosError.message || 'Failed to connect to health service';
 	} finally {
 		loading.value = false;
 	}
@@ -2380,21 +2371,20 @@ async function loadTestIPs() {
 
 	try {
 		// First try to get configuration
-		const configResponse = await axios.get<{ gateway_ip: string; test_ips: GatewayTestIP[]; enabled: boolean }>(
-			`/api/health/gateway/${ip}/test-ips`
-		);
-		testIPs.value = configResponse.data.test_ips || [];
+		const config = await healthApi.getGatewayTestIPsConfig(ip);
+		testIPs.value = config.test_ips || [];
 
 		// Then get cached metrics
 		await fetchTestIPMetrics();
-	} catch (err: any) {
-		if (err.response?.status === 404) {
+	} catch (err: unknown) {
+		const axiosError = err as { response?: { status?: number; data?: { detail?: string } }; message?: string };
+		if (axiosError.response?.status === 404) {
 			// No test IPs configured yet - that's fine
 			testIPs.value = [];
 			testIPMetrics.value = [];
 		} else {
 			console.error('Failed to load test IPs:', err);
-			testIPsError.value = err.response?.data?.detail || err.message || 'Failed to load test IPs';
+			testIPsError.value = axiosError.response?.data?.detail || axiosError.message || 'Failed to load test IPs';
 		}
 	} finally {
 		testIPsLoading.value = false;
@@ -2406,11 +2396,9 @@ async function fetchTestIPMetrics() {
 	if (!ip || testIPs.value.length === 0) return;
 
 	try {
-		const response = await axios.get<GatewayTestIPsResponse>(
-			`/api/health/gateway/${ip}/test-ips/cached`
-		);
-		testIPMetrics.value = response.data.test_ips || [];
-	} catch (err: any) {
+		const response = await healthApi.getGatewayTestIPsCached(ip);
+		testIPMetrics.value = response.test_ips || [];
+	} catch (err: unknown) {
 		console.error('Failed to fetch test IP metrics:', err);
 	}
 }
@@ -2423,16 +2411,14 @@ async function saveTestIPs() {
 	testIPsError.value = null;
 
 	try {
-		await axios.post(`/api/health/gateway/${ip}/test-ips`, {
-			gateway_ip: ip,
-			test_ips: testIPs.value
-		});
+		await healthApi.saveGatewayTestIPs(ip, testIPs.value);
 
 		// Immediately check the test IPs
 		await checkTestIPsNow();
-	} catch (err: any) {
+	} catch (err: unknown) {
 		console.error('Failed to save test IPs:', err);
-		testIPsError.value = err.response?.data?.detail || err.message || 'Failed to save test IPs';
+		const axiosError = err as { response?: { data?: { detail?: string } }; message?: string };
+		testIPsError.value = axiosError.response?.data?.detail || axiosError.message || 'Failed to save test IPs';
 	} finally {
 		testIPsLoading.value = false;
 	}
@@ -2445,13 +2431,12 @@ async function checkTestIPsNow() {
 	testIPsLoading.value = true;
 
 	try {
-		const response = await axios.get<GatewayTestIPsResponse>(
-			`/api/health/gateway/${ip}/test-ips/check`
-		);
-		testIPMetrics.value = response.data.test_ips || [];
-	} catch (err: any) {
+		const response = await healthApi.checkGatewayTestIPs(ip);
+		testIPMetrics.value = response.test_ips || [];
+	} catch (err: unknown) {
 		console.error('Failed to check test IPs:', err);
-		testIPsError.value = err.response?.data?.detail || err.message || 'Failed to check test IPs';
+		const axiosError = err as { response?: { data?: { detail?: string } }; message?: string };
+		testIPsError.value = axiosError.response?.data?.detail || axiosError.message || 'Failed to check test IPs';
 	} finally {
 		testIPsLoading.value = false;
 	}
@@ -2499,7 +2484,7 @@ function removeTestIP(ip: string) {
 		// Remove configuration entirely
 		const gatewayIp = props.node?.ip;
 		if (gatewayIp) {
-			axios.delete(`/api/health/gateway/${gatewayIp}/test-ips`).catch(console.error);
+			healthApi.deleteGatewayTestIPs(gatewayIp).catch(console.error);
 		}
 	} else {
 		saveTestIPs();
@@ -2554,11 +2539,11 @@ async function loadStoredSpeedTest() {
 	if (!ip) return;
 
 	try {
-		const response = await axios.get<SpeedTestResult>(`/api/health/gateway/${ip}/speedtest`);
-		speedTestResult.value = response.data;
-	} catch (err: any) {
+		speedTestResult.value = await healthApi.getSpeedTestResult(ip);
+	} catch (err: unknown) {
 		// 404 means no stored results - that's fine, not an error
-		if (err.response?.status !== 404) {
+		const axiosError = err as { response?: { status?: number } };
+		if (axiosError.response?.status !== 404) {
 			console.error('Failed to load stored speed test:', err);
 		}
 		// Don't set error - just means no previous test
@@ -2573,18 +2558,16 @@ async function runSpeedTest() {
 
 	try {
 		// Use gateway-specific endpoint if we have a gateway IP
-		const endpoint = ip ? `/api/health/gateway/${ip}/speedtest` : '/api/health/speedtest';
-		const response = await axios.post<SpeedTestResult>(endpoint, {}, {
-			timeout: 120000 // 2 minute timeout
-		});
-		speedTestResult.value = response.data;
+		const result = await healthApi.runSpeedTest(ip);
+		speedTestResult.value = result;
 		
-		if (!response.data.success) {
-			speedTestError.value = response.data.error_message || 'Speed test failed';
+		if (!result.success) {
+			speedTestError.value = result.error_message || 'Speed test failed';
 		}
-	} catch (err: any) {
+	} catch (err: unknown) {
 		console.error('Speed test failed:', err);
-		speedTestError.value = err.response?.data?.detail || err.message || 'Failed to run speed test';
+		const axiosError = err as { response?: { data?: { detail?: string } }; message?: string };
+		speedTestError.value = axiosError.response?.data?.detail || axiosError.message || 'Failed to run speed test';
 	} finally {
 		speedTestRunning.value = false;
 	}

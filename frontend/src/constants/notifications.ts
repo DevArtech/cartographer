@@ -1,0 +1,103 @@
+/**
+ * Notification UI constants
+ * 
+ * Labels, icons, and display information for notification types.
+ * These are UI concerns and should not be in composables or types.
+ */
+
+import type { NotificationType, NotificationPriority } from '../types/notifications';
+
+export interface NotificationTypeInfo {
+  label: string;
+  icon: string;
+  description: string;
+  defaultPriority: NotificationPriority;
+}
+
+export const NOTIFICATION_TYPE_INFO: Record<NotificationType, NotificationTypeInfo> = {
+  device_offline: {
+    label: 'Device Offline',
+    icon: '🔴',
+    description: 'When a device stops responding',
+    defaultPriority: 'high',
+  },
+  device_online: {
+    label: 'Device Online',
+    icon: '🟢',
+    description: 'When a device comes back online',
+    defaultPriority: 'low',
+  },
+  device_degraded: {
+    label: 'Device Degraded',
+    icon: '🟡',
+    description: 'When a device has degraded performance',
+    defaultPriority: 'medium',
+  },
+  anomaly_detected: {
+    label: 'Anomaly Detected',
+    icon: '⚠️',
+    description: 'ML-detected unusual behavior',
+    defaultPriority: 'high',
+  },
+  high_latency: {
+    label: 'High Latency',
+    icon: '🐌',
+    description: 'Unusual latency spikes',
+    defaultPriority: 'medium',
+  },
+  packet_loss: {
+    label: 'Packet Loss',
+    icon: '📉',
+    description: 'Significant packet loss',
+    defaultPriority: 'medium',
+  },
+  isp_issue: {
+    label: 'ISP Issue',
+    icon: '🌐',
+    description: 'Internet connectivity problems',
+    defaultPriority: 'high',
+  },
+  security_alert: {
+    label: 'Security Alert',
+    icon: '🔒',
+    description: 'Security-related notifications',
+    defaultPriority: 'critical',
+  },
+  scheduled_maintenance: {
+    label: 'Maintenance',
+    icon: '🔧',
+    description: 'Planned maintenance notices',
+    defaultPriority: 'low',
+  },
+  system_status: {
+    label: 'System Status',
+    icon: 'ℹ️',
+    description: 'General system updates',
+    defaultPriority: 'low',
+  },
+  cartographer_down: {
+    label: 'Cartographer Down',
+    icon: '🚨',
+    description: 'When Cartographer service goes offline',
+    defaultPriority: 'critical',
+  },
+  cartographer_up: {
+    label: 'Cartographer Up',
+    icon: '✅',
+    description: 'When Cartographer service comes back online',
+    defaultPriority: 'medium',
+  },
+};
+
+export interface PriorityInfo {
+  label: string;
+  color: string;
+}
+
+export const PRIORITY_INFO: Record<NotificationPriority, PriorityInfo> = {
+  low: { label: 'Low', color: 'emerald' },
+  medium: { label: 'Medium', color: 'amber' },
+  high: { label: 'High', color: 'orange' },
+  critical: { label: 'Critical', color: 'red' },
+};
+

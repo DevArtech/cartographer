@@ -311,7 +311,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
-import axios from 'axios';
+import * as assistantApi from '../api/assistant';
 import { marked } from 'marked';
 import { apiUrl } from '../config';
 
@@ -408,34 +408,34 @@ function getAuthToken(): string | null {
 // Check rate limit status proactively
 async function checkRateLimitStatus() {
 	try {
-		const response = await axios.get('/api/assistant/chat/limit');
-		const data = response.data;
+		const data = await assistantApi.getRateLimitStatus();
 		
 		// Store the full rate limit info
 		rateLimitInfo.value = {
-			used: data.used,
+			used: (data as { used?: number }).used ?? 0,
 			limit: data.limit,
 			remaining: data.remaining,
-			resets_in_seconds: data.resets_in_seconds,
-			is_exempt: data.is_exempt || false,
+			resets_in_seconds: (data as { resets_in_seconds?: number }).resets_in_seconds ?? 0,
+			is_exempt: (data as { is_exempt?: boolean }).is_exempt || false,
 		};
 		
 		// Exempt users never get rate limited
-		if (data.is_exempt) {
+		if (rateLimitInfo.value.is_exempt) {
 			rateLimited.value = false;
 			rateLimitMessage.value = null;
 		} else if (data.is_limited) {
 			rateLimited.value = true;
-			rateLimitMessage.value = `You've used all ${data.limit} daily chats. Resets in ${formatTimeUntilReset(data.resets_in_seconds)}.`;
+			rateLimitMessage.value = `You've used all ${data.limit} daily chats. Resets in ${formatTimeUntilReset(rateLimitInfo.value.resets_in_seconds)}.`;
 		} else {
 			rateLimited.value = false;
 			rateLimitMessage.value = null;
 		}
-	} catch (err: any) {
+	} catch (err: unknown) {
 		// If we get a 429, we're rate limited
-		if (err.response?.status === 429) {
+		const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
+		if (axiosError.response?.status === 429) {
 			rateLimited.value = true;
-			rateLimitMessage.value = err.response?.data?.detail || 'Daily chat limit exceeded. Please try again tomorrow.';
+			rateLimitMessage.value = axiosError.response?.data?.detail || 'Daily chat limit exceeded. Please try again tomorrow.';
 		} else {
 			// Don't block the UI for other errors, just log
 			console.error('Failed to check rate limit status:', err);
@@ -478,8 +478,8 @@ onUnmounted(() => {
 
 async function fetchProviders() {
 	try {
-		const response = await axios.get('/api/assistant/config');
-		const providers = response.data.providers || [];
+		const config = await assistantApi.getAssistantConfig();
+		const providers = config.providers || [];
 		
 		// Store all providers for display
 		allProviders.value = providers;
@@ -591,15 +591,12 @@ function formatModelName(model: string): string {
 
 async function fetchContext() {
 	try {
-		const params: Record<string, any> = {};
-		if (props.networkId !== undefined) {
-			params.network_id = props.networkId;
-		}
-		const response = await axios.get('/api/assistant/context', { params });
-		contextSummary.value = response.data;
+		const data = await assistantApi.getContext(props.networkId);
+		contextSummary.value = data as ContextSummary;
 		
 		// Check if context is actually available or loading
-		if (response.data.loading || response.data.total_nodes === 0) {
+		const contextData = data as { loading?: boolean; total_nodes?: number };
+		if (contextData.loading || contextData.total_nodes === 0) {
 			contextLoading.value = true;
 			// Start polling for context status
 			startContextStatusPolling();
@@ -616,12 +613,12 @@ async function fetchContext() {
 
 async function fetchContextStatus() {
 	try {
-		const params: Record<string, any> = {};
-		if (props.networkId !== undefined) {
-			params.network_id = props.networkId;
-		}
-		const response = await axios.get('/api/assistant/context/status', { params });
-		const status: ContextStatus = response.data;
+		const data = await assistantApi.getContextStatus(props.networkId);
+		const status: ContextStatus = {
+			snapshot_available: (data as { snapshot_available?: boolean }).snapshot_available ?? false,
+			loading: !data.needs_refresh,
+			ready: !data.needs_refresh,
+		};
 		
 		if (status.ready && status.snapshot_available) {
 			contextLoading.value = false;
@@ -654,12 +651,7 @@ async function refreshContext() {
 	
 	contextRefreshing.value = true;
 	try {
-		const params: Record<string, any> = {};
-		if (props.networkId !== undefined) {
-			params.network_id = props.networkId;
-		}
-		// Call the refresh endpoint
-		await axios.post('/api/assistant/context/refresh', null, { params });
+		await assistantApi.refreshContext(props.networkId);
 		// Then fetch the updated context
 		await fetchContext();
 	} catch (err) {

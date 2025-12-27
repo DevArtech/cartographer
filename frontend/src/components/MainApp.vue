@@ -569,7 +569,8 @@
 
 <script lang="ts" setup>
 import { ref, watch, nextTick, onMounted, onBeforeUnmount, computed } from "vue";
-import axios from "axios";
+import * as networksApi from "../api/networks";
+import client from "../api/client";
 import MapControls from "./MapControls.vue";
 import DeviceList from "./DeviceList.vue";
 import NetworkMap from "./NetworkMap.vue";
@@ -906,16 +907,10 @@ function triggerAutoSave() {
 		clearTimeout(autoSaveTimer);
 	}
 	autoSaveTimer = setTimeout(async () => {
-		if (parsed.value && hasUnsavedChanges.value) {
+		if (parsed.value && hasUnsavedChanges.value && props.networkId) {
 			try {
 				const layout = exportLayout(parsed.value.root);
-				if (props.networkId) {
-					// Save to network-specific endpoint
-					await axios.post(`/api/networks/${props.networkId}/layout`, { layout_data: layout });
-				} else {
-					// Legacy: save to old endpoint
-				await axios.post('/api/save-layout', layout);
-				}
+				await networksApi.saveNetworkLayout(props.networkId, layout);
 				savedStateHash.value = currentStateHash.value;
 				console.log('[Auto-save] Network map saved');
 			} catch (error) {
@@ -1599,8 +1594,8 @@ function downloadHref(line: string): string | null {
 
 async function downloadNetworkMap(url: string) {
 	try {
-		// Use axios which already has the auth token configured
-		const response = await axios.get(url, { responseType: 'blob' });
+		// Use client which already has the auth token configured
+		const response = await client.get(url, { responseType: 'blob' });
 		
 		// Create a blob URL and trigger download
 		const blob = new Blob([response.data], { type: 'text/plain' });

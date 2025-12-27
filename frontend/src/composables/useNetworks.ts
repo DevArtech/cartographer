@@ -1,57 +1,34 @@
-import { ref } from "vue";
-import axios from "axios";
-import type { SavedLayout } from "./useMapLayout";
+/**
+ * Networks composable
+ * 
+ * Manages network state and orchestrates network API calls.
+ */
 
-export interface Network {
-	id: string; // UUID string
-	name: string;
-	description: string | null;
-	is_active: boolean;
-	created_at: string;
-	updated_at: string;
-	last_sync_at: string | null;
-	owner_id: string | null;
-	is_owner: boolean;
-	permission: "viewer" | "editor" | "admin" | null;
-}
+import { ref } from 'vue';
+import * as networksApi from '../api/networks';
+import { extractErrorMessage } from '../api/client';
+import type { SavedLayout } from '../types/layout';
 
-export interface NetworkLayoutResponse {
-	id: string; // UUID string
-	name: string;
-	layout_data: SavedLayout | null;
-	updated_at: string;
-}
+// Re-export types for backwards compatibility
+export type {
+  Network,
+  NetworkLayoutResponse,
+  CreateNetworkData,
+  UpdateNetworkData,
+  NetworkPermissionRole,
+  NetworkPermission,
+  CreateNetworkPermission,
+} from '../api/networks';
 
-export interface CreateNetworkData {
-	name: string;
-	description?: string;
-}
-
-export interface UpdateNetworkData {
-	name?: string;
-	description?: string;
-}
-
-// Network permission types
-export type NetworkPermissionRole = "viewer" | "editor";
-
-export interface NetworkPermission {
-	id: number;
-	network_id: string; // UUID string
-	user_id: string;
-	role: NetworkPermissionRole;
-	created_at: string;
-	username?: string;
-}
-
-export interface CreateNetworkPermission {
-	user_id: string;
-	role: NetworkPermissionRole;
-}
-
-export interface UpdateNetworkPermission {
-	role: NetworkPermissionRole;
-}
+// Import types for local use
+import type {
+  Network,
+  NetworkLayoutResponse,
+  CreateNetworkData,
+  UpdateNetworkData,
+  NetworkPermission,
+  CreateNetworkPermission,
+} from '../api/networks';
 
 // Shared state across components
 const networks = ref<Network[]>([]);
@@ -59,178 +36,155 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 export function useNetworks() {
-	// Clear networks state (call when switching accounts)
-	// Sets loading to true to show loading state instead of "no networks"
-	function clearNetworks(): void {
-		networks.value = [];
-		error.value = null;
-		loading.value = true;
-	}
+  // Clear networks state (call when switching accounts)
+  function clearNetworks(): void {
+    networks.value = [];
+    error.value = null;
+    loading.value = true;
+  }
 
-	async function fetchNetworks(): Promise<void> {
-		loading.value = true;
-		error.value = null;
+  async function fetchNetworks(): Promise<void> {
+    loading.value = true;
+    error.value = null;
 
-		// Log the current auth header for debugging
-		const authHeader = axios.defaults.headers.common["Authorization"];
-		console.log("[Networks] Fetching networks, auth header present:", !!authHeader);
+    console.log('[Networks] Fetching networks');
 
-		try {
-			// Add cache-busting to ensure fresh data after login/logout
-			const response = await axios.get<Network[]>("/api/networks", {
-				headers: {
-					"Cache-Control": "no-cache, no-store, must-revalidate",
-					"Pragma": "no-cache",
-				},
-				params: {
-					_t: Date.now(), // Cache buster
-				},
-			});
-			console.log("[Networks] Fetched", response.data.length, "networks");
-			networks.value = response.data;
-		} catch (e: any) {
-			console.error("[Networks] Fetch failed:", e.response?.status, e.message);
-			error.value = e.response?.data?.detail || e.message || "Failed to fetch networks";
-			const err = new Error(error.value!) as Error & { status?: number };
-			err.status = e.response?.status;
-			throw err;
-		} finally {
-			loading.value = false;
-		}
-	}
+    try {
+      const data = await networksApi.fetchNetworks();
+      console.log('[Networks] Fetched', data.length, 'networks');
+      networks.value = data;
+    } catch (e: unknown) {
+      const axiosError = e as { response?: { status?: number }; message?: string };
+      console.error('[Networks] Fetch failed:', axiosError.response?.status, axiosError.message);
+      error.value = extractErrorMessage(e);
+      const err = new Error(error.value!) as Error & { status?: number };
+      err.status = axiosError.response?.status;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  }
 
-	async function createNetwork(data: CreateNetworkData): Promise<Network> {
-		try {
-			const response = await axios.post<Network>("/api/networks", data);
-			// Add to local state
-			networks.value.unshift(response.data);
-			return response.data;
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to create network";
-			throw new Error(message);
-		}
-	}
+  async function createNetwork(data: CreateNetworkData): Promise<Network> {
+    try {
+      const network = await networksApi.createNetwork(data);
+      // Add to local state
+      networks.value.unshift(network);
+      return network;
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	async function getNetwork(id: string): Promise<Network> {
-		try {
-			const response = await axios.get<Network>(`/api/networks/${id}`);
-			return response.data;
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to get network";
-			const error = new Error(message) as Error & { status?: number };
-			error.status = e.response?.status;
-			throw error;
-		}
-	}
+  async function getNetwork(id: string): Promise<Network> {
+    try {
+      return await networksApi.getNetwork(id);
+    } catch (e: unknown) {
+      const axiosError = e as { response?: { status?: number } };
+      const message = extractErrorMessage(e);
+      const err = new Error(message) as Error & { status?: number };
+      err.status = axiosError.response?.status;
+      throw err;
+    }
+  }
 
-	async function updateNetwork(id: string, data: UpdateNetworkData): Promise<Network> {
-		try {
-			const response = await axios.patch<Network>(`/api/networks/${id}`, data);
-			// Update local state
-			const index = networks.value.findIndex((n) => n.id === id);
-			if (index !== -1) {
-				networks.value[index] = response.data;
-			}
-			return response.data;
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to update network";
-			throw new Error(message);
-		}
-	}
+  async function updateNetwork(id: string, data: UpdateNetworkData): Promise<Network> {
+    try {
+      const network = await networksApi.updateNetwork(id, data);
+      // Update local state
+      const index = networks.value.findIndex((n) => n.id === id);
+      if (index !== -1) {
+        networks.value[index] = network;
+      }
+      return network;
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	async function deleteNetwork(id: string): Promise<void> {
-		try {
-			await axios.delete(`/api/networks/${id}`);
-			// Remove from local state
-			networks.value = networks.value.filter((n) => n.id !== id);
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to delete network";
-			throw new Error(message);
-		}
-	}
+  async function deleteNetwork(id: string): Promise<void> {
+    try {
+      await networksApi.deleteNetwork(id);
+      // Remove from local state
+      networks.value = networks.value.filter((n) => n.id !== id);
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	async function getNetworkLayout(id: string): Promise<NetworkLayoutResponse> {
-		try {
-			const response = await axios.get<NetworkLayoutResponse>(`/api/networks/${id}/layout`);
-			return response.data;
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to get network layout";
-			throw new Error(message);
-		}
-	}
+  async function getNetworkLayout(id: string): Promise<NetworkLayoutResponse> {
+    try {
+      return await networksApi.getNetworkLayout(id);
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	async function saveNetworkLayout(id: string, layoutData: SavedLayout): Promise<NetworkLayoutResponse> {
-		try {
-			const response = await axios.post<NetworkLayoutResponse>(`/api/networks/${id}/layout`, {
-				layout_data: layoutData,
-			});
-			return response.data;
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to save network layout";
-			throw new Error(message);
-		}
-	}
+  async function saveNetworkLayout(id: string, layoutData: SavedLayout): Promise<NetworkLayoutResponse> {
+    try {
+      return await networksApi.saveNetworkLayout(id, layoutData);
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	// Check if user can write to a specific network
-	function canWriteNetwork(network: Network): boolean {
-		if (network.is_owner) return true;
-		return network.permission === "editor" || network.permission === "admin";
-	}
+  // Check if user can write to a specific network
+  function canWriteNetwork(network: Network): boolean {
+    if (network.is_owner) return true;
+    return network.permission === 'editor' || network.permission === 'admin';
+  }
 
-	// ==================== Network Permission Management ====================
+  // ==================== Network Permission Management ====================
 
-	async function listNetworkPermissions(networkId: string): Promise<NetworkPermission[]> {
-		try {
-			const response = await axios.get<NetworkPermission[]>(`/api/networks/${networkId}/permissions`);
-			return response.data;
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to get network permissions";
-			throw new Error(message);
-		}
-	}
+  async function listNetworkPermissions(networkId: string): Promise<NetworkPermission[]> {
+    try {
+      return await networksApi.listNetworkPermissions(networkId);
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	async function addNetworkPermission(networkId: string, data: CreateNetworkPermission): Promise<NetworkPermission> {
-		try {
-			const response = await axios.post<NetworkPermission>(`/api/networks/${networkId}/permissions`, data);
-			return response.data;
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to add user to network";
-			throw new Error(message);
-		}
-	}
+  async function addNetworkPermission(
+    networkId: string,
+    data: CreateNetworkPermission
+  ): Promise<NetworkPermission> {
+    try {
+      return await networksApi.addNetworkPermission(networkId, data);
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	async function removeNetworkPermission(networkId: string, userId: string): Promise<void> {
-		try {
-			await axios.delete(`/api/networks/${networkId}/permissions/${userId}`);
-		} catch (e: any) {
-			const message = e.response?.data?.detail || e.message || "Failed to remove user from network";
-			throw new Error(message);
-		}
-	}
+  async function removeNetworkPermission(networkId: string, userId: string): Promise<void> {
+    try {
+      await networksApi.removeNetworkPermission(networkId, userId);
+    } catch (e) {
+      throw new Error(extractErrorMessage(e));
+    }
+  }
 
-	return {
-		// State
-		networks,
-		loading,
-		error,
+  return {
+    // State
+    networks,
+    loading,
+    error,
 
-		// Actions
-		clearNetworks,
-		fetchNetworks,
-		createNetwork,
-		getNetwork,
-		updateNetwork,
-		deleteNetwork,
-		getNetworkLayout,
-		saveNetworkLayout,
+    // Actions
+    clearNetworks,
+    fetchNetworks,
+    createNetwork,
+    getNetwork,
+    updateNetwork,
+    deleteNetwork,
+    getNetworkLayout,
+    saveNetworkLayout,
 
-		// Network permissions
-		listNetworkPermissions,
-		addNetworkPermission,
-		removeNetworkPermission,
+    // Network permissions
+    listNetworkPermissions,
+    addNetworkPermission,
+    removeNetworkPermission,
 
-		// Helpers
-		canWriteNetwork,
-	};
+    // Helpers
+    canWriteNetwork,
+  };
 }
-
