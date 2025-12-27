@@ -7,24 +7,24 @@ This script:
 3. Updates foreign key references
 4. Replaces the old integer columns with UUID columns
 
-Run during application startup or manually:
-    python -m app.migrations.migrate_network_id_to_uuid
+Run via CLI:
+    python -m app.migrations uuid
 
 IMPORTANT: This migration must run BEFORE the application uses the new UUID model.
 Back up your database before running this migration.
 """
 
-import asyncio
 import uuid
 import logging
-from typing import Dict
 
 from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
 
-from ..database import async_session_maker, engine
+from ..database import async_session_maker
 
 logger = logging.getLogger(__name__)
+
+# Integer types that indicate migration is needed
+INTEGER_COLUMN_TYPES = ("integer", "bigint", "int4", "int8")
 
 
 async def check_column_type(session, table_name: str, column_name: str) -> str:
@@ -63,7 +63,7 @@ async def migrate_network_ids_to_uuid() -> bool:
             logger.info("networks.id is already UUID, skipping migration")
             return False
         
-        if id_type not in ("integer", "bigint", "int4", "int8"):
+        if id_type not in INTEGER_COLUMN_TYPES:
             logger.warning(f"Unexpected column type for networks.id: {id_type}")
             return False
         
@@ -79,7 +79,7 @@ async def migrate_network_ids_to_uuid() -> bool:
                 # Still need to migrate the schema even if no data
             
             # Create mapping: old_id -> new_uuid
-            id_mapping: Dict[int, str] = {}
+            id_mapping: dict[int, str] = {}
             for old_id in existing_ids:
                 id_mapping[old_id] = str(uuid.uuid4())
             
@@ -229,18 +229,15 @@ async def migrate_network_ids_to_uuid() -> bool:
             raise
 
 
-async def run_migration():
-    """Run the migration (for command-line execution)."""
-    logging.basicConfig(level=logging.INFO)
+async def run_migration() -> bool:
+    """
+    Run the UUID migration.
     
-    result = await migrate_network_ids_to_uuid()
+    This is the main entry point for the migration. It converts
+    network IDs from integer to UUID format.
     
-    if result:
-        print("Migration completed successfully!")
-    else:
-        print("Migration skipped (already using UUID or no table found)")
-
-
-if __name__ == "__main__":
-    asyncio.run(run_migration())
+    Returns:
+        True if migration was performed, False if skipped
+    """
+    return await migrate_network_ids_to_uuid()
 

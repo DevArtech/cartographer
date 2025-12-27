@@ -5,38 +5,43 @@ Automatically tracks endpoint usage statistics and reports them
 to the metrics service for aggregation.
 """
 
-import os
-import time
 import asyncio
 import logging
-from datetime import datetime
-from typing import Callable, List
+import time
 from collections import deque
+from collections.abc import Callable
+from datetime import datetime
 
 import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from ..config import get_settings
+
 logger = logging.getLogger(__name__)
 
-# Configuration
-SERVICE_NAME = "backend"
-METRICS_SERVICE_URL = os.environ.get("METRICS_SERVICE_URL", "http://localhost:8003")
-BATCH_SIZE = 10  # Send records in batches
-BATCH_INTERVAL_SECONDS = 5.0  # Send batch every N seconds
+# Excluded paths and prefixes (not configurable - these are internal)
 EXCLUDED_PATHS = {"/healthz", "/ready", "/", "/docs", "/openapi.json", "/redoc", "/favicon.png"}
-# Exclude metrics usage endpoints to prevent recursive tracking
 EXCLUDED_PREFIXES = ("/docs", "/openapi", "/assets", "/api/metrics/usage")
 
 
 class UsageRecord:
     """Simple record class for usage data."""
-    __slots__ = ["endpoint", "method", "status_code", "response_time_ms", "timestamp"]
+    __slots__ = ["endpoint", "method", "service_name", "status_code", "response_time_ms", "timestamp"]
     
-    def __init__(self, endpoint: str, method: str, status_code: int, response_time_ms: float, timestamp: datetime):
+    def __init__(
+        self,
+        endpoint: str,
+        method: str,
+        service_name: str,
+        status_code: int,
+        response_time_ms: float,
+        timestamp: datetime,
+    ):
         self.endpoint = endpoint
         self.method = method
+        self.service_name = service_name
         self.status_code = status_code
         self.response_time_ms = response_time_ms
         self.timestamp = timestamp
@@ -45,7 +50,7 @@ class UsageRecord:
         return {
             "endpoint": self.endpoint,
             "method": self.method,
-            "service": SERVICE_NAME,
+            "service": self.service_name,
             "status_code": self.status_code,
             "response_time_ms": self.response_time_ms,
             "timestamp": self.timestamp.isoformat(),
@@ -62,10 +67,11 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
     - Resilient: Continues operating even if metrics service is unavailable
     """
     
-    def __init__(self, app, service_name: str = SERVICE_NAME):
+    def __init__(self, app, service_name: str = "backend"):
         super().__init__(app)
         self.service_name = service_name
-        self._buffer: deque[UsageRecord] = deque(maxlen=1000)  # Limit buffer size
+        self._settings = get_settings()
+        self._buffer: deque[UsageRecord] = deque(maxlen=1000)
         self._client: httpx.AsyncClient | None = None
         self._flush_task: asyncio.Task | None = None
         self._running = False
@@ -74,7 +80,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         """Get or create HTTP client."""
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                base_url=METRICS_SERVICE_URL,
+                base_url=self._settings.metrics_service_url,
                 timeout=5.0,
             )
         return self._client
@@ -89,7 +95,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         """Background loop that periodically flushes the buffer."""
         while self._running:
             try:
-                await asyncio.sleep(BATCH_INTERVAL_SECONDS)
+                await asyncio.sleep(self._settings.usage_batch_interval_seconds)
                 await self._flush_buffer()
             except asyncio.CancelledError:
                 break
@@ -102,8 +108,8 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             return
         
         # Collect records to send
-        records_to_send: List[dict] = []
-        while self._buffer and len(records_to_send) < BATCH_SIZE:
+        records_to_send: list[dict] = []
+        while self._buffer and len(records_to_send) < self._settings.usage_batch_size:
             records_to_send.append(self._buffer.popleft().to_dict())
         
         if not records_to_send:
@@ -119,27 +125,24 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             if response.status_code != 200:
                 logger.debug(f"Failed to report usage: {response.status_code}")
                 # Put records back in buffer on failure (at the front)
-                for record_dict in reversed(records_to_send):
-                    record = UsageRecord(
-                        endpoint=record_dict["endpoint"],
-                        method=record_dict["method"],
-                        status_code=record_dict["status_code"],
-                        response_time_ms=record_dict["response_time_ms"],
-                        timestamp=datetime.fromisoformat(record_dict["timestamp"]),
-                    )
-                    self._buffer.appendleft(record)
+                self._restore_records(records_to_send)
         except Exception as e:
             logger.debug(f"Failed to report usage to metrics service: {e}")
             # Put records back on failure
-            for record_dict in reversed(records_to_send):
-                record = UsageRecord(
-                    endpoint=record_dict["endpoint"],
-                    method=record_dict["method"],
-                    status_code=record_dict["status_code"],
-                    response_time_ms=record_dict["response_time_ms"],
-                    timestamp=datetime.fromisoformat(record_dict["timestamp"]),
-                )
-                self._buffer.appendleft(record)
+            self._restore_records(records_to_send)
+    
+    def _restore_records(self, records_to_send: list[dict]) -> None:
+        """Restore records to buffer after a failed send attempt."""
+        for record_dict in reversed(records_to_send):
+            record = UsageRecord(
+                endpoint=record_dict["endpoint"],
+                method=record_dict["method"],
+                service_name=record_dict["service"],
+                status_code=record_dict["status_code"],
+                response_time_ms=record_dict["response_time_ms"],
+                timestamp=datetime.fromisoformat(record_dict["timestamp"]),
+            )
+            self._buffer.appendleft(record)
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and track usage."""
@@ -170,6 +173,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         record = UsageRecord(
             endpoint=path,
             method=request.method,
+            service_name=self.service_name,
             status_code=response.status_code,
             response_time_ms=response_time_ms,
             timestamp=datetime.utcnow(),
@@ -179,7 +183,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         self._buffer.append(record)
         
         # Trigger immediate flush if buffer is getting full
-        if len(self._buffer) >= BATCH_SIZE:
+        if len(self._buffer) >= self._settings.usage_batch_size:
             asyncio.create_task(self._flush_buffer())
         
         return response

@@ -43,15 +43,15 @@ class TestHealthProxyRouter:
     @pytest.fixture(autouse=True)
     def mock_http_pool(self):
         """Mock http_pool for health proxy tests"""
-        with patch('app.routers.health_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=create_mock_response())
             yield mock
     
     async def test_proxy_request_forwards_correctly(self, mock_http_pool):
-        """proxy_request should forward to health service"""
-        from app.routers.health_proxy import proxy_request
+        """proxy_health_request should forward to health service"""
+        from app.services.proxy_service import proxy_health_request
         
-        await proxy_request("GET", "/check/192.168.1.1", params={"include_ports": True})
+        await proxy_health_request("GET", "/check/192.168.1.1", params={"include_ports": True})
         
         mock_http_pool.request.assert_called_once_with(
             service_name="health",
@@ -59,6 +59,7 @@ class TestHealthProxyRouter:
             path="/api/health/check/192.168.1.1",
             params={"include_ports": True},
             json_body=None,
+            headers=None,
             timeout=30.0
         )
     
@@ -332,18 +333,19 @@ class TestAuthProxyRouter:
     @pytest.fixture(autouse=True)
     def mock_http_pool(self):
         """Mock http_pool for auth proxy tests"""
-        with patch('app.routers.auth_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=create_mock_response())
             yield mock
     
     async def test_proxy_request_forwards_auth_header(self, mock_http_pool):
-        """proxy_request should forward Authorization header"""
-        from app.routers.auth_proxy import proxy_request
+        """proxy_auth_request should forward Authorization header"""
+        from app.services.proxy_service import proxy_auth_request
         
         mock_request = MagicMock()
-        mock_request.headers = {"Authorization": "Bearer test-token"}
+        mock_request.headers = MagicMock()
+        mock_request.headers.get = MagicMock(return_value="Bearer test-token")
         
-        await proxy_request("POST", "/api/auth/verify", mock_request)
+        await proxy_auth_request("POST", "/verify", mock_request)
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "Authorization" in call_kwargs["headers"]
@@ -619,15 +621,15 @@ class TestMetricsProxyRouter:
     @pytest.fixture(autouse=True)
     def mock_http_pool(self):
         """Mock http_pool for metrics proxy tests"""
-        with patch('app.routers.metrics_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=create_mock_response())
             yield mock
     
     async def test_proxy_request_forwards_correctly(self, mock_http_pool):
-        """proxy_request should forward to metrics service"""
-        from app.routers.metrics_proxy import proxy_request
+        """proxy_metrics_request should forward to metrics service"""
+        from app.services.proxy_service import proxy_metrics_request
         
-        await proxy_request("GET", "/snapshot")
+        await proxy_metrics_request("GET", "/snapshot")
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["service_name"] == "metrics"
@@ -923,15 +925,15 @@ class TestAssistantProxyRouter:
     @pytest.fixture(autouse=True)
     def mock_http_pool(self):
         """Mock http_pool for assistant proxy tests"""
-        with patch('app.routers.assistant_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=create_mock_response())
             yield mock
     
     async def test_proxy_request_forwards_correctly(self, mock_http_pool):
-        """proxy_request should forward to assistant service"""
-        from app.routers.assistant_proxy import proxy_request
+        """proxy_assistant_request should forward to assistant service"""
+        from app.services.proxy_service import proxy_request
         
-        await proxy_request("GET", "/config")
+        await proxy_request("assistant", "GET", "/config")
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["service_name"] == "assistant"
@@ -1041,7 +1043,7 @@ class TestAssistantProxyRouter:
         async def mock_aiter_bytes():
             yield b'data: {"type": "chunk"}\n\n'
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.aiter_bytes = mock_aiter_bytes
@@ -1110,7 +1112,7 @@ class TestAssistantProxyRouter:
         
         mock_request.json = AsyncMock(return_value={"message": "Hello"})
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 429
             mock_response.headers = {"Retry-After": "3600"}
@@ -1135,7 +1137,7 @@ class TestAssistantProxyRouter:
         
         mock_request.json = AsyncMock(return_value={"message": "Hello"})
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 401
             mock_response.aclose = AsyncMock()
@@ -1158,7 +1160,7 @@ class TestAssistantProxyRouter:
         
         mock_request.json = AsyncMock(return_value={"message": "Hello"})
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 400
             mock_response.aread = AsyncMock(return_value=b'{"detail": "Bad request"}')
@@ -1182,7 +1184,7 @@ class TestAssistantProxyRouter:
         
         mock_request.json = AsyncMock(return_value={"message": "Hello"})
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 429
             mock_response.headers = {}
@@ -1208,7 +1210,7 @@ class TestAssistantProxyRouter:
         
         mock_request.json = AsyncMock(return_value={"message": "Hello"})
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 500
             mock_response.aread = AsyncMock(side_effect=Exception("Read error"))
@@ -1235,7 +1237,7 @@ class TestAssistantProxyRouter:
             yield b'data: {"type": "chunk"}\n\n'
             raise RuntimeError("Stream error")
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.aiter_bytes = mock_aiter_bytes
@@ -1268,15 +1270,15 @@ class TestNotificationProxyRouter:
     @pytest.fixture(autouse=True)
     def mock_http_pool(self):
         """Mock http_pool for notification proxy tests"""
-        with patch('app.routers.notification_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=create_mock_response())
             yield mock
     
     async def test_proxy_request_forwards_correctly(self, mock_http_pool):
-        """proxy_request should forward to notification service"""
-        from app.routers.notification_proxy import proxy_request
+        """proxy_notification_request should forward to notification service"""
+        from app.services.proxy_service import proxy_notification_request
         
-        await proxy_request("GET", "/preferences", headers={"X-User-Id": "user-123"})
+        await proxy_notification_request("GET", "/preferences", headers={"X-User-Id": "user-123"})
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["service_name"] == "notification"
@@ -1517,7 +1519,7 @@ class TestNotificationProxyRouter:
         
         mock_db = AsyncMock()
         # Mock the get_network_member_user_ids to return a list of users
-        with patch('app.routers.notification_proxy.get_network_member_user_ids', new_callable=AsyncMock) as mock_get_users:
+        with patch('app.routers.notification.broadcast.get_network_member_user_ids', new_callable=AsyncMock) as mock_get_users:
             mock_get_users.return_value = ["user-1", "user-2"]
             await send_global_notification(request=mock_request, user=owner_user, db=mock_db)
         
@@ -1699,10 +1701,10 @@ class TestNotificationProxyRouter:
     
     async def test_get_discord_info_simple(self, mock_http_pool, owner_user):
         """get_discord_info should GET discord bot info"""
-        # Import the simple version (line 174)
-        from app.routers import notification_proxy
+        # Import from proxy_service
+        from app.services.proxy_service import proxy_notification_request
         # Call the simple get_discord_info (not the one with context_type param)
-        result = await notification_proxy.proxy_request("GET", "/discord/info")
+        result = await proxy_notification_request("GET", "/discord/info")
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/discord/info" in call_kwargs["path"]
@@ -1883,11 +1885,11 @@ class TestNotificationProxyRouter:
     
     async def test_get_user_discord_info_with_network(self, mock_http_pool, owner_user):
         """get_discord_info (user version) should GET with network_id"""
-        # There are two get_discord_info functions - this tests the user-specific one
-        from app.routers import notification_proxy
+        # Import from proxy_service
+        from app.services.proxy_service import proxy_notification_request
         
-        # Call proxy_request directly to test the path
-        await notification_proxy.proxy_request(
+        # Call proxy_notification_request directly to test the path
+        await proxy_notification_request(
             "GET",
             f"/users/{owner_user.user_id}/discord",
             params={"context_type": "network", "network_id": "net-123"},
@@ -1905,7 +1907,7 @@ class TestNotificationProxyRouter:
         mock_request.json = AsyncMock(return_value={"title": "Test", "message": "Hello"})
         mock_db = AsyncMock()
         
-        with patch('app.routers.notification_proxy.get_network_member_user_ids', new_callable=AsyncMock) as mock_get_members:
+        with patch('app.routers.notification.broadcast.get_network_member_user_ids', new_callable=AsyncMock) as mock_get_members:
             mock_get_members.return_value = ["user-1", "user-2"]
             
             await send_network_notification(
@@ -1927,7 +1929,7 @@ class TestNotificationProxyRouter:
         mock_request.json = AsyncMock(return_value={"title": "Test"})
         mock_db = AsyncMock()
         
-        with patch('app.routers.notification_proxy.get_network_member_user_ids', new_callable=AsyncMock) as mock_get_members:
+        with patch('app.routers.notification.broadcast.get_network_member_user_ids', new_callable=AsyncMock) as mock_get_members:
             mock_get_members.side_effect = Exception("Database error")
             
             with pytest.raises(HTTPException) as exc_info:

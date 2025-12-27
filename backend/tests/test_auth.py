@@ -69,7 +69,7 @@ class TestVerifyTokenWithAuthService:
     @pytest.fixture
     def mock_httpx(self):
         """Mock httpx.AsyncClient for auth service calls"""
-        with patch('app.dependencies.auth.httpx.AsyncClient') as mock:
+        with patch('app.services.auth_service.httpx.AsyncClient') as mock:
             yield mock
     
     async def test_valid_token_returns_user(self, mock_httpx, mock_auth_response):
@@ -160,7 +160,7 @@ class TestVerifyServiceToken:
     def test_valid_service_token(self):
         """Valid service token should return AuthenticatedUser"""
         import jwt
-        from app.dependencies.auth import verify_service_token, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import verify_service_token, settings
         
         # Create a valid service token
         payload = {
@@ -168,7 +168,7 @@ class TestVerifyServiceToken:
             "sub": "metrics-service",
             "username": "metrics",
         }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = verify_service_token(token)
         
@@ -180,14 +180,14 @@ class TestVerifyServiceToken:
     def test_non_service_token_returns_none(self):
         """Token without service flag should return None"""
         import jwt
-        from app.dependencies.auth import verify_service_token, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import verify_service_token, settings
         
         # Create a non-service token
         payload = {
             "sub": "user-123",
             "username": "testuser",
         }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = verify_service_token(token)
         
@@ -197,7 +197,7 @@ class TestVerifyServiceToken:
         """Expired service token should return None"""
         import jwt
         import time
-        from app.dependencies.auth import verify_service_token, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import verify_service_token, settings
         
         # Create an expired token
         payload = {
@@ -205,7 +205,7 @@ class TestVerifyServiceToken:
             "sub": "service",
             "exp": int(time.time()) - 3600  # Expired 1 hour ago
         }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = verify_service_token(token)
         
@@ -223,7 +223,7 @@ class TestVerifyServiceToken:
         """Generic exception during verification should return None"""
         from app.dependencies.auth import verify_service_token
         
-        with patch('app.dependencies.auth.jwt.decode', side_effect=Exception("Unexpected error")):
+        with patch('app.services.auth_service.jwt.decode', side_effect=Exception("Unexpected error")):
             user = verify_service_token("some-token")
             
             assert user is None
@@ -241,7 +241,7 @@ class TestGetCurrentUser:
     async def test_service_token_takes_priority(self):
         """Service token should be validated first"""
         import jwt
-        from app.dependencies.auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import get_current_user, settings
         
         # Create a valid service token
         payload = {
@@ -249,7 +249,7 @@ class TestGetCurrentUser:
             "sub": "metrics-service",
             "username": "metrics",
         }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         credentials = HTTPAuthorizationCredentials(
             scheme="Bearer",

@@ -17,8 +17,9 @@ class TestAppCreation:
         """create_app should return a FastAPI instance"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
             app = create_app()
             
             assert isinstance(app, FastAPI)
@@ -27,8 +28,9 @@ class TestAppCreation:
         """App should have the correct title"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
             app = create_app()
             
             assert app.title == "Cartographer Backend"
@@ -37,8 +39,9 @@ class TestAppCreation:
         """App should have CORS middleware configured"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
             app = create_app()
             
             # Check that CORS middleware is in the middleware stack
@@ -49,8 +52,9 @@ class TestAppCreation:
         """App should include all API routers"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
             app = create_app()
             
             # Get all route paths
@@ -71,12 +75,12 @@ class TestHealthzEndpoint:
         """Create a test client with mocked http_pool"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
-            app = create_app()
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
             
             # Mock the http_pool for healthz endpoint
-            with patch('app.main.http_pool') as mock_pool:
+            with patch('app.routers.health.http_pool') as mock_pool:
                 mock_pool._services = {
                     "health": MagicMock(
                         circuit_breaker=MagicMock(
@@ -92,6 +96,7 @@ class TestHealthzEndpoint:
                     )
                 }
                 
+                app = create_app()
                 yield TestClient(app, raise_server_exceptions=False)
     
     def test_healthz_returns_200(self, client):
@@ -121,6 +126,72 @@ class TestHealthzEndpoint:
         assert "failure_count" in data["services"]["health"]
 
 
+class TestReadyzEndpoint:
+    """Tests for the /ready endpoint"""
+    
+    @pytest.fixture
+    def client_ready(self):
+        """Create a test client with healthy http_pool"""
+        from app.main import create_app
+        
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
+            
+            with patch('app.routers.health.http_pool') as mock_pool:
+                mock_pool._services = {
+                    "health": MagicMock(
+                        circuit_breaker=MagicMock(
+                            state=MagicMock(value="closed"),
+                            failure_count=0
+                        )
+                    )
+                }
+                
+                app = create_app()
+                yield TestClient(app, raise_server_exceptions=False)
+    
+    @pytest.fixture
+    def client_degraded(self):
+        """Create a test client with open circuit"""
+        from app.main import create_app
+        
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
+            
+            with patch('app.routers.health.http_pool') as mock_pool:
+                mock_pool._services = {
+                    "health": MagicMock(
+                        circuit_breaker=MagicMock(
+                            state=MagicMock(value="open"),
+                            failure_count=5
+                        )
+                    )
+                }
+                
+                app = create_app()
+                yield TestClient(app, raise_server_exceptions=False)
+    
+    def test_ready_returns_200(self, client_ready):
+        """Ready endpoint should return 200"""
+        response = client_ready.get("/ready")
+        assert response.status_code == 200
+    
+    def test_ready_returns_ready_status(self, client_ready):
+        """Ready should return ready status when healthy"""
+        response = client_ready.get("/ready")
+        data = response.json()
+        assert data["status"] == "ready"
+    
+    def test_ready_returns_degraded_with_open_circuit(self, client_degraded):
+        """Ready should return degraded when circuit is open"""
+        response = client_degraded.get("/ready")
+        data = response.json()
+        assert data["status"] == "degraded"
+        assert "open_circuits" in data
+
+
 class TestLifespan:
     """Tests for application lifespan management"""
     
@@ -131,7 +202,7 @@ class TestLifespan:
         mock_app = MagicMock()
         
         with patch('app.main.init_db', new_callable=AsyncMock):
-            with patch('app.main.migrate_layout_to_database', new_callable=AsyncMock, return_value=False):
+            with patch('app.main.run_migrations', new_callable=AsyncMock):
                 with patch('app.main.http_pool') as mock_pool:
                     mock_pool.initialize_all = AsyncMock()
                     mock_pool.warm_up_all = AsyncMock(return_value={"service1": True})
@@ -151,7 +222,7 @@ class TestLifespan:
         mock_app = MagicMock()
         
         with patch('app.main.init_db', new_callable=AsyncMock):
-            with patch('app.main.migrate_layout_to_database', new_callable=AsyncMock, return_value=False):
+            with patch('app.main.run_migrations', new_callable=AsyncMock):
                 with patch('app.main.http_pool') as mock_pool:
                     mock_pool.initialize_all = AsyncMock()
                     mock_pool.warm_up_all = AsyncMock(return_value={
@@ -166,37 +237,60 @@ class TestLifespan:
                         pass
 
 
+class TestRunMigrations:
+    """Tests for migration runner"""
+    
+    async def test_run_migrations_handles_uuid_migration(self):
+        """run_migrations should handle UUID migration"""
+        from app.main import run_migrations
+        
+        with patch('app.main.migrate_network_ids_to_uuid', new_callable=AsyncMock, return_value=True) as mock_uuid:
+            with patch('app.main.migrate_layout_to_database', new_callable=AsyncMock, return_value=False):
+                await run_migrations()
+                mock_uuid.assert_called_once()
+    
+    async def test_run_migrations_handles_layout_migration(self):
+        """run_migrations should handle layout migration"""
+        from app.main import run_migrations
+        
+        with patch('app.main.migrate_network_ids_to_uuid', new_callable=AsyncMock, return_value=False):
+            with patch('app.main.migrate_layout_to_database', new_callable=AsyncMock, return_value=True) as mock_layout:
+                await run_migrations()
+                mock_layout.assert_called_once()
+    
+    async def test_run_migrations_handles_errors(self):
+        """run_migrations should handle errors gracefully"""
+        from app.main import run_migrations
+        
+        with patch('app.main.migrate_network_ids_to_uuid', new_callable=AsyncMock, side_effect=Exception("Test error")):
+            with patch('app.main.migrate_layout_to_database', new_callable=AsyncMock, return_value=False):
+                # Should not raise - errors are logged as warnings
+                await run_migrations()
+
+
 class TestDistPathConfiguration:
     """Tests for frontend dist path configuration"""
     
     def test_default_dist_path(self):
-        """Default dist path should be relative to main.py"""
-        # Clear environment variable to test default
-        with patch.dict(os.environ, {}, clear=True):
-            os.environ.pop("FRONTEND_DIST", None)
-            
-            # Re-import to get fresh module with default path
-            import importlib
-            import app.main
-            importlib.reload(app.main)
-            
-            # The default should be relative to the module
-            # ../../../frontend/dist from backend/app/main.py
-            expected_suffix = Path("frontend") / "dist"
-            assert app.main.DIST_PATH.name == "dist"
-    
-    def test_custom_dist_path_from_env(self):
-        """FRONTEND_DIST env var should override default path"""
-        custom_path = "/custom/frontend/path"
+        """Default dist path should be relative to config.py"""
+        from app.config import Settings
         
-        with patch.dict(os.environ, {"FRONTEND_DIST": custom_path}):
-            import importlib
-            import app.main
-            importlib.reload(app.main)
+        # Create settings with default (empty) frontend_dist
+        settings = Settings(frontend_dist="")
             
-            # Convert custom_path to platform-specific path for comparison
-            expected_path = str(Path(custom_path))
-            assert str(app.main.DIST_PATH) == expected_path
+        # The default should resolve to frontend/dist relative to config.py
+        assert settings.resolved_frontend_dist.name == "dist"
+        assert "frontend" in str(settings.resolved_frontend_dist)
+    
+    def test_custom_dist_path_from_settings(self):
+        """Settings.frontend_dist should override default path"""
+        from app.config import Settings
+        
+        custom_path = "/custom/frontend/path"
+        test_settings = Settings(frontend_dist=custom_path)
+            
+        # Verify the resolved path matches the custom path
+        assert str(test_settings.resolved_frontend_dist) == custom_path
 
 
 class TestStaticFileServing:
@@ -206,15 +300,16 @@ class TestStaticFileServing:
         """SPA routes should not be added if dist doesn't exist"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
+            
             app = create_app()
             
             routes = [route.path for route in app.routes]
             
             # Root and catch-all should not exist without dist
             spa_routes = [r for r in routes if r == "/" or r == "/{full_path:path}"]
-            # These should not be in routes when dist doesn't exist
             assert len(spa_routes) == 0
     
     def test_spa_routes_added_with_dist(self, tmp_path):
@@ -228,7 +323,10 @@ class TestStaticFileServing:
         assets_dir = dist_dir / "assets"
         assets_dir.mkdir()
         
-        with patch('app.main.DIST_PATH', dist_dir):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_dir
+            
             app = create_app()
             
             routes = [route.path for route in app.routes]
@@ -250,6 +348,8 @@ class TestAppModuleImports:
         from app.routers import metrics_proxy
         from app.routers import assistant_proxy
         from app.routers import notification_proxy
+        from app.routers import health
+        from app.routers import static
         
         # Verify each has a router
         assert hasattr(mapper, 'router')
@@ -258,25 +358,47 @@ class TestAppModuleImports:
         assert hasattr(metrics_proxy, 'router')
         assert hasattr(assistant_proxy, 'router')
         assert hasattr(notification_proxy, 'router')
+        assert hasattr(health, 'router')
+        assert hasattr(static, 'create_static_router')
     
-    def test_http_client_importable(self):
-        """HTTP client module should be importable"""
-        from app.services.http_client import http_pool, HTTPClientPool
+    def test_services_imported(self):
+        """Service modules should be importable"""
+        from app.services import http_client
+        from app.services import usage_middleware
+        from app.services import network_service
         
-        assert http_pool is not None
-        assert HTTPClientPool is not None
-    
-    def test_auth_dependencies_importable(self):
-        """Auth dependencies should be importable"""
-        from app.dependencies.auth import (
-            AuthenticatedUser,
-            UserRole,
-            require_auth,
-            require_write_access,
-            require_owner,
-            get_current_user
-        )
-        
-        assert AuthenticatedUser is not None
-        assert UserRole is not None
+        assert hasattr(http_client, 'http_pool')
+        assert hasattr(usage_middleware, 'UsageTrackingMiddleware')
+        assert hasattr(network_service, 'get_network_with_access')
 
+
+class TestDocsDisabling:
+    """Tests for documentation URL disabling"""
+    
+    def test_docs_enabled_by_default(self):
+        """Docs should be enabled when disable_docs is False"""
+        from app.main import create_app
+        
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
+            
+            app = create_app()
+            
+            assert app.docs_url == "/docs"
+            assert app.redoc_url == "/redoc"
+            assert app.openapi_url == "/openapi.json"
+    
+    def test_docs_disabled_when_configured(self):
+        """Docs should be disabled when disable_docs is True"""
+        from app.main import create_app
+        
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = True
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
+            
+            app = create_app()
+            
+            assert app.docs_url is None
+            assert app.redoc_url is None
+            assert app.openapi_url is None

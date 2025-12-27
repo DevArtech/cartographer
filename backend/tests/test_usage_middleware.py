@@ -87,6 +87,7 @@ class TestUsageRecord:
         record = UsageRecord(
             endpoint="/api/test",
             method="GET",
+            service_name="test-service",
             status_code=200,
             response_time_ms=45.5,
             timestamp=now
@@ -96,7 +97,7 @@ class TestUsageRecord:
         
         assert result["endpoint"] == "/api/test"
         assert result["method"] == "GET"
-        assert result["service"] == "backend"
+        assert result["service"] == "test-service"
         assert result["status_code"] == 200
         assert result["response_time_ms"] == 45.5
         assert result["timestamp"] == now.isoformat()
@@ -143,6 +144,7 @@ class TestMiddlewareFlush:
             mw._buffer.append(UsageRecord(
                 endpoint=f"/api/test/{i}",
                 method="GET",
+                service_name="test-service",
                 status_code=200,
                 response_time_ms=10.0 + i,
                 timestamp=datetime.utcnow()
@@ -404,12 +406,13 @@ class TestFlushLoop:
         # Task should have exited
         assert task.done()
     
-    async def test_flush_loop_handles_generic_exception(self, middleware):
+    async     def test_flush_loop_handles_generic_exception(self, middleware):
         """Should handle generic exceptions in loop"""
-        from app.services import usage_middleware
-        
         middleware._running = True
         call_count = 0
+        
+        # Store original interval and set a fast one for testing
+        original_interval = middleware._settings.usage_batch_interval_seconds
         
         async def failing_flush():
             nonlocal call_count
@@ -418,11 +421,10 @@ class TestFlushLoop:
                 raise Exception("Test error")
             middleware._running = False
         
-        original_interval = usage_middleware.BATCH_INTERVAL_SECONDS
-        usage_middleware.BATCH_INTERVAL_SECONDS = 0.01  # Speed up for test
-        
         try:
-            with patch.object(middleware, '_flush_buffer', failing_flush):
+            # Patch the settings interval
+            with patch.object(middleware._settings, 'usage_batch_interval_seconds', 0.01), \
+                 patch.object(middleware, '_flush_buffer', failing_flush):
                 task = asyncio.create_task(middleware._flush_loop())
                 await asyncio.sleep(0.1)
                 middleware._running = False
@@ -435,7 +437,7 @@ class TestFlushLoop:
                 # Should have continued after error
                 assert call_count >= 1
         finally:
-            usage_middleware.BATCH_INTERVAL_SECONDS = original_interval
+            pass  # Settings are not modified directly
 
 
 class TestFlushBufferHTTP:
@@ -456,6 +458,7 @@ class TestFlushBufferHTTP:
             mw._buffer.append(UsageRecord(
                 endpoint=f"/api/test/{i}",
                 method="GET",
+                service_name="test-service",
                 status_code=200,
                 response_time_ms=10.0 + i,
                 timestamp=datetime.utcnow()

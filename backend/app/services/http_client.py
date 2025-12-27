@@ -7,17 +7,17 @@ This module addresses several performance issues identified in load testing:
 3. Warm-up - Pre-establishes connections on startup to avoid cold start latency
 """
 import asyncio
-import os
 import logging
 import time
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Dict, Any
-from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+
+from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class ServiceClient:
     """HTTP client wrapper for a specific service with circuit breaker"""
     name: str
     base_url: str
-    client: Optional[httpx.AsyncClient] = None
+    client: httpx.AsyncClient | None = None
     circuit_breaker: CircuitBreaker = field(default_factory=CircuitBreaker)
     
     async def initialize(self):
@@ -184,7 +184,7 @@ class HTTPClientPool:
     """
     
     def __init__(self):
-        self._services: Dict[str, ServiceClient] = {}
+        self._services: dict[str, ServiceClient] = {}
         self._initialized = False
     
     def register_service(self, name: str, url: str) -> ServiceClient:
@@ -207,7 +207,7 @@ class HTTPClientPool:
         self._initialized = True
         logger.info("HTTP client pool initialized")
     
-    async def warm_up_all(self) -> Dict[str, bool]:
+    async def warm_up_all(self) -> dict[str, bool]:
         """
         Warm up connections to all services.
         Returns dict of service_name -> success status.
@@ -245,7 +245,7 @@ class HTTPClientPool:
         self._initialized = False
         logger.info("HTTP client pool closed")
     
-    def get_service(self, name: str) -> Optional[ServiceClient]:
+    def get_service(self, name: str) -> ServiceClient | None:
         """Get a service client by name"""
         return self._services.get(name)
     
@@ -254,10 +254,10 @@ class HTTPClientPool:
         service_name: str,
         method: str,
         path: str,
-        params: Optional[dict] = None,
-        json_body: Optional[dict] = None,
-        headers: Optional[dict] = None,
-        timeout: Optional[float] = None
+        params: dict | None = None,
+        json_body: dict | None = None,
+        headers: dict | None = None,
+        timeout: float | None = None
     ) -> JSONResponse:
         """
         Make a request to a service with circuit breaker protection.
@@ -293,7 +293,7 @@ class HTTPClientPool:
         
         try:
             # Build request kwargs
-            kwargs: Dict[str, Any] = {}
+            kwargs: dict = {}
             if params:
                 kwargs["params"] = params
             if json_body is not None:
@@ -349,33 +349,40 @@ class HTTPClientPool:
 http_pool = HTTPClientPool()
 
 
-# Service URLs from environment
-SERVICE_URLS = {
-    "health": os.environ.get("HEALTH_SERVICE_URL", "http://localhost:8001"),
-    "auth": os.environ.get("AUTH_SERVICE_URL", "http://localhost:8002"),
-    "metrics": os.environ.get("METRICS_SERVICE_URL", "http://localhost:8003"),
-    "assistant": os.environ.get("ASSISTANT_SERVICE_URL", "http://localhost:8004"),
-    "notification": os.environ.get("NOTIFICATION_SERVICE_URL", "http://localhost:8005"),
+def get_service_urls() -> dict[str, str]:
+    """Get service URLs from settings."""
+    settings = get_settings()
+    return {
+        "health": settings.health_service_url,
+        "auth": settings.auth_service_url,
+        "metrics": settings.metrics_service_url,
+        "assistant": settings.assistant_service_url,
+        "notification": settings.notification_service_url,
 }
 
 
-def register_all_services():
-    """Register all microservices with the HTTP client pool"""
-    for name, url in SERVICE_URLS.items():
-        http_pool.register_service(name, url)
-
-
-# Register services on module load
-register_all_services()
+def register_all_services(pool: HTTPClientPool | None = None):
+    """Register all microservices with the HTTP client pool.
+    
+    Args:
+        pool: Optional pool instance. Defaults to global http_pool.
+    """
+    target_pool = pool or http_pool
+    service_urls = get_service_urls()
+    for name, url in service_urls.items():
+        target_pool.register_service(name, url)
 
 
 @asynccontextmanager
 async def lifespan_http_pool():
     """
     Async context manager for FastAPI lifespan.
-    Handles initialization and cleanup of the HTTP client pool.
+    Handles registration, initialization and cleanup of the HTTP client pool.
     """
-    # Startup
+    # Register services at startup (not on module import)
+    register_all_services()
+    
+    # Initialize clients
     await http_pool.initialize_all()
     await http_pool.warm_up_all()
     

@@ -42,7 +42,10 @@ class TestSPARoutes:
         """Root route should serve index.html"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -55,7 +58,10 @@ class TestSPARoutes:
         """GET /favicon.png should serve favicon"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -68,7 +74,10 @@ class TestSPARoutes:
         """HEAD /favicon.png should work"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -80,7 +89,10 @@ class TestSPARoutes:
         """Unknown routes should serve index.html for SPA"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -93,7 +105,10 @@ class TestSPARoutes:
         """Nested SPA routes should serve index.html"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -109,7 +124,10 @@ class TestSPARoutes:
         # Create a static file in dist root
         (dist_with_assets / "robots.txt").write_text("User-agent: *\nDisallow: /api/")
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -122,7 +140,13 @@ class TestSPARoutes:
         """API routes should not be caught by SPA catch-all"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
+            with patch('app.routers.health.http_pool') as mock_pool:
+                mock_pool._services = {}
+                
             app = create_app()
             client = TestClient(app)
             
@@ -144,7 +168,10 @@ class TestSPARoutes:
         sensitive_file = dist_with_assets.parent / "sensitive.txt"
         sensitive_file.write_text("SECRET DATA")
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -161,7 +188,10 @@ class TestSPARoutes:
         # Remove favicon
         (dist_with_assets / "favicon.png").unlink()
         
-        with patch('app.main.DIST_PATH', dist_with_assets):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_with_assets
+            
             app = create_app()
             client = TestClient(app)
             
@@ -178,8 +208,12 @@ class TestNoDistDirectory:
         """App should work even without dist directory"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
+            
+            with patch('app.routers.health.http_pool') as mock_pool:
+                mock_pool._services = {}
             
             app = create_app()
             client = TestClient(app)
@@ -192,10 +226,11 @@ class TestNoDistDirectory:
         """Healthz should be available regardless of dist"""
         from app.main import create_app
         
-        with patch('app.main.DIST_PATH') as mock_dist:
-            mock_dist.exists.return_value = False
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = Path("/nonexistent/path")
             
-            with patch('app.main.http_pool') as mock_pool:
+            with patch('app.routers.health.http_pool') as mock_pool:
                 mock_pool._services = {}
                 
                 app = create_app()
@@ -223,7 +258,10 @@ class TestAssetsMount:
         assets_dir.mkdir()
         (assets_dir / "app.js").write_text("console.log('test');")
         
-        with patch('app.main.DIST_PATH', dist_dir):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_dir
+            
             app = create_app()
             client = TestClient(app)
             
@@ -243,7 +281,10 @@ class TestAssetsMount:
         assets_dir = dist_dir / "assets"
         assets_dir.mkdir()
         
-        with patch('app.main.DIST_PATH', dist_dir):
+        with patch('app.main.settings') as mock_settings:
+            mock_settings.disable_docs = False
+            mock_settings.resolved_frontend_dist = dist_dir
+            
             app = create_app()
             client = TestClient(app)
             
@@ -251,3 +292,61 @@ class TestAssetsMount:
             
             assert response.status_code == 404
 
+
+class TestStaticRouter:
+    """Tests for the static router module"""
+    
+    def test_create_static_router_returns_none_for_missing_dist(self):
+        """create_static_router should return None if dist doesn't exist"""
+        from app.routers.static import create_static_router
+        
+        result = create_static_router(Path("/nonexistent/path"))
+        assert result is None
+    
+    def test_create_static_router_returns_none_without_index(self, tmp_path):
+        """create_static_router should return None if index.html missing"""
+        from app.routers.static import create_static_router
+        
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        # No index.html
+        
+        result = create_static_router(dist_dir)
+        assert result is None
+    
+    def test_create_static_router_returns_router_with_index(self, tmp_path):
+        """create_static_router should return router if dist has index.html"""
+        from app.routers.static import create_static_router
+        from fastapi import APIRouter
+        
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        (dist_dir / "index.html").write_text("<html></html>")
+        
+        result = create_static_router(dist_dir)
+        assert isinstance(result, APIRouter)
+    
+    def test_mount_assets_returns_false_without_assets(self, tmp_path):
+        """mount_assets should return False if assets dir doesn't exist"""
+        from app.routers.static import mount_assets
+        from fastapi import FastAPI
+        
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        
+        app = FastAPI()
+        result = mount_assets(app, dist_dir)
+        assert result is False
+    
+    def test_mount_assets_returns_true_with_assets(self, tmp_path):
+        """mount_assets should return True if assets dir exists"""
+        from app.routers.static import mount_assets
+        from fastapi import FastAPI
+        
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        (dist_dir / "assets").mkdir()
+        
+        app = FastAPI()
+        result = mount_assets(app, dist_dir)
+        assert result is True

@@ -35,7 +35,7 @@ class TestAssistantStreamProxy:
         from fastapi import HTTPException
         from app.routers.assistant_proxy import chat_stream
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_client = MagicMock()
             mock_client.aclose = AsyncMock()
             mock_client.build_request = MagicMock(return_value=MagicMock())
@@ -54,7 +54,7 @@ class TestAssistantStreamProxy:
         async def mock_aiter_bytes():
             yield b'data: {"type": "chunk"}\n\n'
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.aiter_bytes = mock_aiter_bytes
@@ -85,7 +85,7 @@ class TestNotificationServiceStatus:
         """Mock http_pool for notification proxy tests"""
         from fastapi.responses import JSONResponse
         
-        with patch('app.routers.notification_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=JSONResponse(content={"ok": True}))
             yield mock
     

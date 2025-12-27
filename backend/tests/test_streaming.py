@@ -34,7 +34,7 @@ class TestAssistantStreamingProxy:
         from fastapi import HTTPException
         from app.routers.assistant_proxy import chat_stream
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_client = MagicMock()
             mock_client.aclose = AsyncMock()
             mock_client.build_request = MagicMock(return_value=MagicMock())
@@ -54,7 +54,7 @@ class TestAssistantStreamingProxy:
         async def mock_aiter_bytes():
             yield b'data: {"type": "chunk"}\n\n'
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.aiter_bytes = mock_aiter_bytes
@@ -77,7 +77,7 @@ class TestAssistantStreamingProxy:
         async def mock_aiter_bytes():
             yield b'data: {"type": "chunk"}\n\n'
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.aiter_bytes = mock_aiter_bytes
@@ -130,22 +130,22 @@ class TestMetricsWebSocketProxy:
 class TestAssistantProxyURLConfig:
     """Test assistant proxy URL configuration"""
     
-    def test_assistant_service_url_from_env(self):
-        """ASSISTANT_SERVICE_URL should be configurable"""
-        import os
+    def test_assistant_service_url_from_settings(self):
+        """assistant_service_url should be available from settings"""
         from app.routers import assistant_proxy
         
-        # The URL should be set
-        assert assistant_proxy.ASSISTANT_SERVICE_URL is not None
+        # The settings object should be available
+        assert assistant_proxy.settings is not None
+        assert assistant_proxy.settings.assistant_service_url is not None
     
     async def test_proxy_request_uses_timeout(self):
-        """proxy_request should use specified timeout"""
-        with patch('app.routers.assistant_proxy.http_pool') as mock_pool:
+        """proxy_assistant_request should use specified timeout"""
+        with patch('app.services.proxy_service.http_pool') as mock_pool:
             mock_pool.request = AsyncMock(return_value=MagicMock())
             
-            from app.routers.assistant_proxy import proxy_request
+            from app.services.proxy_service import proxy_request
             
-            await proxy_request("GET", "/test", timeout=90.0)
+            await proxy_request("assistant", "GET", "/test", timeout=90.0)
             
             call_kwargs = mock_pool.request.call_args[1]
             assert call_kwargs["timeout"] == 90.0
@@ -154,12 +154,13 @@ class TestAssistantProxyURLConfig:
 class TestMetricsProxyURLConfig:
     """Test metrics proxy URL configuration"""
     
-    def test_metrics_service_url_from_env(self):
-        """METRICS_SERVICE_URL should be configurable"""
+    def test_metrics_service_url_from_settings(self):
+        """metrics_service_url should be available from settings"""
         from app.routers import metrics_proxy
         
-        # The URL should be set
-        assert metrics_proxy.METRICS_SERVICE_URL is not None
+        # The settings object should be available
+        assert metrics_proxy.settings is not None
+        assert metrics_proxy.settings.metrics_service_url is not None
 
 
 class TestHealthProxyTimeouts:
@@ -170,24 +171,24 @@ class TestHealthProxyTimeouts:
         """Mock http_pool"""
         from fastapi.responses import JSONResponse
         
-        with patch('app.routers.health_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=JSONResponse(content={"ok": True}))
             yield mock
     
     async def test_proxy_request_default_timeout(self, mock_http_pool):
-        """proxy_request should use default 30s timeout"""
-        from app.routers.health_proxy import proxy_request
+        """proxy_health_request should use default 30s timeout"""
+        from app.services.proxy_service import proxy_health_request
         
-        await proxy_request("GET", "/test")
+        await proxy_health_request("GET", "/test")
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["timeout"] == 30.0
     
     async def test_proxy_request_custom_timeout(self, mock_http_pool):
-        """proxy_request should accept custom timeout"""
-        from app.routers.health_proxy import proxy_request
+        """proxy_health_request should accept custom timeout"""
+        from app.services.proxy_service import proxy_health_request
         
-        await proxy_request("GET", "/test", timeout=60.0)
+        await proxy_health_request("GET", "/test", timeout=60.0)
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["timeout"] == 60.0
@@ -201,15 +202,15 @@ class TestNotificationProxyHeaders:
         """Mock http_pool"""
         from fastapi.responses import JSONResponse
         
-        with patch('app.routers.notification_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=JSONResponse(content={"ok": True}))
             yield mock
     
     async def test_proxy_request_forwards_headers(self, mock_http_pool):
-        """proxy_request should forward custom headers"""
-        from app.routers.notification_proxy import proxy_request
+        """proxy_notification_request should forward custom headers"""
+        from app.services.proxy_service import proxy_notification_request
         
-        await proxy_request(
+        await proxy_notification_request(
             "GET",
             "/test",
             headers={"X-Custom": "value", "X-User-Id": "user-123"}
@@ -228,18 +229,19 @@ class TestAuthProxyNoHeader:
         """Mock http_pool"""
         from fastapi.responses import JSONResponse
         
-        with patch('app.routers.auth_proxy.http_pool') as mock:
+        with patch('app.services.proxy_service.http_pool') as mock:
             mock.request = AsyncMock(return_value=JSONResponse(content={"ok": True}))
             yield mock
     
     async def test_proxy_request_without_auth_header(self, mock_http_pool):
-        """proxy_request should work without Authorization header"""
-        from app.routers.auth_proxy import proxy_request
+        """proxy_auth_request should work without Authorization header"""
+        from app.services.proxy_service import proxy_auth_request
         
         mock_request = MagicMock()
-        mock_request.headers = {}
+        mock_request.headers = MagicMock()
+        mock_request.headers.get = MagicMock(return_value=None)
         
-        await proxy_request("GET", "/api/auth/setup/status", mock_request)
+        await proxy_auth_request("GET", "/setup/status", mock_request)
         
         call_kwargs = mock_http_pool.request.call_args[1]
         # Should still have Content-Type

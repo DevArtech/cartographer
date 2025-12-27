@@ -16,6 +16,8 @@ yarn-error.log
 .npm/
 dist/
 .cache/
+.dev-logs/
+.dev-pids/
 
 # IDEs and Editors
 .vscode/
@@ -31,3 +33,6 @@ network_map.txt
 saved_network_layout.json
 *storybook.log
 storybook-static
+
+# Python
+__pycache__/

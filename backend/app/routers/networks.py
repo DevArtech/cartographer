@@ -2,13 +2,12 @@
 Network management API routes.
 """
 
-import secrets
-from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, or_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
+from ..dependencies.auth import AuthenticatedUser, require_auth
 from ..models.network import Network, NetworkPermission, PermissionRole, NetworkNotificationSettings
 from ..schemas import (
     NetworkCreate,
@@ -21,112 +20,14 @@ from ..schemas import (
     NetworkNotificationSettingsCreate,
     NetworkNotificationSettingsResponse,
 )
-from ..dependencies.auth import AuthenticatedUser, require_auth, require_write_access
+from ..services.network_service import (
+    generate_agent_key,
+    get_network_with_access,
+    get_network_member_user_ids,
+    is_service_token,
+)
 
 router = APIRouter(prefix="/networks", tags=["Networks"])
-
-
-def generate_agent_key() -> str:
-    """Generate a secure agent key for future cloud sync."""
-    return secrets.token_hex(32)
-
-
-async def get_network_with_access(
-    network_id: str,
-    user: AuthenticatedUser,
-    db: AsyncSession,
-    require_write: bool = False,
-) -> tuple[Network, bool, Optional[PermissionRole]]:
-    """
-    Get a network and verify user has access.
-    Returns (network, is_owner, permission_role).
-    Raises 404 if not found or user has no access.
-    
-    Service tokens (user_id in ["service", "metrics-service"]) have full access
-    to all networks for internal service-to-service operations.
-    """
-    # Check if this is a service token - services have access to all networks
-    is_service = user.user_id in ("service", "metrics-service")
-    
-    # Fetch the network
-    result = await db.execute(select(Network).where(Network.id == network_id))
-    network = result.scalar_one_or_none()
-
-    if not network:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Network not found",
-        )
-
-    # Service tokens have full access to all networks
-    if is_service:
-        return network, False, PermissionRole.EDITOR
-
-    # Check if user is the owner
-    is_owner = network.user_id == user.user_id
-
-    if is_owner:
-        return network, True, None
-
-    # Check for permission grant
-    perm_result = await db.execute(
-        select(NetworkPermission).where(
-            NetworkPermission.network_id == network_id,
-            NetworkPermission.user_id == user.user_id,
-        )
-    )
-    permission = perm_result.scalar_one_or_none()
-
-    if not permission:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Network not found",
-        )
-
-    # Check write access if required
-    if require_write and permission.role == PermissionRole.VIEWER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Write access required",
-        )
-
-    return network, False, permission.role
-
-
-async def get_network_member_user_ids(
-    network_id: str,
-    db: AsyncSession,
-) -> List[str]:
-    """
-    Get all user IDs who have access to a network.
-    Returns a list of user IDs including:
-    - The network owner
-    - All users with viewer/editor permissions
-    """
-    # Fetch the network
-    result = await db.execute(select(Network).where(Network.id == network_id))
-    network = result.scalar_one_or_none()
-
-    if not network:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Network not found",
-        )
-
-    # Start with the owner
-    user_ids = [network.user_id]
-
-    # Add all users with permissions
-    perm_result = await db.execute(
-        select(NetworkPermission.user_id).where(
-            NetworkPermission.network_id == network_id
-        )
-    )
-    permission_user_ids = perm_result.scalars().all()
-    user_ids.extend(permission_user_ids)
-
-    # Remove duplicates (in case owner somehow has a permission entry)
-    return list(set(user_ids))
 
 
 # ============================================================================
@@ -163,7 +64,29 @@ async def create_network(
     return response
 
 
-@router.get("", response_model=List[NetworkResponse])
+def _build_network_response(
+    network: Network,
+    is_owner: bool,
+    permission: PermissionRole | None = None,
+) -> NetworkResponse:
+    """Build a NetworkResponse from a Network model.
+    
+    Args:
+        network: The Network model instance
+        is_owner: Whether the current user owns this network
+        permission: The permission role if shared (None for owners)
+        
+    Returns:
+        NetworkResponse with ownership info populated
+    """
+    response = NetworkResponse.model_validate(network)
+    response.owner_id = network.user_id
+    response.is_owner = is_owner
+    response.permission = permission
+    return response
+
+
+@router.get("", response_model=list[NetworkResponse])
 async def list_networks(
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
@@ -173,8 +96,7 @@ async def list_networks(
     For service tokens (internal service-to-service calls), returns ALL active networks
     in the system to support metrics generation across all networks.
     """
-    # Check if this is a service token (user_id will be 'service' or 'metrics-service')
-    is_service = current_user.user_id in ("service", "metrics-service")
+    is_service = is_service_token(current_user.user_id)
     
     if is_service:
         # Service tokens get access to ALL networks for metrics generation
@@ -184,16 +106,10 @@ async def list_networks(
             .order_by(Network.created_at.desc())
         )
         all_networks = result.scalars().all()
-        
-        response_list = []
-        for network in all_networks:
-            response = NetworkResponse.model_validate(network)
-            response.owner_id = network.user_id
-            response.is_owner = False  # Service is not the owner
-            response.permission = PermissionRole.EDITOR  # Service has editor access
-            response_list.append(response)
-        
-        return response_list
+        return [
+            _build_network_response(network, is_owner=False, permission=PermissionRole.EDITOR)
+            for network in all_networks
+        ]
     
     # Regular user: Get networks owned by user
     owned_result = await db.execute(
@@ -215,24 +131,14 @@ async def list_networks(
     )
     shared_networks = shared_result.all()
 
-    # Build response list
-    response_list = []
-
-    for network in owned_networks:
-        response = NetworkResponse.model_validate(network)
-        response.owner_id = network.user_id
-        response.is_owner = True
-        response.permission = None
-        response_list.append(response)
-
-    for network, role in shared_networks:
-        response = NetworkResponse.model_validate(network)
-        response.owner_id = network.user_id
-        response.is_owner = False
-        response.permission = role
-        response_list.append(response)
-
-    return response_list
+    # Build consolidated response list using list comprehensions
+    return [
+        _build_network_response(network, is_owner=True)
+        for network in owned_networks
+    ] + [
+        _build_network_response(network, is_owner=False, permission=role)
+        for network, role in shared_networks
+    ]
 
 
 @router.get("/{network_id}", response_model=NetworkResponse)
@@ -243,7 +149,10 @@ async def get_network(
 ):
     """Get a specific network by ID."""
     network, is_owner, permission = await get_network_with_access(
-        network_id, current_user, db
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
     )
 
     response = NetworkResponse.model_validate(network)
@@ -263,7 +172,11 @@ async def update_network(
 ):
     """Update a network's metadata."""
     network, is_owner, permission = await get_network_with_access(
-        network_id, current_user, db, require_write=True
+        network_id,
+        current_user.user_id,
+        db,
+        require_write=True,
+        is_service=is_service_token(current_user.user_id),
     )
 
     # Update fields if provided
@@ -290,7 +203,12 @@ async def delete_network(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a network. Only the owner can delete."""
-    network, is_owner, _ = await get_network_with_access(network_id, current_user, db)
+    network, is_owner, _ = await get_network_with_access(
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
+    )
 
     if not is_owner:
         raise HTTPException(
@@ -314,7 +232,12 @@ async def get_network_layout(
     db: AsyncSession = Depends(get_db),
 ):
     """Get the network layout data."""
-    network, _, _ = await get_network_with_access(network_id, current_user, db)
+    network, _, _ = await get_network_with_access(
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
+    )
 
     return NetworkLayoutResponse(
         id=network.id,
@@ -333,7 +256,11 @@ async def save_network_layout(
 ):
     """Save the network layout data."""
     network, _, _ = await get_network_with_access(
-        network_id, current_user, db, require_write=True
+        network_id,
+        current_user.user_id,
+        db,
+        require_write=True,
+        is_service=is_service_token(current_user.user_id),
     )
 
     network.layout_data = layout_data.layout_data
@@ -353,7 +280,7 @@ async def save_network_layout(
 # ============================================================================
 
 
-@router.get("/{network_id}/permissions", response_model=List[PermissionResponse])
+@router.get("/{network_id}/permissions", response_model=list[PermissionResponse])
 async def list_network_permissions(
     network_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
@@ -361,7 +288,10 @@ async def list_network_permissions(
 ):
     """List all permissions for a network. Only the owner can view."""
     network, is_owner, _ = await get_network_with_access(
-        network_id, current_user, db
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
     )
 
     # Only owner can view permissions
@@ -394,7 +324,10 @@ async def create_permission(
 ):
     """Share a network with another user. Only the owner can share."""
     network, is_owner, _ = await get_network_with_access(
-        network_id, current_user, db
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
     )
 
     # Only owner can share
@@ -448,7 +381,10 @@ async def delete_permission(
 ):
     """Remove a user's access to a network. Only the owner can remove access."""
     network, is_owner, _ = await get_network_with_access(
-        network_id, current_user, db
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
     )
 
     # Only owner can remove access
@@ -490,7 +426,10 @@ async def get_network_notification_settings(
 ):
     """Get notification settings for a network. Only owner and editors can view."""
     network, is_owner, permission = await get_network_with_access(
-        network_id, current_user, db
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
     )
 
     # Owner and editors can view notification settings
@@ -532,7 +471,10 @@ async def update_network_notification_settings(
 ):
     """Update notification settings for a network. Only owner and editors can update."""
     network, is_owner, permission = await get_network_with_access(
-        network_id, current_user, db
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
     )
 
     # Owner and editors can update notification settings

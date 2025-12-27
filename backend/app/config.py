@@ -3,12 +3,16 @@ Application configuration using pydantic-settings.
 All configuration is read from environment variables.
 """
 
-from pydantic_settings import BaseSettings
+from pathlib import Path
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Environment
     env: str = "development"
@@ -24,9 +28,26 @@ class Settings(BaseSettings):
     assistant_service_url: str = "http://localhost:8004"
     notification_service_url: str = "http://localhost:8005"
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    # Frontend / SPA serving
+    frontend_dist: str = ""  # Empty = auto-detect from project structure
+    disable_docs: bool = False
+    application_url: str = ""  # Base URL for the application
+
+    # JWT / Auth
+    jwt_secret: str = "cartographer-dev-secret-change-in-production"
+    jwt_algorithm: str = "HS256"
+
+    # Usage tracking middleware
+    usage_batch_size: int = 10
+    usage_batch_interval_seconds: float = 5.0
+
+    @property
+    def resolved_frontend_dist(self) -> Path:
+        """Resolve frontend dist path, auto-detecting if not set."""
+        if self.frontend_dist:
+            return Path(self.frontend_dist)
+        # Default: relative to backend/app/config.py -> frontend/dist
+        return Path(__file__).resolve().parents[3] / "frontend" / "dist"
 
 
 @lru_cache

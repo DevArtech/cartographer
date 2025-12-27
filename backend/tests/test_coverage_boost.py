@@ -30,14 +30,16 @@ class TestMapperStreamGenerator:
     
     def test_stream_generator_popen_exception(self, tmp_path, readwrite_user):
         """Stream generator should handle Popen exceptions"""
-        from app.routers.mapper import run_mapper_stream, _sse_event
+        from app.routers.mapper import run_mapper_stream
+        from app.services import mapper_runner_service
+        from app.services.mapper_runner_service import sse_event
         
         script = tmp_path / "lan_mapper.sh"
         script.write_text("#!/bin/bash\necho test")
         script.chmod(0o755)
         
-        with patch('app.routers.mapper._script_path', return_value=script):
-            with patch('app.routers.mapper._project_root', return_value=tmp_path):
+        with patch.object(mapper_runner_service, 'script_path', return_value=script):
+            with patch.object(mapper_runner_service, 'project_root', return_value=tmp_path):
                 with patch('subprocess.Popen', side_effect=OSError("Cannot execute")):
                     response = run_mapper_stream(user=readwrite_user)
                     
@@ -47,6 +49,7 @@ class TestMapperStreamGenerator:
     def test_stream_generator_success(self, tmp_path, readwrite_user):
         """Stream generator should yield events correctly"""
         from app.routers.mapper import run_mapper_stream
+        from app.services import mapper_runner_service
         
         script = tmp_path / "lan_mapper.sh"
         script.write_text("#!/bin/bash\necho 'line1'\necho 'line2'")
@@ -55,9 +58,9 @@ class TestMapperStreamGenerator:
         # Create output file
         (tmp_path / "network_map.txt").write_text("Network data")
         
-        with patch('app.routers.mapper._script_path', return_value=script):
-            with patch('app.routers.mapper._project_root', return_value=tmp_path):
-                with patch('app.routers.mapper._network_map_candidates', return_value=[tmp_path / "network_map.txt"]):
+        with patch.object(mapper_runner_service, 'script_path', return_value=script):
+            with patch.object(mapper_runner_service, 'project_root', return_value=tmp_path):
+                with patch.object(mapper_runner_service, 'network_map_candidates', return_value=[tmp_path / "network_map.txt"]):
                     response = run_mapper_stream(user=readwrite_user)
                     
                     assert isinstance(response, StreamingResponse)
@@ -70,7 +73,7 @@ class TestMapperEmbedDeleteWithMapping:
     def test_delete_embed_clears_mapping(self, tmp_path, owner_user):
         """delete_embed should clear IP mapping"""
         from app.routers.mapper import delete_embed
-        import app.routers.mapper as mapper_module
+        from app.services import embed_service
         
         embeds_file = tmp_path / "embeds.json"
         embeds_file.write_text(json.dumps({
@@ -82,18 +85,18 @@ class TestMapperEmbedDeleteWithMapping:
         }))
         
         # Set up IP mapping
-        mapper_module._embed_ip_mappings["embed-to-delete"] = {
+        embed_service.set_ip_mapping("embed-to-delete", {
             "device_abc": "192.168.1.1"
-        }
+        })
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             response = delete_embed(embed_id="embed-to-delete", user=owner_user)
             
             data = json.loads(response.body.decode())
             assert data["success"] is True
             
             # Mapping should be cleared
-            assert "embed-to-delete" not in mapper_module._embed_ip_mappings
+            assert embed_service.get_ip_mapping("embed-to-delete") == {}
 
 
 class TestAssistantStreamProxy:
@@ -115,7 +118,7 @@ class TestAssistantStreamProxy:
         from fastapi import HTTPException
         from app.routers.assistant_proxy import chat_stream
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_client = MagicMock()
             mock_client.aclose = AsyncMock()
             mock_client.build_request = MagicMock(return_value=MagicMock())
@@ -134,7 +137,7 @@ class TestAssistantStreamProxy:
         from fastapi import HTTPException
         from app.routers.assistant_proxy import chat_stream
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_client = MagicMock()
             mock_client.aclose = AsyncMock()
             mock_client.build_request = MagicMock(return_value=MagicMock())
@@ -152,7 +155,7 @@ class TestAssistantStreamProxy:
         from fastapi import HTTPException
         from app.routers.assistant_proxy import chat_stream
         
-        with patch('app.routers.assistant_proxy.httpx.AsyncClient') as mock_client_cls:
+        with patch('app.services.streaming_service.httpx.AsyncClient') as mock_client_cls:
             mock_client = MagicMock()
             mock_client.aclose = AsyncMock()
             mock_client.build_request = MagicMock(return_value=MagicMock())
@@ -206,7 +209,7 @@ class TestMapperProjectRootFallback:
     
     def test_embeds_config_path_fallback(self, tmp_path):
         """Should fallback to project root if /app/data doesn't exist"""
-        from app.routers.mapper import _embeds_config_path
+        from app.services.embed_service import _embeds_config_path
         
         # When /app/data doesn't exist, should use project root
         path = _embeds_config_path()
@@ -214,9 +217,9 @@ class TestMapperProjectRootFallback:
     
     def test_saved_layout_path_fallback(self):
         """Should fallback to project root if /app/data doesn't exist"""
-        from app.routers.mapper import _saved_layout_path
+        from app.services.mapper_runner_service import saved_layout_path
         
-        path = _saved_layout_path()
+        path = saved_layout_path()
         assert path.name == "saved_network_layout.json"
 
 
@@ -226,6 +229,7 @@ class TestMapperEmbedException:
     def test_update_embed_exception(self, tmp_path, readwrite_user):
         """update_embed should handle exceptions"""
         from app.routers.mapper import update_embed
+        from app.services import embed_service
         
         embeds_file = tmp_path / "embeds.json"
         embeds_file.write_text(json.dumps({
@@ -236,8 +240,8 @@ class TestMapperEmbedException:
             }
         }))
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
-            with patch('app.routers.mapper._save_all_embeds', side_effect=IOError("Write failed")):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
+            with patch.object(embed_service, 'save_all_embeds', side_effect=IOError("Write failed")):
                 with pytest.raises(HTTPException) as exc_info:
                     update_embed(
                         embed_id="test",
@@ -250,6 +254,7 @@ class TestMapperEmbedException:
     def test_delete_embed_exception(self, tmp_path, owner_user):
         """delete_embed should handle exceptions"""
         from app.routers.mapper import delete_embed
+        from app.services import embed_service
         
         embeds_file = tmp_path / "embeds.json"
         embeds_file.write_text(json.dumps({
@@ -259,8 +264,8 @@ class TestMapperEmbedException:
             }
         }))
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
-            with patch('app.routers.mapper._save_all_embeds', side_effect=IOError("Write failed")):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
+            with patch.object(embed_service, 'save_all_embeds', side_effect=IOError("Write failed")):
                 with pytest.raises(HTTPException) as exc_info:
                     delete_embed(embed_id="test", user=owner_user)
                 
@@ -273,9 +278,9 @@ class TestEmbedDataException:
     async def test_get_embed_data_exception(self, tmp_path):
         """get_embed_data should handle load exceptions"""
         from app.routers.mapper import get_embed_data
+        from app.services import embed_service, mapper_runner_service
         
         embeds_file = tmp_path / "embeds.json"
-        layout_file = tmp_path / "layout.json"
         
         embeds_file.write_text(json.dumps({
             "test": {
@@ -285,13 +290,10 @@ class TestEmbedDataException:
             }
         }))
         
-        # Create a layout file that will cause json.load to fail
-        layout_file.write_text("not valid json {{{")
-        
         mock_db = AsyncMock()
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
-            with patch('app.routers.mapper._saved_layout_path', return_value=layout_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
+            with patch.object(mapper_runner_service, 'load_layout', side_effect=RuntimeError("Invalid JSON")):
                 with pytest.raises(HTTPException) as exc_info:
                     await get_embed_data(embed_id="test", db=mock_db)
                 

@@ -94,7 +94,7 @@ class TestGetNetworkWithAccess:
     
     async def test_network_not_found(self, owner_user, mock_db):
         """Should raise 404 when network doesn't exist"""
-        from app.routers.networks import get_network_with_access
+        from app.services.network_service import get_network_with_access
         
         # Mock execute to return no network
         mock_result = MagicMock()
@@ -102,13 +102,13 @@ class TestGetNetworkWithAccess:
         mock_db.execute = AsyncMock(return_value=mock_result)
         
         with pytest.raises(HTTPException) as exc_info:
-            await get_network_with_access("nonexistent", owner_user, mock_db)
+            await get_network_with_access("nonexistent", owner_user.user_id, mock_db)
         
         assert exc_info.value.status_code == 404
     
     async def test_owner_has_access(self, owner_user, mock_db, sample_network):
         """Owner should have full access"""
-        from app.routers.networks import get_network_with_access
+        from app.services.network_service import get_network_with_access
         
         # Mock execute to return the network
         mock_result = MagicMock()
@@ -116,7 +116,7 @@ class TestGetNetworkWithAccess:
         mock_db.execute = AsyncMock(return_value=mock_result)
         
         network, is_owner, permission = await get_network_with_access(
-            "network-123", owner_user, mock_db
+            "network-123", owner_user.user_id, mock_db
         )
         
         assert network == sample_network
@@ -125,7 +125,7 @@ class TestGetNetworkWithAccess:
     
     async def test_service_user_has_access(self, service_user, mock_db, sample_network):
         """Service token should have editor access to all networks"""
-        from app.routers.networks import get_network_with_access
+        from app.services.network_service import get_network_with_access
         
         # Mock execute to return the network
         mock_result = MagicMock()
@@ -133,7 +133,7 @@ class TestGetNetworkWithAccess:
         mock_db.execute = AsyncMock(return_value=mock_result)
         
         network, is_owner, permission = await get_network_with_access(
-            "network-123", service_user, mock_db
+            "network-123", service_user.user_id, mock_db, is_service=True
         )
         
         assert network == sample_network
@@ -142,7 +142,7 @@ class TestGetNetworkWithAccess:
     
     async def test_metrics_service_user_has_access(self, metrics_service_user, mock_db, sample_network):
         """Metrics service token should have editor access to all networks"""
-        from app.routers.networks import get_network_with_access
+        from app.services.network_service import get_network_with_access
         
         # Mock execute to return the network
         mock_result = MagicMock()
@@ -150,7 +150,7 @@ class TestGetNetworkWithAccess:
         mock_db.execute = AsyncMock(return_value=mock_result)
         
         network, is_owner, permission = await get_network_with_access(
-            "network-123", metrics_service_user, mock_db
+            "network-123", metrics_service_user.user_id, mock_db, is_service=True
         )
         
         assert network == sample_network
@@ -159,7 +159,7 @@ class TestGetNetworkWithAccess:
     
     async def test_user_with_editor_permission(self, admin_user, mock_db, sample_network):
         """User with editor permission should have access"""
-        from app.routers.networks import get_network_with_access
+        from app.services.network_service import get_network_with_access
         
         # First call returns network, second returns permission
         mock_network_result = MagicMock()
@@ -174,7 +174,7 @@ class TestGetNetworkWithAccess:
         mock_db.execute = AsyncMock(side_effect=[mock_network_result, mock_perm_result])
         
         network, is_owner, permission = await get_network_with_access(
-            "network-123", admin_user, mock_db
+            "network-123", admin_user.user_id, mock_db
         )
         
         assert network == sample_network

@@ -89,8 +89,9 @@ class TestRunMapperEndpoint:
     def test_run_mapper_script_not_found(self, readwrite_user):
         """Should return 404 if script doesn't exist"""
         from app.routers.mapper import run_mapper
+        from app.services import mapper_runner_service
         
-        with patch('app.routers.mapper._script_path') as mock_path:
+        with patch.object(mapper_runner_service, 'script_path') as mock_path:
             mock_path.return_value = Path("/nonexistent/lan_mapper.sh")
             
             with pytest.raises(Exception) as exc_info:
@@ -102,10 +103,11 @@ class TestRunMapperEndpoint:
     def test_run_mapper_executes_script(self, temp_project_root, readwrite_user):
         """Should execute script and return results"""
         from app.routers.mapper import run_mapper
+        from app.services import mapper_runner_service
         
-        with patch('app.routers.mapper._project_root', return_value=temp_project_root):
-            with patch('app.routers.mapper._script_path', return_value=temp_project_root / "lan_mapper.sh"):
-                with patch('app.routers.mapper._network_map_candidates', return_value=[temp_project_root / "network_map.txt"]):
+        with patch.object(mapper_runner_service, 'project_root', return_value=temp_project_root):
+            with patch.object(mapper_runner_service, 'script_path', return_value=temp_project_root / "lan_mapper.sh"):
+                with patch.object(mapper_runner_service, 'network_map_candidates', return_value=[temp_project_root / "network_map.txt"]):
                     response = run_mapper(user=readwrite_user)
                     
                     assert response.content is not None
@@ -114,10 +116,11 @@ class TestRunMapperEndpoint:
     def test_run_mapper_timeout(self, temp_project_root, readwrite_user):
         """Should handle script timeout"""
         from app.routers.mapper import run_mapper
+        from app.services import mapper_runner_service
         import subprocess
         
-        with patch('app.routers.mapper._project_root', return_value=temp_project_root):
-            with patch('app.routers.mapper._script_path', return_value=temp_project_root / "lan_mapper.sh"):
+        with patch.object(mapper_runner_service, 'project_root', return_value=temp_project_root):
+            with patch.object(mapper_runner_service, 'script_path', return_value=temp_project_root / "lan_mapper.sh"):
                 with patch('subprocess.run', side_effect=subprocess.TimeoutExpired("script", 300)):
                     with pytest.raises(Exception) as exc_info:
                         run_mapper(user=readwrite_user)
@@ -131,8 +134,9 @@ class TestRunMapperStreamEndpoint:
     def test_run_mapper_stream_script_not_found(self, readwrite_user):
         """Should return 404 if script doesn't exist"""
         from app.routers.mapper import run_mapper_stream
+        from app.services import mapper_runner_service
         
-        with patch('app.routers.mapper._script_path') as mock_path:
+        with patch.object(mapper_runner_service, 'script_path') as mock_path:
             mock_path.return_value = Path("/nonexistent/lan_mapper.sh")
             
             with pytest.raises(Exception) as exc_info:
@@ -149,9 +153,10 @@ class TestDownloadMapEndpoint:
     def test_download_map_file_found(self, temp_project_root, owner_user):
         """Should return file when exists"""
         from app.routers.mapper import download_map
+        from app.services import mapper_runner_service
         from fastapi.responses import FileResponse
         
-        with patch('app.routers.mapper._network_map_candidates', return_value=[temp_project_root / "network_map.txt"]):
+        with patch.object(mapper_runner_service, 'find_network_map', return_value=temp_project_root / "network_map.txt"):
             response = download_map(user=owner_user)
             
             assert isinstance(response, FileResponse)
@@ -159,8 +164,9 @@ class TestDownloadMapEndpoint:
     def test_download_map_file_not_found(self, owner_user):
         """Should return 404 when file doesn't exist"""
         from app.routers.mapper import download_map
+        from app.services import mapper_runner_service
         
-        with patch('app.routers.mapper._network_map_candidates', return_value=[Path("/nonexistent/network_map.txt")]):
+        with patch.object(mapper_runner_service, 'find_network_map', return_value=None):
             with pytest.raises(Exception) as exc_info:
                 download_map(user=owner_user)
             
@@ -175,25 +181,22 @@ class TestLayoutEndpoints:
     def test_save_layout_success(self, temp_data_dir, readwrite_user, sample_layout):
         """Should save layout to file"""
         from app.routers.mapper import save_layout
+        from app.services import mapper_runner_service
         
         layout_file = temp_data_dir / "saved_network_layout.json"
         
-        with patch('app.routers.mapper._saved_layout_path', return_value=layout_file):
+        with patch.object(mapper_runner_service, 'save_layout', return_value=str(layout_file)):
             response = save_layout(layout=sample_layout, user=readwrite_user)
             
             data = json.loads(response.body.decode())
             assert data["success"] is True
-            
-            # Verify file was written
-            assert layout_file.exists()
-            saved = json.loads(layout_file.read_text())
-            assert saved["root"]["ip"] == "192.168.1.1"
     
     def test_load_layout_not_exists(self, temp_data_dir, owner_user):
         """Should return exists=False when no layout saved"""
         from app.routers.mapper import load_layout
+        from app.services import mapper_runner_service
         
-        with patch('app.routers.mapper._saved_layout_path', return_value=temp_data_dir / "nonexistent.json"):
+        with patch.object(mapper_runner_service, 'load_layout', return_value=None):
             response = load_layout(user=owner_user)
             
             data = json.loads(response.body.decode())
@@ -203,11 +206,9 @@ class TestLayoutEndpoints:
     def test_load_layout_success(self, temp_data_dir, owner_user, sample_layout):
         """Should load layout from file"""
         from app.routers.mapper import load_layout
+        from app.services import mapper_runner_service
         
-        layout_file = temp_data_dir / "saved_network_layout.json"
-        layout_file.write_text(json.dumps(sample_layout))
-        
-        with patch('app.routers.mapper._saved_layout_path', return_value=layout_file):
+        with patch.object(mapper_runner_service, 'load_layout', return_value=sample_layout):
             response = load_layout(user=owner_user)
             
             data = json.loads(response.body.decode())
@@ -229,8 +230,9 @@ class TestEmbedEndpoints:
     def test_list_embeds_empty(self, embeds_file, owner_user):
         """Should return empty list when no embeds"""
         from app.routers.mapper import list_embeds
+        from app.services import embed_service
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             response = list_embeds(user=owner_user)
             
             data = json.loads(response.body.decode())
@@ -239,8 +241,9 @@ class TestEmbedEndpoints:
     def test_create_embed(self, embeds_file, readwrite_user):
         """Should create new embed"""
         from app.routers.mapper import create_embed
+        from app.services import embed_service
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             response = create_embed(
                 config={"name": "Test Embed", "sensitiveMode": True},
                 user=readwrite_user
@@ -254,6 +257,7 @@ class TestEmbedEndpoints:
     def test_list_embeds_with_data(self, embeds_file, owner_user):
         """Should list existing embeds"""
         from app.routers.mapper import list_embeds
+        from app.services import embed_service
         
         embeds_file.write_text(json.dumps({
             "embed123": {
@@ -264,7 +268,7 @@ class TestEmbedEndpoints:
             }
         }))
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             response = list_embeds(user=owner_user, network_id=None)
             
             data = json.loads(response.body.decode())
@@ -274,6 +278,7 @@ class TestEmbedEndpoints:
     def test_update_embed(self, embeds_file, readwrite_user):
         """Should update existing embed"""
         from app.routers.mapper import update_embed
+        from app.services import embed_service
         
         embeds_file.write_text(json.dumps({
             "embed123": {
@@ -284,7 +289,7 @@ class TestEmbedEndpoints:
             }
         }))
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             response = update_embed(
                 embed_id="embed123",
                 config={"name": "New Name"},
@@ -298,8 +303,9 @@ class TestEmbedEndpoints:
     def test_update_embed_not_found(self, embeds_file, readwrite_user):
         """Should return 404 for non-existent embed"""
         from app.routers.mapper import update_embed
+        from app.services import embed_service
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             with pytest.raises(Exception) as exc_info:
                 update_embed(
                     embed_id="nonexistent",
@@ -312,6 +318,7 @@ class TestEmbedEndpoints:
     def test_delete_embed(self, embeds_file, owner_user):
         """Should delete embed (owner only)"""
         from app.routers.mapper import delete_embed
+        from app.services import embed_service
         
         embeds_file.write_text(json.dumps({
             "embed123": {
@@ -322,7 +329,7 @@ class TestEmbedEndpoints:
             }
         }))
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             response = delete_embed(embed_id="embed123", user=owner_user)
             
             data = json.loads(response.body.decode())
@@ -335,8 +342,9 @@ class TestEmbedEndpoints:
     def test_delete_embed_not_found(self, embeds_file, owner_user):
         """Should return 404 for non-existent embed"""
         from app.routers.mapper import delete_embed
+        from app.services import embed_service
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             with pytest.raises(Exception) as exc_info:
                 delete_embed(embed_id="nonexistent", user=owner_user)
             
@@ -374,19 +382,21 @@ class TestEmbedDataEndpoint:
         
         return {
             "embeds_file": embeds_file,
-            "layout_file": layout_file
+            "layout_file": layout_file,
+            "layout": sample_layout
         }
     
     async def test_get_embed_data_not_found(self, temp_data_dir):
         """Should return 404 for non-existent embed"""
         from app.routers.mapper import get_embed_data
+        from app.services import embed_service
         
         embeds_file = temp_data_dir / "embeds.json"
         embeds_file.write_text("{}")
         
         mock_db = AsyncMock()
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             with pytest.raises(HTTPException) as exc_info:
                 await get_embed_data(embed_id="nonexistent", db=mock_db)
             
@@ -395,14 +405,15 @@ class TestEmbedDataEndpoint:
     async def test_get_embed_data_no_layout(self, setup_embed):
         """Should return exists=False if no layout saved"""
         from app.routers.mapper import get_embed_data
+        from app.services import embed_service, mapper_runner_service
         
         # Remove layout file
         setup_embed["layout_file"].unlink()
         
         mock_db = AsyncMock()
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed["embeds_file"]):
-            with patch('app.routers.mapper._saved_layout_path', return_value=setup_embed["layout_file"]):
+        with patch.object(embed_service, '_embeds_config_path', return_value=setup_embed["embeds_file"]):
+            with patch.object(mapper_runner_service, 'load_layout', return_value=None):
                 response = await get_embed_data(embed_id="embed123", db=mock_db)
                 
                 data = json.loads(response.body.decode())
@@ -411,11 +422,12 @@ class TestEmbedDataEndpoint:
     async def test_get_embed_data_non_sensitive(self, setup_embed):
         """Should return raw IPs when not in sensitive mode"""
         from app.routers.mapper import get_embed_data
+        from app.services import embed_service, mapper_runner_service
         
         mock_db = AsyncMock()
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed["embeds_file"]):
-            with patch('app.routers.mapper._saved_layout_path', return_value=setup_embed["layout_file"]):
+        with patch.object(embed_service, '_embeds_config_path', return_value=setup_embed["embeds_file"]):
+            with patch.object(mapper_runner_service, 'load_layout', return_value=setup_embed["layout"]):
                 response = await get_embed_data(embed_id="embed123", db=mock_db)
                 
                 data = json.loads(response.body.decode())
@@ -427,11 +439,12 @@ class TestEmbedDataEndpoint:
     async def test_get_embed_data_sensitive(self, setup_embed):
         """Should anonymize IPs in sensitive mode"""
         from app.routers.mapper import get_embed_data
+        from app.services import embed_service, mapper_runner_service
         
         mock_db = AsyncMock()
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed["embeds_file"]):
-            with patch('app.routers.mapper._saved_layout_path', return_value=setup_embed["layout_file"]):
+        with patch.object(embed_service, '_embeds_config_path', return_value=setup_embed["embeds_file"]):
+            with patch.object(mapper_runner_service, 'load_layout', return_value=setup_embed["layout"]):
                 response = await get_embed_data(embed_id="sensitive456", db=mock_db)
                 
                 data = json.loads(response.body.decode())
@@ -470,11 +483,12 @@ class TestEmbedHealthEndpoints:
     async def test_register_embed_health_devices_not_found(self, temp_data_dir):
         """Should return 404 for non-existent embed"""
         from app.routers.mapper import register_embed_health_devices
+        from app.services import embed_service
         
         embeds_file = temp_data_dir / "embeds.json"
         embeds_file.write_text("{}")
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             with pytest.raises(Exception) as exc_info:
                 await register_embed_health_devices(
                     embed_id="nonexistent",
@@ -486,11 +500,12 @@ class TestEmbedHealthEndpoints:
     async def test_trigger_embed_health_check_not_found(self, temp_data_dir):
         """Should return 404 for non-existent embed"""
         from app.routers.mapper import trigger_embed_health_check
+        from app.services import embed_service
         
         embeds_file = temp_data_dir / "embeds.json"
         embeds_file.write_text("{}")
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             with pytest.raises(Exception) as exc_info:
                 await trigger_embed_health_check(embed_id="nonexistent")
             
@@ -499,11 +514,12 @@ class TestEmbedHealthEndpoints:
     async def test_get_embed_cached_health_not_found(self, temp_data_dir):
         """Should return 404 for non-existent embed"""
         from app.routers.mapper import get_embed_cached_health
+        from app.services import embed_service
         
         embeds_file = temp_data_dir / "embeds.json"
         embeds_file.write_text("{}")
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
             with pytest.raises(Exception) as exc_info:
                 await get_embed_cached_health(embed_id="nonexistent")
             
@@ -512,8 +528,9 @@ class TestEmbedHealthEndpoints:
     async def test_register_embed_health_devices_empty(self, setup_embed_health):
         """Should handle empty device IDs"""
         from app.routers.mapper import register_embed_health_devices
+        from app.services import embed_service
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed_health["embeds_file"]):
+        with patch.object(embed_service, '_embeds_config_path', return_value=setup_embed_health["embeds_file"]):
             response = await register_embed_health_devices(
                 embed_id="embed123",
                 request={"device_ids": []}
@@ -525,13 +542,14 @@ class TestEmbedHealthEndpoints:
     async def test_trigger_embed_health_check_success(self, setup_embed_health):
         """Should trigger health check"""
         from app.routers.mapper import trigger_embed_health_check
+        from app.services import embed_service, health_proxy_service
         
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed_health["embeds_file"]):
-            with patch('app.routers.mapper._health_service_request', new_callable=AsyncMock) as mock_health:
+        with patch.object(embed_service, '_embeds_config_path', return_value=setup_embed_health["embeds_file"]):
+            with patch.object(health_proxy_service, 'trigger_health_check', new_callable=AsyncMock) as mock_health:
                 mock_health.return_value = mock_response
                 
                 response = await trigger_embed_health_check(embed_id="embed123")
@@ -542,20 +560,16 @@ class TestEmbedHealthEndpoints:
     async def test_get_embed_cached_health_non_sensitive(self, setup_embed_health):
         """Should return metrics as-is when not in sensitive mode"""
         from app.routers.mapper import get_embed_cached_health
+        from app.services import embed_service, health_proxy_service
         
         # Change to non-sensitive
         embeds = json.loads(setup_embed_health["embeds_file"].read_text())
         embeds["embed123"]["sensitiveMode"] = False
         setup_embed_health["embeds_file"].write_text(json.dumps(embeds))
         
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"192.168.1.1": {"status": "healthy"}}
-        
-        with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed_health["embeds_file"]):
-            with patch('app.routers.mapper._health_service_request', new_callable=AsyncMock) as mock_health:
-                mock_health.return_value = mock_response
+        with patch.object(embed_service, '_embeds_config_path', return_value=setup_embed_health["embeds_file"]):
+            with patch.object(health_proxy_service, 'get_cached_metrics', new_callable=AsyncMock) as mock_health:
+                mock_health.return_value = {"192.168.1.1": {"status": "healthy"}}
                 
                 response = await get_embed_cached_health(embed_id="embed123")
                 
@@ -571,9 +585,9 @@ class TestEdgeCases:
     def test_save_layout_exception(self, readwrite_user):
         """Should handle file write errors"""
         from app.routers.mapper import save_layout
+        from app.services import mapper_runner_service
         
-        with patch('app.routers.mapper._saved_layout_path', return_value=Path("/readonly/layout.json")):
-            with patch('builtins.open', side_effect=PermissionError("Access denied")):
+        with patch.object(mapper_runner_service, 'save_layout', side_effect=RuntimeError("Access denied")):
                 with pytest.raises(Exception) as exc_info:
                     save_layout(layout={"root": {}}, user=readwrite_user)
                 
@@ -582,11 +596,9 @@ class TestEdgeCases:
     def test_load_layout_exception(self, temp_data_dir, owner_user):
         """Should handle file read errors"""
         from app.routers.mapper import load_layout
+        from app.services import mapper_runner_service
         
-        layout_file = temp_data_dir / "layout.json"
-        layout_file.write_text("invalid json {{{")
-        
-        with patch('app.routers.mapper._saved_layout_path', return_value=layout_file):
+        with patch.object(mapper_runner_service, 'load_layout', side_effect=RuntimeError("Invalid JSON")):
             with pytest.raises(Exception) as exc_info:
                 load_layout(user=owner_user)
             
@@ -595,14 +607,14 @@ class TestEdgeCases:
     def test_create_embed_exception(self, temp_data_dir, readwrite_user):
         """Should handle embed creation errors"""
         from app.routers.mapper import create_embed
+        from app.services import embed_service
         
         embeds_file = temp_data_dir / "embeds.json"
         embeds_file.write_text("{}")
         
-        with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
-            with patch('app.routers.mapper._save_all_embeds', side_effect=IOError("Write failed")):
+        with patch.object(embed_service, '_embeds_config_path', return_value=embeds_file):
+            with patch.object(embed_service, 'save_all_embeds', side_effect=IOError("Write failed")):
                 with pytest.raises(Exception) as exc_info:
                     create_embed(config={"name": "Test"}, user=readwrite_user)
                 
                 assert "500" in str(exc_info.value.status_code)
-

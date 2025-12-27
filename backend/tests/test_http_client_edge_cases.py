@@ -19,7 +19,7 @@ from app.services.http_client import (
     register_all_services,
     lifespan_http_pool,
     http_pool,
-    SERVICE_URLS,
+    get_service_urls,
 )
 
 
@@ -256,13 +256,14 @@ class TestLifespanContextManager:
 class TestServiceURLConfiguration:
     """Tests for service URL configuration"""
     
-    def test_service_urls_from_env(self):
-        """SERVICE_URLS should contain expected services"""
-        assert "health" in SERVICE_URLS
-        assert "auth" in SERVICE_URLS
-        assert "metrics" in SERVICE_URLS
-        assert "assistant" in SERVICE_URLS
-        assert "notification" in SERVICE_URLS
+    def test_service_urls_from_settings(self):
+        """get_service_urls should contain expected services"""
+        service_urls = get_service_urls()
+        assert "health" in service_urls
+        assert "auth" in service_urls
+        assert "metrics" in service_urls
+        assert "assistant" in service_urls
+        assert "notification" in service_urls
     
     def test_register_all_services(self):
         """register_all_services should register all service URLs"""
@@ -270,7 +271,7 @@ class TestServiceURLConfiguration:
         test_pool = HTTPClientPool()
         
         with patch('app.services.http_client.http_pool', test_pool):
-            with patch('app.services.http_client.SERVICE_URLS', {
+            with patch('app.services.http_client.get_service_urls', return_value={
                 "test1": "http://localhost:8001",
                 "test2": "http://localhost:8002"
             }):

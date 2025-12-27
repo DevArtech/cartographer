@@ -5,18 +5,18 @@ This script:
 1. Checks for existing saved_network_layout.json
 2. If found and no networks exist in DB, creates a "Default Network"
 3. Assigns ownership to the first owner user found in auth-service
+4. Fixes orphaned networks (owner account recreated)
+5. Fixes placeholder networks (migration ran before setup)
 
-Run during application startup or manually:
-    python -m app.migrations.migrate_layout
+Run via CLI:
+    python -m app.migrations layout
 """
 
-import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Optional
-import httpx
 
+import httpx
 from sqlalchemy import select, func
 
 from ..database import async_session_maker, engine, Base
@@ -26,18 +26,24 @@ from ..config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Placeholder user ID used when migration runs before setup is complete
+PLACEHOLDER_USER_ID = "00000000-0000-0000-0000-000000000000"
+
+# Default paths for layout file
+DOCKER_DATA_DIR = Path("/app/data")
+LAYOUT_FILENAME = "saved_network_layout.json"
+
 
 def _get_layout_path() -> Path:
     """Get the path to the saved network layout JSON file."""
     # Check Docker volume path first
-    data_dir = Path("/app/data")
-    if data_dir.exists():
-        return data_dir / "saved_network_layout.json"
+    if DOCKER_DATA_DIR.exists():
+        return DOCKER_DATA_DIR / LAYOUT_FILENAME
     # Fallback to project root for local development
-    return Path(__file__).resolve().parents[4] / "saved_network_layout.json"
+    return Path(__file__).resolve().parents[4] / LAYOUT_FILENAME
 
 
-async def _get_owner_user_id() -> Optional[str]:
+async def _get_owner_user_id() -> str | None:
     """
     Get the user_id of the first owner user from auth-service.
     Returns None if no owner is found.
@@ -61,9 +67,6 @@ async def _get_owner_user_id() -> Optional[str]:
         logger.warning(f"Failed to connect to auth service: {e}")
     
     return None
-
-
-PLACEHOLDER_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
 async def _get_all_user_ids() -> set[str]:
@@ -238,23 +241,23 @@ async def migrate_layout_to_database() -> bool:
         return True
 
 
-async def run_migration():
-    """Run the migration (for command-line execution)."""
-    logging.basicConfig(level=logging.INFO)
+async def run_migration() -> bool:
+    """
+    Run the layout migration with table creation.
     
+    This is the main entry point for the migration. It:
+    1. Creates tables if they don't exist
+    2. Fixes placeholder networks (from pre-setup migrations)
+    3. Fixes orphaned networks (owner account recreated)
+    4. Migrates JSON layout file to database
+    
+    Returns:
+        True if any migration/fix was performed, False if skipped
+    """
     # Create tables if they don't exist
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
     # Run migration
-    result = await migrate_layout_to_database()
-    
-    if result:
-        print("Migration completed successfully!")
-    else:
-        print("Migration skipped (no file found or networks already exist)")
-
-
-if __name__ == "__main__":
-    asyncio.run(run_migration())
+    return await migrate_layout_to_database()
 
